@@ -1,0 +1,1978 @@
+# hermes-lite — implementation plan
+
+**Audience:** the engineer who will execute this hand-off.
+**Goal:** ship a single-user, OpenAI-only personal assistant that keeps Hermes Agent's *defining behaviors* (skills, evolution, persistent memory with frozen-snapshot injection, FTS5 cross-session recall, iteration-budget pressure, gateway delivery, cron) on top of **OpenAI Agents SDK ≥ 0.14.1**, throwing away every part of Hermes that doesn't pay rent.
+
+**Author of plan:** Claude. **Reference repos:** `NousResearch/hermes-agent` (MIT) for design and bits to vendor; `openai/openai-agents-python` 0.14.x for runtime.
+
+---
+
+## 0. Mental model before you start
+
+### What we are NOT building
+
+- A coding agent. No browser tool, no IDE/ACP integration, no SWE-bench harness.
+- A multi-provider provider zoo. **OpenAI only.** No Anthropic, Codex API, OpenRouter, Nous Portal, etc.
+- A 14-platform gateway. **One channel: Telegram.** Add more later as adapters.
+- A research/RL framework. No Atropos, no trajectory compression, no GRPO.
+- A skills-hub registry. No `hermes skills install openai/skills/k8s` story. User-managed local dir only.
+- A web UI. CLI + Telegram. Period.
+
+### What we ARE keeping (Hermes's actual moat)
+
+| # | Behavior | Source in Hermes | Where it lives in hermes-lite |
+|---|---|---|---|
+| 1 | `Agent` loop, tool dispatch, handoffs, guardrails, HITL, tracing | `run_agent.py` (~9,200 lines, custom) | **DELETED.** Replaced by SDK `Runner` + `SandboxAgent`. |
+| 2 | Skills with progressive disclosure (Level 0 list → Level 1 SKILL.md → Level 2 reference file) | `agent/skill_commands.py` + `~/.hermes/skills/` | SDK `Skills(lazy_from=LocalDirLazySkillSource(...))` capability. |
+| 3 | `skill_manage` tool (create/patch/edit/delete; agent edits its own skills) | `tools/` (look for `skill_manage*.py`) | Custom `function_tool` writing to the skills dir. |
+| 4 | Autonomous skill creation after complex tasks (5+ tool calls) | Heuristic baked into Hermes system prompt + post-run logic | `RunHooks.on_agent_end` hook + side-agent. |
+| 5 | `MEMORY.md` + `USER.md` with frozen-snapshot injection, char limits, substring `replace`/`remove` | `agent/memory_manager.py` + `agent/prompt_builder.py` | Custom files + `function_tool` + dynamic `instructions` callable. |
+| 6 | FTS5 cross-session search (`session_search` tool) over SQLite session DB | `hermes_state.py` + `tools/session_search*` | Custom SDK `Session` subclass with FTS5 mirror table + `function_tool`. |
+| 7 | Iteration-budget pressure warnings (70% caution, 90% warning, 100% stop) | `run_agent.py` `_get_budget_warning` | `RunHooks.on_tool_end` injecting notes into the run input list. |
+| 8 | Two-level message guard (queue + interrupt) on the gateway | `gateway/run.py` + `gateway/platforms/base.py` | Per-session `asyncio.Lock` + interrupt queue in our gateway. |
+| 9 | Session-key format `agent:main:{platform}:{chat_type}:{chat_id}` | `gateway/session.py` `build_session_key()` | Same string format, our function. |
+| 10 | Cron with platform delivery (jobs.json + scheduler) | `cron/jobs.py`, `cron/scheduler.py` | APScheduler + jobs.json + delivery hook. |
+| 11 | SOUL.md persona file rendered into system prompt | `agent/prompt_builder.py` | Same — read & inject in dynamic `instructions`. |
+
+**Target LOC:** **~3.5k lines of our own code** (excluding tests). Hermes is ~40k.
+
+### Non-negotiables
+
+1. **No Anthropic SDK anywhere.** Not as a dep, not vendored, not optional. This is a hard Nexus constraint.
+2. **`openai-agents>=0.14.1`** for `SandboxAgent`, `Skills`, `Memory` capabilities.
+3. **Python 3.11+** (SDK requires ≥3.10; pick 3.11 for stability).
+4. **`uv`** for env/lock management. **`ruff`** for lint, **`mypy --strict`** on our code, **`pytest`** for tests.
+5. **No background magic.** All long-running work goes through APScheduler or the gateway main loop. No bare `asyncio.create_task` orphans.
+
+---
+
+## 1. Project layout
+
+Create a fresh repo, do **not** fork Hermes. We will copy specific files into `vendored/` and rewrite the rest.
+
+```
+hermes-lite/
+├── pyproject.toml
+├── README.md
+├── .env.example
+├── .gitignore
+├── src/
+│   └── hermes_lite/
+│       ├── __init__.py
+│       ├── constants.py             # paths, defaults, char limits
+│       ├── config.py                # YAML + .env loading
+│       ├── cli.py                   # `hermeslite` entrypoint (chat / gateway / cron)
+│       │
+│       ├── agent/
+│       │   ├── __init__.py
+│       │   ├── factory.py           # build_agent() — the SandboxAgent factory
+│       │   ├── instructions.py      # dynamic instructions callable (system prompt assembly)
+│       │   ├── budget.py            # IterationBudget + RunHooks for pressure warnings
+│       │   └── evolution.py         # post-run skill-creation RunHooks
+│       │
+│       ├── memory/
+│       │   ├── __init__.py
+│       │   ├── store.py             # MemoryStore: MEMORY.md + USER.md char-limited stores
+│       │   └── tool.py              # @function_tool memory(action, target, ...)
+│       │
+│       ├── sessions/
+│       │   ├── __init__.py
+│       │   ├── db.py                # SessionDB: SQLite + FTS5, Hermes schema v6
+│       │   ├── sdk_session.py       # SDKSession(Session) — implements SDK Session protocol
+│       │   └── search_tool.py       # @function_tool session_search(query, ...)
+│       │
+│       ├── skills/
+│       │   ├── __init__.py
+│       │   ├── source.py            # wraps SDK LocalDirLazySkillSource
+│       │   └── manage_tool.py       # @function_tool skill_manage(action, ...)
+│       │
+│       ├── gateway/
+│       │   ├── __init__.py
+│       │   ├── runner.py            # GatewayRunner — main loop, dispatch
+│       │   ├── session_key.py       # build_session_key()
+│       │   ├── guard.py             # two-level message guard (lock + interrupt queue)
+│       │   ├── delivery.py          # outbound message delivery
+│       │   └── platforms/
+│       │       ├── __init__.py
+│       │       ├── base.py          # BaseAdapter ABC
+│       │       └── telegram.py      # TelegramAdapter (only platform in v1)
+│       │
+│       ├── cron/
+│       │   ├── __init__.py
+│       │   ├── jobs.py              # JobStore (jobs.json)
+│       │   └── scheduler.py         # APScheduler wiring + delivery
+│       │
+│       └── tools/
+│           ├── __init__.py
+│           └── builtin.py           # web_search, file ops, etc. — see Phase 8
+│
+├── skills/                          # bundled SKILL.md files (read at install time)
+│   └── plan/SKILL.md                # bring 1-2 from Hermes for parity
+│
+├── soul.example.md                  # template persona file
+│
+├── tests/
+│   ├── conftest.py
+│   ├── test_memory_store.py
+│   ├── test_session_db_fts5.py
+│   ├── test_skill_manage_tool.py
+│   ├── test_evolution_hook.py
+│   ├── test_budget_hook.py
+│   ├── test_instructions_assembly.py
+│   ├── test_gateway_guard.py
+│   └── e2e/
+│       └── test_chat_roundtrip.py
+│
+└── vendored/                        # files we copied verbatim from Hermes (with attribution)
+    └── hermes_state.py              # ONLY if we choose to copy verbatim — see Phase 2
+```
+
+**State directory** (created at first run, NOT in repo):
+
+```
+~/.hermeslite/
+├── config.yaml                      # user-editable
+├── .env                             # OPENAI_API_KEY, TELEGRAM_BOT_TOKEN
+├── soul.md                          # persona, copied from soul.example.md on first run
+├── memories/
+│   ├── MEMORY.md                    # agent's notes
+│   └── USER.md                      # user profile
+├── skills/                          # writable; bundled skills synced here on install
+├── sessions.db                      # SQLite + FTS5 (sessions, messages, messages_fts)
+├── jobs.json                        # cron jobs
+└── gateway.pid                      # PID file
+```
+
+`HERMESLITE_HOME` env var overrides `~/.hermeslite/`.
+
+---
+
+## 2. Phase 0 — scaffold
+
+### 2.1 `pyproject.toml`
+
+```toml
+[project]
+name = "hermes-lite"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "openai-agents>=0.14.1,<0.15",
+    "openai>=2.0,<3",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "apscheduler>=3.10,<4",
+    "python-telegram-bot>=21.0,<22",
+    "click>=8.1",
+    "rich>=13.7",            # CLI rendering only
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "freezegun>=1.4",        # for cron tests
+]
+
+[project.scripts]
+hermeslite = "hermes_lite.cli:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "PL", "RUF"]
+ignore = ["PLR0913", "PLR2004"]  # too-many-args, magic numbers — pragmatic
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+```
+
+### 2.2 Bootstrap commands the executor runs once
+
+```bash
+mkdir hermes-lite && cd hermes-lite
+uv init --no-readme --no-pin-python
+# replace pyproject.toml with the above
+uv venv --python 3.11
+uv sync --extra dev
+mkdir -p src/hermes_lite/{agent,memory,sessions,skills,gateway/platforms,cron,tools}
+mkdir -p tests/e2e skills vendored
+touch src/hermes_lite/{__init__,constants,config,cli}.py
+# ...etc, mkdir per the layout above
+git init && git add -A && git commit -m "chore: scaffold"
+```
+
+### 2.3 `constants.py`
+
+```python
+from __future__ import annotations
+import os
+from pathlib import Path
+
+def hermeslite_home() -> Path:
+    return Path(os.environ.get("HERMESLITE_HOME", Path.home() / ".hermeslite"))
+
+# Hermes-compatible char limits — DO NOT change these without updating system prompt expectations
+MEMORY_CHAR_LIMIT = 2200       # ~800 tokens
+USER_PROFILE_CHAR_LIMIT = 1375 # ~500 tokens
+ENTRY_DELIMITER = "\n§\n"      # Hermes uses § (section sign)
+
+# Iteration budget (Hermes default = 90)
+DEFAULT_MAX_TURNS = 90
+BUDGET_CAUTION_THRESHOLD = 0.70
+BUDGET_WARNING_THRESHOLD = 0.90
+
+# Skills auto-creation heuristic
+SKILL_CREATION_MIN_TOOL_CALLS = 5
+
+# SQLite schema version (we ship Hermes v6 minus billing/cost columns we don't need)
+SCHEMA_VERSION = 1  # ours, not Hermes's
+```
+
+### 2.4 `config.py`
+
+YAML at `~/.hermeslite/config.yaml`, env at `~/.hermeslite/.env`. Keep it minimal.
+
+```yaml
+# config.yaml — first-run defaults, executor: write writer in config.py to materialize this
+model: gpt-5.4
+model_settings:
+  reasoning_effort: medium    # "none" | "low" | "medium" | "high"
+  parallel_tool_calls: true
+agent:
+  max_turns: 90
+memory:
+  enabled: true
+  user_profile_enabled: true
+gateway:
+  telegram:
+    enabled: false
+    allowed_user_ids: []      # int Telegram user IDs
+sandbox:
+  enabled: false              # see Phase 9 — only flip on if you actually want filesystem access
+```
+
+**Required env:** `OPENAI_API_KEY`, `TELEGRAM_BOT_TOKEN` (only if gateway enabled).
+
+### 2.5 Acceptance for Phase 0
+
+- `uv run hermeslite --help` prints `chat`, `gateway`, `cron`.
+- `uv run pytest -q` runs 0 tests, 0 failures.
+- `uv run ruff check src tests` clean.
+- `uv run mypy src` clean (write minimal stubs first).
+
+---
+
+## 3. Phase 1 — SQLite + FTS5 session store
+
+This is the foundation for everything else (memory tool reads it via `MemoryStore`, `session_search` queries FTS5, gateway resolves session keys against it).
+
+### 3.1 What to port from Hermes
+
+`hermes_state.py` is ~1k lines, pure SQLite. **Strategy: vendor a trimmed copy.** Put it in `vendored/hermes_state.py` with a header comment crediting Nous Research and the MIT license, then wrap it from `src/hermes_lite/sessions/db.py`.
+
+**What to strip from the vendored copy:**
+
+- All billing columns (`billing_provider`, `billing_base_url`, `billing_mode`, `estimated_cost_usd`, `actual_cost_usd`, `cost_status`, `cost_source`, `pricing_version`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`).
+- All migrations except v1 (initial schema with FTS5).
+- `model_config`, `system_prompt` columns on `sessions` (we don't need historical model config).
+- All `parent_session_id` lineage queries (we won't auto-compress; SDK handles that differently).
+- `codex_reasoning_items`, `reasoning_details` (OpenAI's Responses API surfaces reasoning differently and we let the SDK handle that).
+
+**What to keep verbatim:**
+
+- WAL mode + write-contention handling (`_WRITE_MAX_RETRIES = 15`, jittered backoff 20-150ms, `BEGIN IMMEDIATE`, periodic checkpoints every 50 writes). This is *exactly* what we want for one-CLI-plus-one-gateway concurrency, and it's hard-won engineering.
+- `messages_fts` virtual table + the three sync triggers (insert/delete/update).
+- `_sanitize_fts5_query()` (handles unmatched quotes, hyphen wrapping, dangling boolean ops).
+- `search_messages()` with `source_filter`, `exclude_sources`, `role_filter`, snippet generation.
+
+### 3.2 `src/hermes_lite/sessions/db.py` — minimal trimmed schema
+
+```python
+"""SessionDB — SQLite + FTS5 store for hermes-lite sessions and messages."""
+from __future__ import annotations
+import json
+import random
+import sqlite3
+import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Iterable
+
+from hermes_lite.constants import hermeslite_home
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,           -- 'cli' | 'telegram' | 'cron'
+    user_id TEXT,
+    model TEXT,
+    started_at REAL NOT NULL,
+    ended_at REAL,
+    end_reason TEXT,
+    message_count INTEGER DEFAULT 0,
+    tool_call_count INTEGER DEFAULT 0,
+    input_tokens INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0,
+    title TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_source ON sessions(source);
+CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_title_unique
+    ON sessions(title) WHERE title IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES sessions(id),
+    role TEXT NOT NULL,             -- 'user' | 'assistant' | 'system' | 'tool'
+    content TEXT,
+    tool_call_id TEXT,
+    tool_calls TEXT,                -- JSON
+    tool_name TEXT,
+    timestamp REAL NOT NULL,
+    token_count INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, timestamp);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+    content, content=messages, content_rowid=id
+);
+CREATE TRIGGER IF NOT EXISTS messages_fts_insert AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+END;
+CREATE TRIGGER IF NOT EXISTS messages_fts_delete AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content)
+        VALUES('delete', old.id, old.content);
+END;
+CREATE TRIGGER IF NOT EXISTS messages_fts_update AFTER UPDATE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content)
+        VALUES('delete', old.id, old.content);
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+END;
+
+CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
+"""
+
+_WRITE_MAX_RETRIES = 15
+_WRITE_RETRY_MIN_S = 0.020
+_WRITE_RETRY_MAX_S = 0.150
+_CHECKPOINT_EVERY_N_WRITES = 50
+
+
+@dataclass
+class SearchHit:
+    id: int
+    session_id: str
+    role: str
+    timestamp: float
+    snippet: str
+    source: str
+
+class SessionDB:
+    def __init__(self, db_path: Path | None = None) -> None:
+        self.db_path = db_path or (hermeslite_home() / "sessions.db")
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._local = threading.local()
+        self._writes_since_checkpoint = 0
+        self._init_schema()
+
+    # ---------- connection management ----------
+    def _conn(self) -> sqlite3.Connection:
+        c = getattr(self._local, "conn", None)
+        if c is None:
+            c = sqlite3.connect(str(self.db_path), timeout=1.0, check_same_thread=False)
+            c.execute("PRAGMA journal_mode=WAL")
+            c.execute("PRAGMA synchronous=NORMAL")
+            c.row_factory = sqlite3.Row
+            self._local.conn = c
+        return c
+
+    def _init_schema(self) -> None:
+        with self._writer() as c:
+            c.executescript(_SCHEMA)
+            row = c.execute("SELECT version FROM schema_version").fetchone()
+            if row is None:
+                c.execute("INSERT INTO schema_version(version) VALUES (1)")
+
+    # ---------- write contention helper ----------
+    def _writer(self):
+        """Context manager that BEGIN IMMEDIATEs with retry+jitter."""
+        return _Writer(self)
+
+    def _maybe_checkpoint(self) -> None:
+        self._writes_since_checkpoint += 1
+        if self._writes_since_checkpoint >= _CHECKPOINT_EVERY_N_WRITES:
+            try:
+                self._conn().execute("PRAGMA wal_checkpoint(PASSIVE)")
+            except sqlite3.OperationalError:
+                pass
+            self._writes_since_checkpoint = 0
+
+    # ---------- session ops ----------
+    def create_session(self, *, session_id: str, source: str,
+                       model: str | None = None, user_id: str | None = None) -> None:
+        with self._writer() as c:
+            c.execute(
+                "INSERT OR IGNORE INTO sessions(id, source, user_id, model, started_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (session_id, source, user_id, model, time.time()),
+            )
+        self._maybe_checkpoint()
+
+    def end_session(self, session_id: str, *, end_reason: str = "user_exit") -> None:
+        with self._writer() as c:
+            c.execute(
+                "UPDATE sessions SET ended_at=?, end_reason=? WHERE id=?",
+                (time.time(), end_reason, session_id),
+            )
+
+    # ---------- message ops ----------
+    def append_message(self, *, session_id: str, role: str, content: str | None,
+                       tool_call_id: str | None = None, tool_calls: list[dict[str, Any]] | None = None,
+                       tool_name: str | None = None, token_count: int | None = None) -> int:
+        with self._writer() as c:
+            cur = c.execute(
+                "INSERT INTO messages(session_id, role, content, tool_call_id, tool_calls, "
+                "tool_name, timestamp, token_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (session_id, role, content, tool_call_id,
+                 json.dumps(tool_calls) if tool_calls else None,
+                 tool_name, time.time(), token_count),
+            )
+            c.execute(
+                "UPDATE sessions SET message_count = message_count + 1 WHERE id=?",
+                (session_id,),
+            )
+            self._maybe_checkpoint()
+            return int(cur.lastrowid)
+
+    def get_messages(self, session_id: str, *, limit: int | None = None) -> list[dict[str, Any]]:
+        sql = ("SELECT * FROM messages WHERE session_id=? ORDER BY timestamp, id")
+        if limit:
+            sql += f" LIMIT {int(limit)}"
+        rows = self._conn().execute(sql, (session_id,)).fetchall()
+        return [self._row_to_msg(r) for r in rows]
+
+    def pop_last_message(self, session_id: str) -> dict[str, Any] | None:
+        with self._writer() as c:
+            row = c.execute(
+                "SELECT * FROM messages WHERE session_id=? ORDER BY timestamp DESC, id DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            c.execute("DELETE FROM messages WHERE id=?", (row["id"],))
+            return self._row_to_msg(row)
+
+    def clear_session(self, session_id: str) -> None:
+        with self._writer() as c:
+            c.execute("DELETE FROM messages WHERE session_id=?", (session_id,))
+            c.execute("UPDATE sessions SET message_count=0 WHERE id=?", (session_id,))
+
+    @staticmethod
+    def _row_to_msg(r: sqlite3.Row) -> dict[str, Any]:
+        msg: dict[str, Any] = {"role": r["role"]}
+        if r["content"] is not None:
+            msg["content"] = r["content"]
+        if r["tool_call_id"]:
+            msg["tool_call_id"] = r["tool_call_id"]
+        if r["tool_calls"]:
+            msg["tool_calls"] = json.loads(r["tool_calls"])
+        if r["tool_name"]:
+            msg["name"] = r["tool_name"]
+        return msg
+
+    # ---------- FTS5 search ----------
+    def search_messages(self, query: str, *, limit: int = 20,
+                        source_filter: list[str] | None = None,
+                        role_filter: list[str] | None = None) -> list[SearchHit]:
+        sanitized = self._sanitize_fts5_query(query)
+        if not sanitized:
+            return []
+        params: list[Any] = [sanitized]
+        sql = (
+            "SELECT m.id, m.session_id, m.role, m.timestamp, "
+            "snippet(messages_fts, 0, '>>>', '<<<', '...', 8) AS snippet, "
+            "s.source "
+            "FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid "
+            "JOIN sessions s ON s.id = m.session_id "
+            "WHERE messages_fts MATCH ?"
+        )
+        if source_filter:
+            sql += f" AND s.source IN ({','.join('?' for _ in source_filter)})"
+            params.extend(source_filter)
+        if role_filter:
+            sql += f" AND m.role IN ({','.join('?' for _ in role_filter)})"
+            params.extend(role_filter)
+        sql += " ORDER BY m.timestamp DESC LIMIT ?"
+        params.append(limit)
+        rows = self._conn().execute(sql, params).fetchall()
+        return [SearchHit(**dict(r)) for r in rows]
+
+    @staticmethod
+    def _sanitize_fts5_query(q: str) -> str:
+        # Strip unmatched quotes; wrap hyphenated terms; drop trailing boolean ops.
+        # (port from hermes_state.py — keep it permissive)
+        import re
+        q = q.strip()
+        if q.count('"') % 2 == 1:
+            q = q.replace('"', "")
+        q = re.sub(r"\b(\w+-\w+)\b", r'"\1"', q)
+        q = re.sub(r"\s+(AND|OR|NOT)\s*$", "", q, flags=re.IGNORECASE)
+        return q
+
+class _Writer:
+    def __init__(self, db: SessionDB) -> None:
+        self.db = db
+        self.conn: sqlite3.Connection | None = None
+
+    def __enter__(self) -> sqlite3.Connection:
+        last_err: Exception | None = None
+        for attempt in range(_WRITE_MAX_RETRIES):
+            try:
+                self.conn = self.db._conn()
+                self.conn.execute("BEGIN IMMEDIATE")
+                return self.conn
+            except sqlite3.OperationalError as e:
+                last_err = e
+                if "database is locked" not in str(e).lower():
+                    raise
+                time.sleep(random.uniform(_WRITE_RETRY_MIN_S, _WRITE_RETRY_MAX_S))
+        raise RuntimeError(f"SessionDB write contention exceeded retries: {last_err}")
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        assert self.conn is not None
+        if exc:
+            self.conn.execute("ROLLBACK")
+        else:
+            self.conn.execute("COMMIT")
+```
+
+### 3.3 `src/hermes_lite/sessions/sdk_session.py` — implement SDK Session protocol
+
+The SDK's `Session` protocol needs `get_items`, `add_items`, `pop_item`, `clear_session`. We delegate to `SessionDB`.
+
+```python
+"""Adapter that exposes our SessionDB as an OpenAI Agents SDK Session."""
+from __future__ import annotations
+from typing import Any
+from hermes_lite.sessions.db import SessionDB
+
+class SDKSession:
+    """Implements the SDK's Session protocol on top of SessionDB."""
+    def __init__(self, session_id: str, db: SessionDB, source: str = "cli") -> None:
+        self.session_id = session_id
+        self.db = db
+        self.db.create_session(session_id=session_id, source=source)
+
+    async def get_items(self, limit: int | None = None) -> list[dict[str, Any]]:
+        return self.db.get_messages(self.session_id, limit=limit)
+
+    async def add_items(self, items: list[dict[str, Any]]) -> None:
+        for item in items:
+            self.db.append_message(
+                session_id=self.session_id,
+                role=item.get("role", "assistant"),
+                content=item.get("content"),
+                tool_call_id=item.get("tool_call_id"),
+                tool_calls=item.get("tool_calls"),
+                tool_name=item.get("name"),
+            )
+
+    async def pop_item(self) -> dict[str, Any] | None:
+        return self.db.pop_last_message(self.session_id)
+
+    async def clear_session(self) -> None:
+        self.db.clear_session(self.session_id)
+```
+
+### 3.4 `src/hermes_lite/sessions/search_tool.py`
+
+```python
+from __future__ import annotations
+import json
+from agents import RunContextWrapper, function_tool
+from hermes_lite.sessions.db import SessionDB
+
+# Module-level singleton; initialized by the agent factory.
+_DB: SessionDB | None = None
+def bind_db(db: SessionDB) -> None:
+    global _DB
+    _DB = db
+
+@function_tool(
+    name_override="session_search",
+    description_override=(
+        "Search across all past conversations using full-text search (FTS5). "
+        "Use FTS5 syntax: bare keywords for AND, \"quoted phrases\", "
+        "OR/NOT operators, and prefix* matching. "
+        "Returns up to 20 hits with session_id, role, timestamp, and a snippet "
+        "containing >>>match<<< markers."
+    ),
+)
+async def session_search(
+    ctx: RunContextWrapper[Any],
+    query: str,
+    limit: int = 20,
+    source: str | None = None,
+    role: str | None = None,
+) -> str:
+    if _DB is None:
+        return json.dumps({"error": "session DB not bound"})
+    hits = _DB.search_messages(
+        query, limit=min(limit, 50),
+        source_filter=[source] if source else None,
+        role_filter=[role] if role else None,
+    )
+    return json.dumps([h.__dict__ for h in hits], default=str)
+```
+
+### 3.5 Tests for Phase 1
+
+`tests/test_session_db_fts5.py`:
+
+```python
+import pytest
+from pathlib import Path
+from hermes_lite.sessions.db import SessionDB
+
+@pytest.fixture
+def db(tmp_path: Path) -> SessionDB:
+    return SessionDB(db_path=tmp_path / "t.db")
+
+def test_create_and_append(db: SessionDB):
+    db.create_session(session_id="s1", source="cli")
+    mid = db.append_message(session_id="s1", role="user", content="hello world")
+    msgs = db.get_messages("s1")
+    assert len(msgs) == 1 and msgs[0]["content"] == "hello world"
+    assert isinstance(mid, int)
+
+def test_fts5_basic(db: SessionDB):
+    db.create_session(session_id="s1", source="cli")
+    db.append_message(session_id="s1", role="user", content="docker deployment notes")
+    db.append_message(session_id="s1", role="assistant", content="kubernetes cluster setup")
+    hits = db.search_messages("docker")
+    assert len(hits) == 1 and ">>>docker<<<" in hits[0].snippet
+
+def test_fts5_filter_by_role(db: SessionDB):
+    db.create_session(session_id="s1", source="cli")
+    db.append_message(session_id="s1", role="user", content="error log")
+    db.append_message(session_id="s1", role="assistant", content="error handler")
+    user_only = db.search_messages("error", role_filter=["user"])
+    assert len(user_only) == 1 and user_only[0].role == "user"
+
+def test_fts5_query_sanitization(db: SessionDB):
+    db.create_session(session_id="s1", source="cli")
+    db.append_message(session_id="s1", role="user", content="chat-send broke")
+    # hyphen would normally break FTS5; sanitizer wraps in quotes
+    hits = db.search_messages("chat-send")
+    assert len(hits) == 1
+
+def test_pop_last_message(db: SessionDB):
+    db.create_session(session_id="s1", source="cli")
+    db.append_message(session_id="s1", role="user", content="a")
+    db.append_message(session_id="s1", role="assistant", content="b")
+    popped = db.pop_last_message("s1")
+    assert popped["content"] == "b"
+    assert len(db.get_messages("s1")) == 1
+```
+
+Run: `uv run pytest tests/test_session_db_fts5.py -v`. **Acceptance:** all 5 pass.
+
+---
+
+## 4. Phase 2 — Memory layer (MEMORY.md + USER.md)
+
+### 4.1 `src/hermes_lite/memory/store.py`
+
+```python
+"""Hermes-style char-bounded memory: MEMORY.md (agent notes) + USER.md (user profile)."""
+from __future__ import annotations
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+from hermes_lite.constants import (
+    ENTRY_DELIMITER, MEMORY_CHAR_LIMIT, USER_PROFILE_CHAR_LIMIT, hermeslite_home,
+)
+
+_INVISIBLE_RE = re.compile(r"[\u200B-\u200F\u202A-\u202E\u2060-\u206F]")
+_INJECTION_PATTERNS = [
+    re.compile(r"ignore\s+(all\s+)?previous\s+instructions", re.I),
+    re.compile(r"system\s*:\s*you\s+are", re.I),
+    re.compile(r"<\s*\|im_start\s*\|>", re.I),
+]
+
+class MemoryFull(Exception):
+    def __init__(self, current: int, limit: int, attempted: int):
+        super().__init__(
+            f"Memory at {current}/{limit} chars. Adding this entry ({attempted} chars) "
+            f"would exceed the limit."
+        )
+        self.current = current
+        self.limit = limit
+        self.attempted = attempted
+
+class UnsafeMemoryContent(Exception):
+    pass
+
+@dataclass
+class MemoryStore:
+    """One file = one store. Hermes uses two: MEMORY.md and USER.md."""
+    path: Path
+    char_limit: int
+    label: str  # "MEMORY" or "USER PROFILE"
+
+    @classmethod
+    def for_memory(cls) -> "MemoryStore":
+        p = hermeslite_home() / "memories" / "MEMORY.md"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.touch(exist_ok=True)
+        return cls(path=p, char_limit=MEMORY_CHAR_LIMIT, label="MEMORY")
+
+    @classmethod
+    def for_user(cls) -> "MemoryStore":
+        p = hermeslite_home() / "memories" / "USER.md"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.touch(exist_ok=True)
+        return cls(path=p, char_limit=USER_PROFILE_CHAR_LIMIT, label="USER PROFILE")
+
+    # ---------- read ----------
+    def entries(self) -> list[str]:
+        raw = self.path.read_text(encoding="utf-8").strip()
+        if not raw:
+            return []
+        return [e.strip() for e in raw.split(ENTRY_DELIMITER.strip()) if e.strip()]
+
+    def total_chars(self) -> int:
+        return sum(len(e) for e in self.entries()) + max(0, len(self.entries()) - 1) * len(ENTRY_DELIMITER)
+
+    # ---------- write ----------
+    def add(self, content: str) -> None:
+        self._validate(content)
+        existing = self.entries()
+        if content in existing:
+            return  # duplicate guard
+        new_total = self.total_chars() + len(content) + (len(ENTRY_DELIMITER) if existing else 0)
+        if new_total > self.char_limit:
+            raise MemoryFull(self.total_chars(), self.char_limit, len(content))
+        existing.append(content)
+        self._save(existing)
+
+    def replace(self, old_substring: str, new_content: str) -> None:
+        self._validate(new_content)
+        matches = [i for i, e in enumerate(self.entries()) if old_substring in e]
+        if not matches:
+            raise ValueError(f"no entry matches substring: {old_substring!r}")
+        if len(matches) > 1:
+            raise ValueError(
+                f"substring {old_substring!r} matches {len(matches)} entries; "
+                "be more specific"
+            )
+        entries = self.entries()
+        entries[matches[0]] = new_content
+        # Re-validate total length
+        total = sum(len(e) for e in entries) + max(0, len(entries) - 1) * len(ENTRY_DELIMITER)
+        if total > self.char_limit:
+            raise MemoryFull(total, self.char_limit, len(new_content))
+        self._save(entries)
+
+    def remove(self, substring: str) -> None:
+        matches = [i for i, e in enumerate(self.entries()) if substring in e]
+        if not matches:
+            raise ValueError(f"no entry matches substring: {substring!r}")
+        if len(matches) > 1:
+            raise ValueError(
+                f"substring {substring!r} matches {len(matches)} entries; be more specific"
+            )
+        entries = self.entries()
+        entries.pop(matches[0])
+        self._save(entries)
+
+    # ---------- system prompt rendering (frozen snapshot at session start) ----------
+    def render_block(self) -> str:
+        entries = self.entries()
+        if not entries:
+            return ""
+        chars = self.total_chars()
+        pct = int(round(chars / self.char_limit * 100))
+        body = f"\n§\n".join(entries)
+        return (
+            f"══════════════════════════════════════════════\n"
+            f"{self.label} [{pct}% — {chars}/{self.char_limit} chars]\n"
+            f"══════════════════════════════════════════════\n"
+            f"{body}"
+        )
+
+    # ---------- internals ----------
+    def _validate(self, content: str) -> None:
+        if not content.strip():
+            raise ValueError("empty memory entry")
+        if _INVISIBLE_RE.search(content):
+            raise UnsafeMemoryContent("memory entry contains invisible Unicode characters")
+        for pat in _INJECTION_PATTERNS:
+            if pat.search(content):
+                raise UnsafeMemoryContent(f"memory entry matches injection pattern: {pat.pattern}")
+
+    def _save(self, entries: list[str]) -> None:
+        text = ENTRY_DELIMITER.join(entries)
+        self.path.write_text(text + "\n" if text else "", encoding="utf-8")
+```
+
+### 4.2 `src/hermes_lite/memory/tool.py`
+
+```python
+from __future__ import annotations
+import json
+from typing import Literal, Any
+from agents import RunContextWrapper, function_tool
+from hermes_lite.memory.store import MemoryFull, MemoryStore, UnsafeMemoryContent
+
+@function_tool(
+    name_override="memory",
+    description_override=(
+        "Manage persistent memory across sessions. Two targets: 'memory' (your "
+        "personal notes about the environment, conventions, lessons) and 'user' "
+        "(facts about the human's preferences, identity, communication style). "
+        "Use action='add' to insert a new entry, 'replace' to update one (matched "
+        "by substring), or 'remove' to delete one. There is no 'read' action — "
+        "memory is automatically injected into your system prompt at session start."
+    ),
+)
+async def memory_tool(
+    ctx: RunContextWrapper[Any],
+    action: Literal["add", "replace", "remove"],
+    target: Literal["memory", "user"],
+    content: str | None = None,
+    old_text: str | None = None,
+) -> str:
+    store = MemoryStore.for_memory() if target == "memory" else MemoryStore.for_user()
+    try:
+        if action == "add":
+            if not content:
+                return json.dumps({"success": False, "error": "content is required for add"})
+            store.add(content)
+            return json.dumps({"success": True, "usage": f"{store.total_chars()}/{store.char_limit}"})
+        if action == "replace":
+            if not (old_text and content):
+                return json.dumps({"success": False, "error": "old_text and content required"})
+            store.replace(old_text, content)
+            return json.dumps({"success": True, "usage": f"{store.total_chars()}/{store.char_limit}"})
+        if action == "remove":
+            if not old_text:
+                return json.dumps({"success": False, "error": "old_text is required"})
+            store.remove(old_text)
+            return json.dumps({"success": True, "usage": f"{store.total_chars()}/{store.char_limit}"})
+    except MemoryFull as e:
+        return json.dumps({
+            "success": False, "error": str(e),
+            "current_entries": store.entries(),
+            "usage": f"{e.current}/{e.limit}",
+        })
+    except (ValueError, UnsafeMemoryContent) as e:
+        return json.dumps({"success": False, "error": str(e)})
+    return json.dumps({"success": False, "error": "unknown action"})
+```
+
+### 4.3 Tests for Phase 2
+
+`tests/test_memory_store.py` — write tests for:
+- `add()` honors duplicates (no-op, returns success).
+- `add()` over the char limit raises `MemoryFull`.
+- `replace()` with multi-match substring raises `ValueError`.
+- `remove()` with no match raises `ValueError`.
+- `_validate()` rejects invisible Unicode.
+- `_validate()` rejects "ignore previous instructions" pattern.
+- `render_block()` matches the Hermes format (header line, percentage, `§` delimiters).
+
+**Acceptance:** all tests pass.
+
+---
+
+## 5. Phase 3 — Skills
+
+### 5.1 Strategy
+
+Use the SDK's built-in `Skills(lazy_from=LocalDirLazySkillSource(...))` for read/discovery. **Add our own `skill_manage` tool** for write operations (the agent editing its own skills, which the SDK does not provide).
+
+### 5.2 `src/hermes_lite/skills/source.py`
+
+```python
+"""Wrap LocalDirLazySkillSource with our skills directory."""
+from __future__ import annotations
+from agents.sandbox.capabilities import LocalDirLazySkillSource, Skills
+from agents.sandbox.entries import LocalDir
+from hermes_lite.constants import hermeslite_home
+
+def make_skills_capability() -> Skills:
+    skills_dir = hermeslite_home() / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    return Skills(
+        lazy_from=LocalDirLazySkillSource(source=LocalDir(src=skills_dir)),
+    )
+```
+
+### 5.3 `src/hermes_lite/skills/manage_tool.py`
+
+This is the feature that makes Hermes "self-improving". The model can call this tool to write SKILL.md files. The SDK's `Skills` capability picks them up on the next run via lazy loading.
+
+```python
+"""skill_manage — agent-managed CRUD over ~/.hermeslite/skills/."""
+from __future__ import annotations
+import json
+import re
+from pathlib import Path
+from typing import Literal, Any
+from agents import RunContextWrapper, function_tool
+from hermes_lite.constants import hermeslite_home
+
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+def _skills_root() -> Path:
+    p = hermeslite_home() / "skills"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+def _skill_dir(name: str) -> Path:
+    if not _SLUG_RE.match(name):
+        raise ValueError(
+            f"invalid skill name {name!r}; must be lowercase, alphanumeric + dash/underscore, "
+            "max 64 chars, start with [a-z0-9]"
+        )
+    return _skills_root() / name
+
+@function_tool(
+    name_override="skill_manage",
+    description_override=(
+        "Create, update, or delete your own skills. Skills are markdown documents "
+        "you can load on demand via `skill_view`. Use 'create' to write a new SKILL.md, "
+        "'patch' for targeted old_string→new_string edits (preferred), 'edit' for full "
+        "rewrites, 'delete' to remove a skill, 'write_file'/'remove_file' for "
+        "supporting files (references/, scripts/, templates/). Skills you create here "
+        "are picked up automatically on the next run."
+    ),
+)
+async def skill_manage(
+    ctx: RunContextWrapper[Any],
+    action: Literal["create", "patch", "edit", "delete", "write_file", "remove_file", "list"],
+    name: str | None = None,
+    content: str | None = None,
+    old_string: str | None = None,
+    new_string: str | None = None,
+    file_path: str | None = None,
+) -> str:
+    if action == "list":
+        return json.dumps([p.name for p in sorted(_skills_root().iterdir()) if p.is_dir()])
+
+    if not name:
+        return json.dumps({"success": False, "error": "name is required"})
+    try:
+        d = _skill_dir(name)
+    except ValueError as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+    skill_md = d / "SKILL.md"
+
+    if action == "create":
+        if d.exists():
+            return json.dumps({"success": False, "error": f"skill {name!r} already exists"})
+        if not content or "---" not in content:
+            return json.dumps({
+                "success": False,
+                "error": "content must be a complete SKILL.md with YAML frontmatter "
+                         "(--- name: ... description: ... ---)",
+            })
+        d.mkdir(parents=True)
+        skill_md.write_text(content, encoding="utf-8")
+        return json.dumps({"success": True, "path": str(skill_md.relative_to(hermeslite_home()))})
+
+    if action == "patch":
+        if not skill_md.exists():
+            return json.dumps({"success": False, "error": f"skill {name!r} does not exist"})
+        if not (old_string and new_string is not None):
+            return json.dumps({"success": False, "error": "old_string and new_string required"})
+        text = skill_md.read_text(encoding="utf-8")
+        count = text.count(old_string)
+        if count == 0:
+            return json.dumps({"success": False, "error": "old_string not found"})
+        if count > 1:
+            return json.dumps({
+                "success": False,
+                "error": f"old_string matches {count} times; make it unique",
+            })
+        skill_md.write_text(text.replace(old_string, new_string, 1), encoding="utf-8")
+        return json.dumps({"success": True})
+
+    if action == "edit":
+        if not skill_md.exists():
+            return json.dumps({"success": False, "error": f"skill {name!r} does not exist"})
+        if not content or "---" not in content:
+            return json.dumps({"success": False, "error": "content must include YAML frontmatter"})
+        skill_md.write_text(content, encoding="utf-8")
+        return json.dumps({"success": True})
+
+    if action == "delete":
+        if not d.exists():
+            return json.dumps({"success": False, "error": f"skill {name!r} does not exist"})
+        import shutil
+        shutil.rmtree(d)
+        return json.dumps({"success": True})
+
+    if action == "write_file":
+        if not (file_path and content is not None):
+            return json.dumps({"success": False, "error": "file_path and content required"})
+        target = (d / file_path).resolve()
+        if not str(target).startswith(str(d.resolve())):
+            return json.dumps({"success": False, "error": "file_path escapes skill directory"})
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        return json.dumps({"success": True, "path": str(target.relative_to(hermeslite_home()))})
+
+    if action == "remove_file":
+        if not file_path:
+            return json.dumps({"success": False, "error": "file_path required"})
+        target = (d / file_path).resolve()
+        if not str(target).startswith(str(d.resolve())):
+            return json.dumps({"success": False, "error": "file_path escapes skill directory"})
+        if target.exists():
+            target.unlink()
+        return json.dumps({"success": True})
+
+    return json.dumps({"success": False, "error": f"unknown action {action!r}"})
+```
+
+### 5.4 Bundled skills
+
+Copy 1-2 cherrypicked skills from Hermes into `skills/` in the repo, then have install/first-run sync them into `~/.hermeslite/skills/`. Recommended bundles:
+
+- `plan/SKILL.md` — write-a-plan-instead-of-doing-it pattern (port verbatim from Hermes; MIT-licensed, attribution in skill frontmatter).
+- `skill-creator/SKILL.md` — meta-skill the agent loads to learn how to write good skills (port verbatim).
+
+The first-run sync logic lives in `cli.py`'s `_ensure_state_dirs()` helper.
+
+### 5.5 Tests for Phase 3
+
+`tests/test_skill_manage_tool.py` — write tests for:
+- `create` then `list` shows the new skill.
+- `create` rejects bad names (uppercase, leading dash).
+- `create` rejects content without YAML frontmatter.
+- `patch` with multi-match `old_string` returns error.
+- `write_file` rejects path traversal (`../../etc/passwd`).
+- `delete` removes the directory.
+
+**Acceptance:** all tests pass.
+
+---
+
+## 6. Phase 4 — Autonomous skill creation hook (the evolution loop)
+
+The Hermes heuristic is "after a complex task (5+ tool calls), consider writing a skill." We implement this as `RunHooks` that count tool calls and spawn a side-agent to draft a SKILL.md.
+
+### 6.1 `src/hermes_lite/agent/evolution.py`
+
+```python
+"""Post-run skill-creation hook: side-agent reviews trajectory, optionally writes a skill."""
+from __future__ import annotations
+import json
+from typing import Any
+from agents import Agent, AgentHooks, RunContextWrapper, Runner
+from hermes_lite.constants import SKILL_CREATION_MIN_TOOL_CALLS
+from hermes_lite.skills.manage_tool import skill_manage
+
+
+class EvolutionHook(AgentHooks):
+    """After each agent run, if trajectory had >= N tool calls, ask a side-agent to
+    decide whether to materialize a skill."""
+
+    def __init__(self, *, model: str = "gpt-5.4", min_tool_calls: int = SKILL_CREATION_MIN_TOOL_CALLS):
+        self.model = model
+        self.min_tool_calls = min_tool_calls
+        self._tool_call_count: int = 0
+        self._user_request: str | None = None
+        self._final_output: str | None = None
+
+    async def on_start(self, context: RunContextWrapper[Any], agent: Agent[Any]) -> None:
+        self._tool_call_count = 0
+        self._user_request = None
+        self._final_output = None
+        # Capture the original user request for later — best-effort.
+        if context.usage and context.usage.requests == 0:
+            try:
+                input_items = context.run_state.input  # type: ignore[attr-defined]
+                if isinstance(input_items, list) and input_items:
+                    last = input_items[-1]
+                    if isinstance(last, dict) and last.get("role") == "user":
+                        self._user_request = str(last.get("content", ""))[:500]
+            except Exception:
+                pass
+
+    async def on_tool_end(self, *args, **kwargs) -> None:
+        self._tool_call_count += 1
+
+    async def on_end(self, context: RunContextWrapper[Any], agent: Agent[Any], output: Any) -> None:
+        self._final_output = str(output)[:1000] if output else None
+        if self._tool_call_count < self.min_tool_calls:
+            return
+        await self._maybe_create_skill(context)
+
+    async def _maybe_create_skill(self, context: RunContextWrapper[Any]) -> None:
+        # Side-agent that decides AND writes. Single LLM call, low cost.
+        decider = Agent(
+            name="skill-distiller",
+            model=self.model,
+            instructions=(
+                "You inspect a completed agent trajectory and decide whether the work "
+                "warrants a reusable Skill (procedural memory). A skill is worth writing when:\n"
+                "- The task was non-trivial (>= 5 tool calls)\n"
+                "- The approach is generalizable, not one-off\n"
+                "- A future agent encountering a similar task would benefit\n\n"
+                "If yes, call the `skill_manage` tool with action='create' and a complete "
+                "SKILL.md. The SKILL.md must have YAML frontmatter:\n"
+                "---\nname: short-kebab-name\ndescription: one sentence (<140 chars)\n"
+                "version: 1.0.0\n---\n\n"
+                "Followed by sections: ## When to Use / ## Procedure / ## Pitfalls / ## Verification.\n\n"
+                "If the task does NOT warrant a skill, just respond with 'no skill warranted' "
+                "and stop. Be conservative — bad skills are worse than no skill."
+            ),
+            tools=[skill_manage],
+        )
+        prompt = json.dumps({
+            "user_request": self._user_request,
+            "tool_calls_used": self._tool_call_count,
+            "final_output_excerpt": self._final_output,
+        })
+        try:
+            await Runner.run(decider, prompt, max_turns=4)
+        except Exception:
+            # Never let the evolution hook break the main run.
+            pass
+```
+
+**Caveats the executor must know:**
+
+1. We attach this as `agent.hooks` (per-agent), not `RunHooks` (per-run). This way it applies to the main user-facing agent only, not to the distiller side-agent (or it would recurse).
+2. We deliberately don't pass the full trajectory to the distiller — that would double our token cost on every meaningful run. We pass a summary (request + final output + tool count) and let the distiller make a coarse-grained call.
+3. Failure in evolution **must not** propagate to the user's run. The `try/except Exception` is intentional.
+4. Cost guard: the distiller has `max_turns=4`. If it can't decide in 4 turns it just returns.
+
+### 6.2 Tests for Phase 4
+
+`tests/test_evolution_hook.py`:
+- Stub the `Runner.run` for the distiller and assert it's called only when `tool_call_count >= 5`.
+- Assert the prompt JSON contains `user_request`, `tool_calls_used`, `final_output_excerpt`.
+- Assert exceptions in the distiller are swallowed.
+
+**Acceptance:** all tests pass.
+
+---
+
+## 7. Phase 5 — Iteration budget pressure warnings
+
+Hermes's `_get_budget_warning` injects pressure messages into tool results when iteration budget is being consumed. We replicate this with a `RunHooks` that mutates the input item list between turns.
+
+### 7.1 `src/hermes_lite/agent/budget.py`
+
+```python
+"""Iteration budget tracking with pressure warnings injected as tool messages."""
+from __future__ import annotations
+from typing import Any
+from agents import AgentHooks, Agent, RunContextWrapper
+
+from hermes_lite.constants import (
+    BUDGET_CAUTION_THRESHOLD, BUDGET_WARNING_THRESHOLD, DEFAULT_MAX_TURNS,
+)
+
+
+class BudgetHook(AgentHooks):
+    """Tracks tool-call iterations and stamps pressure notes into the run state.
+
+    Note: the SDK's `max_turns` is the hard ceiling. This hook adds a SOFT signal
+    inside each tool result, telling the model to wind down before the ceiling hits.
+    """
+    def __init__(self, max_turns: int = DEFAULT_MAX_TURNS) -> None:
+        self.max_turns = max_turns
+        self.iteration = 0
+        self._last_tier: str | None = None  # "caution" | "warning" | None
+
+    async def on_start(self, context: RunContextWrapper[Any], agent: Agent[Any]) -> None:
+        self.iteration = 0
+        self._last_tier = None
+
+    async def on_tool_end(self, context: RunContextWrapper[Any], agent: Agent[Any],
+                          tool: Any, result: Any) -> None:
+        self.iteration += 1
+        ratio = self.iteration / max(1, self.max_turns)
+        tier = self._tier_for(ratio)
+        if tier and tier != self._last_tier:
+            note = self._note(tier)
+            # Append note to the tool result content.
+            # The SDK exposes the run state via context.run_state; we mutate the
+            # most recent tool result item's content.
+            try:
+                items = context.run_state.input  # type: ignore[attr-defined]
+                if isinstance(items, list) and items:
+                    last = items[-1]
+                    if isinstance(last, dict) and last.get("role") == "tool":
+                        last["content"] = (last.get("content") or "") + "\n\n" + note
+                        self._last_tier = tier
+            except Exception:
+                pass
+
+    def _tier_for(self, ratio: float) -> str | None:
+        if ratio >= BUDGET_WARNING_THRESHOLD:
+            return "warning"
+        if ratio >= BUDGET_CAUTION_THRESHOLD:
+            return "caution"
+        return None
+
+    def _note(self, tier: str) -> str:
+        left = max(0, self.max_turns - self.iteration)
+        if tier == "warning":
+            return (
+                f"[BUDGET WARNING: Iteration {self.iteration}/{self.max_turns}. "
+                f"Only {left} iteration(s) left. Provide your final response NOW.]"
+            )
+        return (
+            f"[BUDGET: Iteration {self.iteration}/{self.max_turns}. "
+            f"{left} iterations left. Start consolidating your work.]"
+        )
+```
+
+### 7.2 Tests
+
+- `_tier_for(0.5)` → None
+- `_tier_for(0.75)` → "caution"
+- `_tier_for(0.92)` → "warning"
+- After enough `on_tool_end` calls to cross 70%, the next tool result has the caution note appended once.
+- Crossing both thresholds in one run produces caution then warning notes (not duplicates of the same tier).
+
+---
+
+## 8. Phase 6 — Dynamic instructions (system prompt assembly)
+
+This is Hermes's `prompt_builder.py` reborn as a dynamic `instructions` callable. The SDK supports `instructions` being a sync or async function `(ctx, agent) -> str`.
+
+### 8.1 `src/hermes_lite/agent/instructions.py`
+
+```python
+"""Dynamic system prompt assembly. Order matches Hermes for cache-stability:
+SOUL persona → MEMORY snapshot → USER PROFILE snapshot → skills index → AGENTS.md → tool guidance."""
+from __future__ import annotations
+import os
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from agents import Agent, RunContextWrapper
+from hermes_lite.constants import hermeslite_home
+from hermes_lite.memory.store import MemoryStore
+
+_SKILLS_INDEX_HEADER = "AVAILABLE SKILLS (load with skill_view)"
+
+
+def _read_optional(p: Path, max_chars: int = 8_000) -> str:
+    try:
+        return p.read_text(encoding="utf-8")[:max_chars].strip()
+    except (FileNotFoundError, OSError):
+        return ""
+
+
+def _skills_index() -> str:
+    """Level-0 skill index. The SDK's Skills capability also injects a list, but
+    we render our own block so it appears at a stable position in the prompt."""
+    skills_dir = hermeslite_home() / "skills"
+    if not skills_dir.is_dir():
+        return ""
+    lines: list[str] = []
+    for p in sorted(skills_dir.iterdir()):
+        if not p.is_dir():
+            continue
+        skill_md = p / "SKILL.md"
+        if not skill_md.is_file():
+            continue
+        # Cheap frontmatter parse — we don't need a YAML lib for `description:`.
+        text = skill_md.read_text(encoding="utf-8", errors="ignore")
+        desc = ""
+        for line in text.split("\n", 80)[:80]:
+            if line.lower().startswith("description:"):
+                desc = line.split(":", 1)[1].strip()
+                break
+        lines.append(f"- **{p.name}**: {desc or '(no description)'}")
+    if not lines:
+        return ""
+    return f"{_SKILLS_INDEX_HEADER}\n" + "\n".join(lines)
+
+
+_TOOL_GUIDANCE = (
+    "TOOL USE GUIDANCE:\n"
+    "- Use `memory(action=...)` proactively when you learn something the human will "
+    "  benefit from remembering across sessions. Two targets: 'memory' for environment "
+    "  facts, conventions, lessons; 'user' for the human's preferences and identity.\n"
+    "- Use `session_search(query=...)` BEFORE asking the human about something they "
+    "  may have already told you. It searches all past conversations.\n"
+    "- Use `skill_view(name)` to load a skill before doing related work; use "
+    "  `skill_manage(action='create', ...)` AFTER completing a non-trivial task that "
+    "  is likely to recur."
+)
+
+
+def make_instructions():
+    """Return an async callable suitable for Agent(instructions=...)."""
+    async def _instructions(ctx: RunContextWrapper[Any], agent: Agent[Any]) -> str:
+        soul = _read_optional(hermeslite_home() / "soul.md")
+        agents_md = _read_optional(hermeslite_home() / "AGENTS.md", max_chars=4_000)
+        mem_block = MemoryStore.for_memory().render_block()
+        usr_block = MemoryStore.for_user().render_block()
+        skills_index = _skills_index()
+        now = datetime.now().astimezone().isoformat(timespec="seconds")
+
+        parts: list[str] = []
+        if soul:
+            parts.append(soul)
+        parts.append(f"Current time: {now}")
+        if mem_block:
+            parts.append(mem_block)
+        if usr_block:
+            parts.append(usr_block)
+        if skills_index:
+            parts.append(skills_index)
+        if agents_md:
+            parts.append("PROJECT CONTEXT (AGENTS.md):\n" + agents_md)
+        parts.append(_TOOL_GUIDANCE)
+        return "\n\n".join(parts)
+    return _instructions
+```
+
+### 8.2 Cache-stability rule
+
+The dynamic instructions are evaluated **once per run** by the SDK and become the system message for every turn within that run. To keep prompt cache hits high across turns, the function output **must** be stable for the duration of a run. We achieve this implicitly: SOUL/MEMORY/USER/SKILLS/AGENTS.md are read from disk once at session start (the SDK only calls `instructions` once per `Runner.run`), and writes during the run go to disk but don't appear in the prompt until next run. **This is identical to Hermes's frozen-snapshot pattern.**
+
+If you want to be paranoid, cache the result on the agent instance for the duration of the run. The above is good enough for v1.
+
+### 8.3 Tests
+
+`tests/test_instructions_assembly.py`:
+- With empty state dir, the prompt still includes "Current time" and the tool guidance.
+- After `MemoryStore.for_memory().add("foo")`, the prompt contains "MEMORY [" and "foo".
+- After creating a skill `test/SKILL.md` with `description: hello`, the prompt contains "**test**: hello".
+- The order is: SOUL → time → MEMORY → USER → SKILLS → AGENTS.md → tool guidance.
+
+---
+
+## 9. Phase 7 — Agent factory
+
+Wire it all together.
+
+### 9.1 `src/hermes_lite/agent/factory.py`
+
+```python
+"""Factory for the main hermes-lite agent (used by CLI, gateway, and cron)."""
+from __future__ import annotations
+from typing import Any
+from agents import Agent, ModelSettings
+from openai.types.shared import Reasoning
+
+from hermes_lite.agent.budget import BudgetHook
+from hermes_lite.agent.evolution import EvolutionHook
+from hermes_lite.agent.instructions import make_instructions
+from hermes_lite.config import load_config
+from hermes_lite.memory.tool import memory_tool
+from hermes_lite.sessions.search_tool import session_search
+from hermes_lite.skills.manage_tool import skill_manage
+
+
+def build_agent(*, name: str = "hermes-lite") -> Agent[Any]:
+    cfg = load_config()
+    model = cfg.get("model", "gpt-5.4")
+    ms = cfg.get("model_settings", {})
+    effort = ms.get("reasoning_effort", "medium")
+    return Agent(
+        name=name,
+        model=model,
+        instructions=make_instructions(),
+        model_settings=ModelSettings(
+            reasoning=Reasoning(effort=effort),
+            parallel_tool_calls=ms.get("parallel_tool_calls", True),
+            store=True,
+            prompt_cache_retention="24h",
+        ),
+        tools=[
+            memory_tool,
+            session_search,
+            skill_manage,
+            # Add more in Phase 8.
+        ],
+        hooks=BudgetHook(max_turns=cfg.get("agent", {}).get("max_turns", 90))
+              + EvolutionHook(model=model)  # AgentHooks compose via list — see notes
+              if False else BudgetHook(max_turns=cfg.get("agent", {}).get("max_turns", 90)),
+    )
+```
+
+**Important note for the executor on hook composition:**
+
+The SDK exposes `Agent.hooks` as **one** `AgentHooks` instance (not a list). To compose multiple hooks you have two choices:
+
+- **A — Single composite class:** define `class HermesLiteHooks(AgentHooks)` that inherits and forwards to a `BudgetHook` and `EvolutionHook` it owns internally. This is the cleanest.
+- **B — Stack via subclassing.** `class HermesLiteHooks(BudgetHook, EvolutionHook)` and call `super().<method>()` in each. Fragile; avoid.
+
+Pick **A**. Replace the `hooks=` line with `hooks=HermesLiteHooks(max_turns=..., model=model)`. Implement:
+
+```python
+class HermesLiteHooks(AgentHooks):
+    def __init__(self, *, max_turns: int, model: str) -> None:
+        self._budget = BudgetHook(max_turns=max_turns)
+        self._evo = EvolutionHook(model=model)
+    async def on_start(self, ctx, agent):
+        await self._budget.on_start(ctx, agent)
+        await self._evo.on_start(ctx, agent)
+    async def on_tool_end(self, ctx, agent, tool, result):
+        await self._budget.on_tool_end(ctx, agent, tool, result)
+        await self._evo.on_tool_end(ctx, agent, tool, result)
+    async def on_end(self, ctx, agent, output):
+        await self._evo.on_end(ctx, agent, output)
+```
+
+### 9.2 Bind the session DB into module-level singletons
+
+In `cli.py`'s startup:
+
+```python
+from hermes_lite.sessions.db import SessionDB
+from hermes_lite.sessions.search_tool import bind_db
+_db = SessionDB()
+bind_db(_db)
+```
+
+This is intentional — the search tool is a module-level `function_tool` and needs a singleton DB handle. The alternative is passing context through every tool, which is verbose for a single-user app.
+
+---
+
+## 10. Phase 8 — CLI entry point
+
+### 10.1 `src/hermes_lite/cli.py`
+
+```python
+"""hermeslite CLI: chat | gateway | cron."""
+from __future__ import annotations
+import asyncio
+import sys
+import uuid
+import click
+from rich.console import Console
+
+from hermes_lite.agent.factory import build_agent
+from hermes_lite.config import ensure_state_dirs
+from hermes_lite.sessions.db import SessionDB
+from hermes_lite.sessions.search_tool import bind_db
+from hermes_lite.sessions.sdk_session import SDKSession
+from agents import Runner
+
+console = Console()
+
+
+@click.group()
+def main() -> None:
+    """hermes-lite — single-user personal assistant on OpenAI Agents SDK."""
+    ensure_state_dirs()
+
+
+@main.command()
+@click.option("--session-id", default=None, help="Resume an existing session by id.")
+def chat(session_id: str | None) -> None:
+    """Interactive REPL."""
+    db = SessionDB()
+    bind_db(db)
+    sid = session_id or f"cli-{uuid.uuid4().hex[:12]}"
+    session = SDKSession(sid, db, source="cli")
+    agent = build_agent()
+
+    console.print(f"[dim]session: {sid}[/dim]\n[dim]/exit to quit[/dim]\n")
+
+    async def repl() -> None:
+        while True:
+            try:
+                user_in = await asyncio.to_thread(console.input, "[bold cyan]you[/]: ")
+            except (EOFError, KeyboardInterrupt):
+                break
+            if user_in.strip() in {"/exit", "/quit", ":q"}:
+                break
+            if not user_in.strip():
+                continue
+            try:
+                result = await Runner.run(agent, user_in, session=session)
+            except Exception as e:
+                console.print(f"[red]error:[/] {e}")
+                continue
+            console.print(f"[bold green]hermes[/]: {result.final_output}\n")
+
+        db.end_session(sid)
+
+    asyncio.run(repl())
+
+
+@main.command()
+def gateway() -> None:
+    """Run the messaging gateway (Telegram in v1)."""
+    from hermes_lite.gateway.runner import run_gateway
+    asyncio.run(run_gateway())
+
+
+@main.command()
+def cron() -> None:
+    """Run the cron scheduler in the foreground (use systemd in prod)."""
+    from hermes_lite.cron.scheduler import run_scheduler_blocking
+    run_scheduler_blocking()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+### 10.2 Phase 8 acceptance
+
+- `OPENAI_API_KEY=sk-... uv run hermeslite chat` opens a REPL.
+- Type "remember that I prefer concise answers" → agent calls `memory(target='user', action='add', ...)`.
+- Restart, type "what do you know about me" → agent's system prompt now contains the USER block (verify by enabling SDK tracing and checking the system message).
+- Type "search past conversations for 'concise'" → agent calls `session_search`.
+
+---
+
+## 11. Phase 9 — Telegram gateway
+
+### 11.1 `src/hermes_lite/gateway/session_key.py`
+
+```python
+"""Session-key construction (matches Hermes format)."""
+def build_session_key(*, platform: str, chat_type: str, chat_id: int | str,
+                      thread_id: int | str | None = None) -> str:
+    base = f"agent:main:{platform}:{chat_type}:{chat_id}"
+    return f"{base}:{thread_id}" if thread_id else base
+```
+
+### 11.2 `src/hermes_lite/gateway/guard.py` — two-level message guard
+
+```python
+"""Per-session lock + interrupt queue. Mirrors Hermes's two-level message guard."""
+from __future__ import annotations
+import asyncio
+from dataclasses import dataclass, field
+
+@dataclass
+class SessionGuard:
+    """One per session_key. Held by the gateway runner."""
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    interrupt: asyncio.Event = field(default_factory=asyncio.Event)
+    pending: list[str] = field(default_factory=list)
+
+class GuardRegistry:
+    def __init__(self) -> None:
+        self._guards: dict[str, SessionGuard] = {}
+    def get(self, key: str) -> SessionGuard:
+        g = self._guards.get(key)
+        if g is None:
+            g = SessionGuard()
+            self._guards[key] = g
+        return g
+```
+
+### 11.3 `src/hermes_lite/gateway/platforms/telegram.py`
+
+Use `python-telegram-bot` (v21+). Outline:
+
+```python
+"""Telegram adapter — single bot, allowlist of user IDs."""
+from __future__ import annotations
+import asyncio
+import logging
+from telegram import Update
+from telegram.ext import Application, MessageHandler, filters, ContextTypes
+
+log = logging.getLogger(__name__)
+
+class TelegramAdapter:
+    def __init__(self, *, token: str, allowed_user_ids: set[int],
+                 on_message) -> None:
+        self.token = token
+        self.allowed = allowed_user_ids
+        self.on_message = on_message  # async callable: (event_dict) -> None
+        self.app: Application | None = None
+
+    async def start(self) -> None:
+        self.app = Application.builder().token(self.token).build()
+        self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_text))
+        self.app.add_handler(MessageHandler(filters.COMMAND, self._on_command))
+        await self.app.initialize()
+        await self.app.start()
+        await self.app.updater.start_polling()
+
+    async def stop(self) -> None:
+        if self.app:
+            await self.app.updater.stop()
+            await self.app.stop()
+            await self.app.shutdown()
+
+    async def _on_text(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        msg = update.effective_message
+        user = update.effective_user
+        chat = update.effective_chat
+        if user is None or msg is None or chat is None:
+            return
+        if user.id not in self.allowed:
+            log.warning("rejecting message from non-allowed user %s", user.id)
+            return
+        await self.on_message({
+            "platform": "telegram",
+            "chat_type": chat.type,        # "private" | "group" | ...
+            "chat_id": chat.id,
+            "user_id": user.id,
+            "text": msg.text or "",
+            "is_command": False,
+            "send_reply": lambda text: msg.reply_text(text),
+        })
+
+    async def _on_command(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        msg = update.effective_message
+        if msg and msg.text:
+            await self._on_text(update, ctx)  # treat /cmd as text; runner dispatches
+```
+
+### 11.4 `src/hermes_lite/gateway/runner.py`
+
+```python
+"""GatewayRunner — owns adapters, dispatches messages with the two-level guard."""
+from __future__ import annotations
+import asyncio
+import logging
+import os
+import signal
+from agents import Runner
+from hermes_lite.agent.factory import build_agent
+from hermes_lite.config import load_config
+from hermes_lite.constants import hermeslite_home
+from hermes_lite.gateway.guard import GuardRegistry
+from hermes_lite.gateway.platforms.telegram import TelegramAdapter
+from hermes_lite.gateway.session_key import build_session_key
+from hermes_lite.sessions.db import SessionDB
+from hermes_lite.sessions.search_tool import bind_db
+from hermes_lite.sessions.sdk_session import SDKSession
+
+log = logging.getLogger(__name__)
+
+
+async def run_gateway() -> None:
+    cfg = load_config()
+    tg_cfg = cfg.get("gateway", {}).get("telegram", {})
+    if not tg_cfg.get("enabled"):
+        raise SystemExit("Telegram is disabled in config.yaml")
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+    allowed = set(int(x) for x in tg_cfg.get("allowed_user_ids", []))
+    if not allowed:
+        raise SystemExit("gateway.telegram.allowed_user_ids is empty — refusing to start")
+
+    db = SessionDB()
+    bind_db(db)
+    guards = GuardRegistry()
+    pid_file = hermeslite_home() / "gateway.pid"
+    pid_file.write_text(str(os.getpid()))
+
+    async def handle(event: dict) -> None:
+        sk = build_session_key(
+            platform=event["platform"], chat_type=event["chat_type"],
+            chat_id=event["chat_id"],
+        )
+        guard = guards.get(sk)
+        # Level 1: if a run is already in flight for this session, queue + interrupt.
+        if guard.lock.locked():
+            guard.pending.append(event["text"])
+            guard.interrupt.set()
+            return
+        async with guard.lock:
+            text = event["text"]
+            # Drain any queued pending messages first by concatenating — keeps message order.
+            if guard.pending:
+                text = "\n\n".join(guard.pending + [text])
+                guard.pending.clear()
+                guard.interrupt.clear()
+            session = SDKSession(sk, db, source="telegram")
+            agent = build_agent()
+            try:
+                result = await Runner.run(agent, text, session=session)
+                await event["send_reply"](result.final_output)
+            except Exception as e:
+                log.exception("agent run failed")
+                await event["send_reply"](f"⚠ error: {e}")
+
+    adapter = TelegramAdapter(token=token, allowed_user_ids=allowed, on_message=handle)
+    await adapter.start()
+    log.info("gateway up; allowed users: %s", allowed)
+
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set)
+    await stop.wait()
+    await adapter.stop()
+    if pid_file.exists():
+        pid_file.unlink()
+```
+
+### 11.5 Phase 9 acceptance
+
+- Configure `OPENAI_API_KEY` and `TELEGRAM_BOT_TOKEN`. In `config.yaml` set `gateway.telegram.enabled: true` and add your TG user id to `allowed_user_ids`.
+- `uv run hermeslite gateway` starts and logs "gateway up".
+- DM the bot "hi" → it replies. Run `sqlite3 ~/.hermeslite/sessions.db "select * from sessions"` → see one row with `source='telegram'`.
+- Send a message while it's still working → second message is queued; you get one combined reply (this is the simple v1 behavior; full interrupt-mid-flight is a v2 enhancement).
+
+---
+
+## 12. Phase 10 — APScheduler cron
+
+### 12.1 `src/hermes_lite/cron/jobs.py`
+
+```python
+"""JobStore — flat JSON file at ~/.hermeslite/jobs.json."""
+from __future__ import annotations
+import json
+import uuid
+from dataclasses import dataclass, asdict
+from pathlib import Path
+from typing import Any
+from hermes_lite.constants import hermeslite_home
+
+@dataclass
+class Job:
+    id: str
+    schedule: str          # cron expression "min hr day mon dow" or "@daily" etc.
+    prompt: str
+    delivery: dict[str, Any]  # {"platform":"telegram","chat_id":...} or {"platform":"log"}
+    enabled: bool = True
+
+class JobStore:
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path or (hermeslite_home() / "jobs.json")
+        if not self.path.exists():
+            self.path.write_text("[]", encoding="utf-8")
+
+    def all(self) -> list[Job]:
+        return [Job(**j) for j in json.loads(self.path.read_text(encoding="utf-8"))]
+
+    def add(self, *, schedule: str, prompt: str, delivery: dict[str, Any]) -> Job:
+        job = Job(id=uuid.uuid4().hex[:12], schedule=schedule, prompt=prompt, delivery=delivery)
+        jobs = self.all() + [job]
+        self.path.write_text(json.dumps([asdict(j) for j in jobs], indent=2), encoding="utf-8")
+        return job
+
+    def remove(self, job_id: str) -> bool:
+        jobs = [j for j in self.all() if j.id != job_id]
+        if len(jobs) == len(self.all()):
+            return False
+        self.path.write_text(json.dumps([asdict(j) for j in jobs], indent=2), encoding="utf-8")
+        return True
+```
+
+### 12.2 `src/hermes_lite/cron/scheduler.py`
+
+```python
+"""APScheduler wiring + delivery."""
+from __future__ import annotations
+import asyncio
+import logging
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from agents import Runner
+
+from hermes_lite.agent.factory import build_agent
+from hermes_lite.cron.jobs import Job, JobStore
+from hermes_lite.sessions.db import SessionDB
+from hermes_lite.sessions.search_tool import bind_db
+from hermes_lite.sessions.sdk_session import SDKSession
+
+log = logging.getLogger(__name__)
+
+
+def run_scheduler_blocking() -> None:
+    db = SessionDB()
+    bind_db(db)
+    store = JobStore()
+    sched = AsyncIOScheduler(timezone="local")
+
+    async def fire(job: Job) -> None:
+        log.info("cron firing: %s", job.id)
+        sid = f"cron-{job.id}-{int(asyncio.get_running_loop().time())}"
+        session = SDKSession(sid, db, source="cron")
+        agent = build_agent()
+        result = await Runner.run(agent, job.prompt, session=session)
+        await _deliver(job.delivery, result.final_output)
+
+    for job in store.all():
+        if not job.enabled:
+            continue
+        try:
+            trig = CronTrigger.from_crontab(job.schedule, timezone="local") \
+                if " " in job.schedule else _alias_trigger(job.schedule)
+        except Exception as e:
+            log.error("invalid schedule %r for job %s: %s", job.schedule, job.id, e)
+            continue
+        sched.add_job(fire, trig, args=[job], id=job.id, replace_existing=True)
+
+    sched.start()
+    log.info("cron up; %d jobs loaded", len(store.all()))
+    try:
+        asyncio.get_event_loop().run_forever()
+    except KeyboardInterrupt:
+        sched.shutdown()
+
+
+def _alias_trigger(alias: str) -> CronTrigger:
+    aliases = {
+        "@hourly": "0 * * * *",
+        "@daily":  "0 0 * * *",
+        "@weekly": "0 0 * * 0",
+    }
+    return CronTrigger.from_crontab(aliases[alias], timezone="local")
+
+
+async def _deliver(spec: dict, text: str) -> None:
+    platform = spec.get("platform", "log")
+    if platform == "log":
+        log.info("[cron output] %s", text)
+        return
+    if platform == "telegram":
+        # Out-of-band: use a fresh telegram client to send (don't share state with gateway).
+        import os
+        from telegram import Bot
+        bot = Bot(token=os.environ["TELEGRAM_BOT_TOKEN"])
+        await bot.send_message(chat_id=int(spec["chat_id"]), text=text)
+        return
+    log.error("unknown delivery platform: %s", platform)
+```
+
+### 12.3 Phase 10 acceptance
+
+- Add a job by editing `~/.hermeslite/jobs.json`:
+  ```json
+  [{"id":"smoke","schedule":"* * * * *","prompt":"What time is it?",
+    "delivery":{"platform":"log"},"enabled":true}]
+  ```
+- `uv run hermeslite cron` logs "cron firing: smoke" every minute and prints the model's answer.
+
+---
+
+## 13. Phase 11 — built-in tools (lightweight)
+
+The SDK ships some hosted tools (`web_search`, code_interpreter, etc.) that are billed via OpenAI. For v1, expose just one builtin if your agent needs the web — `WebSearchTool` from `agents`. Add nothing else; let the user mount MCP servers for everything else.
+
+In `factory.py`:
+
+```python
+from agents import WebSearchTool
+# ...
+tools=[
+    memory_tool,
+    session_search,
+    skill_manage,
+    WebSearchTool(),  # OpenAI-hosted web search (billed per call)
+],
+```
+
+For external MCP servers (e.g., your `rag-broker`):
+
+```python
+from agents.mcp import MCPServerStreamableHttp
+async with MCPServerStreamableHttp(
+    name="rag-broker",
+    params={"url": "http://localhost:7444/mcp"},
+    cache_tools_list=True,
+) as rag:
+    agent = build_agent()
+    agent.mcp_servers = [rag]
+    result = await Runner.run(agent, "...", session=session)
+```
+
+(Move this into `factory.py` if you want it always-on; for now, keep it opt-in.)
+
+---
+
+## 14. Phase 12 — telemetry & tracing (silent v1)
+
+The SDK has built-in tracing that ships to OpenAI by default. For an OpenAI-only single-user setup, **leave it on**. Add only one custom processor: a local debug log that writes spans to `~/.hermeslite/traces.jsonl` for offline inspection.
+
+Skip this for v1 if time-constrained. The OpenAI traces UI alone is sufficient.
+
+---
+
+## 15. Caveats the executor MUST internalize
+
+1. **SDK 0.14 sandbox features are beta.** Pin `openai-agents==0.14.1` exactly. Re-pin and re-test on each upgrade. The sandbox API may break.
+2. **`SandboxAgent` vs plain `Agent`.** This plan uses **plain `Agent`**, not `SandboxAgent`. Reason: a personal assistant doesn't need a containerized workspace by default. If you later want filesystem isolation, swap `Agent` → `SandboxAgent` in `factory.py`, set `default_manifest`, and add `Capabilities.default()`. The skill management we built still works because `LocalDirLazySkillSource` reads from a host directory either way.
+3. **Hooks compose via a wrapper class, not subclassing.** See §9.1.
+4. **`function_tool`s are module-level singletons.** They cannot capture per-instance state cleanly. We use `bind_db()` for that. If you ever want multi-tenant, restructure to pass DB through `RunContextWrapper[Ctx]` instead.
+5. **Memory entries are injected as a frozen snapshot at session start, NOT mid-run.** This is intentional and matches Hermes. Memory writes during a run only show up in the *next* run's system prompt.
+6. **The autonomous-skill-creation hook fires on EVERY run with ≥5 tool calls.** Even for trivial tasks. The distiller is responsible for saying "no skill warranted" for noise. Watch for cost in heavy-use periods; add a daily-cap if needed (write a `JobStore`-backed counter in `evolution.py`).
+7. **Telegram allow-list is a hard guard, not a suggestion.** Empty allow-list refuses to start. Don't add logic that opens DMs to anyone.
+8. **Gateway and cron MUST not run in the same process.** Cron uses APScheduler's asyncio scheduler with `loop.run_forever()`; gateway uses signal-driven shutdown. Run as two systemd services (or two `tmux` panes for dev).
+9. **SQLite write contention.** The DB is shared by chat REPL, gateway, and cron. The vendored Hermes write-retry pattern is what makes this safe — don't simplify it away.
+10. **Don't accept user input as MCP server URLs.** The `web_fetch`-style tools and any MCP server URL come from your config, never from the user message. Hermes has bigger guards here; we keep them out by simply not exposing the surface.
+11. **Model defaults.** Plan assumes `gpt-5.4` for the main agent and the distiller. If your work account has a different default (per your memory: `GPT-5.4 family`), set `model:` in `config.yaml`.
+12. **Web Search billing.** `WebSearchTool()` is metered separately by OpenAI. Comment it out for cost-conscious testing.
+
+---
+
+## 16. Build order & milestones
+
+| Day | Milestone | Verify by |
+|---|---|---|
+| 1 | Phase 0 + Phase 1 | `pytest tests/test_session_db_fts5.py` green |
+| 2 | Phase 2 + Phase 3 | `pytest tests/test_memory_store.py tests/test_skill_manage_tool.py` green |
+| 3 | Phase 4 + Phase 5 + Phase 6 | `pytest -k "evolution or budget or instructions"` green |
+| 4 | Phase 7 + Phase 8 | `hermeslite chat` works, can write a memory, restart and have it persist |
+| 5 | Phase 9 | `hermeslite gateway` accepts your Telegram DM and responds |
+| 6 | Phase 10 + Phase 11 | A `@hourly` cron job posts to Telegram. WebSearchTool returns results. |
+| 7 | Hardening: ruff, mypy, e2e test, README, systemd unit files | `make ci` clean |
+
+---
+
+## 17. Definition of done (v1.0)
+
+A user can:
+
+1. `pip install -e .`, `hermeslite chat`, hold a multi-turn conversation, have it remember preferences across restarts.
+2. `hermeslite gateway` and DM the bot from Telegram with the same persistence.
+3. After ~6 non-trivial conversations, see SKILL.md files appear in `~/.hermeslite/skills/` that the agent wrote itself.
+4. Schedule a "daily 9am morning briefing" via `jobs.json` and receive it in Telegram.
+5. Search past conversations from the chat (`"what did we talk about last Tuesday?"`).
+6. Total maintained code: under 4,000 lines of Python (excluding vendored `hermes_state.py` and tests). Verify with `cloc src/hermes_lite/`.
+
+---
+
+## 18. v2 backlog (do NOT do in v1)
+
+- WhatsApp / Slack / Feishu adapters (one file each, ~150 LOC).
+- Profile isolation (`hermeslite -p coder ...` with separate `HERMESLITE_HOME`).
+- Honcho/Mem0 memory provider plugin.
+- Mid-run interrupt (cancel in-flight `Runner.run` and resume with new input).
+- ACP integration (so VS Code / Zed can talk to the gateway).
+- A custom tracing processor that exports spans to `traces.jsonl` and a local viewer.
+- Optional `SandboxAgent` mode for tasks that need filesystem isolation.
+- Cron jobs that can `attach_skills=[name]` to seed context.
+- A `hermeslite skills sync` command that pulls from a Git repo of shared skills.
+
+---
+
+## 19. Attribution & license note
+
+`vendored/hermes_state.py` (if used) is derived from `NousResearch/hermes-agent` (MIT). Keep the original copyright header and add a "Modified for hermes-lite" line. The Hermes README's MEMORY.md/USER.md format and the `agentskills.io` SKILL.md spec are conceptual reuse — not derivative code. Cite both in the project README.
+
+End of plan.
