@@ -23,12 +23,12 @@ box as the acceptance criteria for that phase are met.
 - [x] `tests/test_session_db_fts5.py` — 7 tests green
 
 ## Phase 2 — Memory layer (MEMORY.md + USER.md)
-- [ ] `memory/store.py` — `MemoryStore` with `add` / `replace` / `remove`
-- [ ] Char-limit enforcement (`MemoryFull`) and duplicate guard
-- [ ] Injection-pattern / invisible-Unicode validators (`UnsafeMemoryContent`)
-- [ ] `render_block()` Hermes-format header + `§` delimiters
-- [ ] `memory/tool.py` — `memory` `@function_tool`
-- [ ] `tests/test_memory_store.py` green
+- [x] `memory/store.py` — `MemoryStore` with `add` / `replace` / `remove`
+- [x] Char-limit enforcement (`MemoryFull`) and duplicate guard
+- [x] Injection-pattern / invisible-Unicode validators (`UnsafeMemoryContent`)
+- [x] `render_block()` Hermes-format header + `§` delimiters
+- [x] `memory/tool.py` — `memory` `@function_tool`
+- [x] `tests/test_memory_store.py` green
 
 ## Phase 3 — Skills
 - [ ] `skills/source.py` — `make_skills_capability()` wrapping `LocalDirLazySkillSource`
