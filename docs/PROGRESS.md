@@ -49,9 +49,9 @@ box as the acceptance criteria for that phase are met.
 - [x] `tests/test_budget_hook.py` green
 
 ## Phase 6 — Dynamic instructions
-- [ ] `agent/instructions.py` — SOUL → time → MEMORY → USER → SKILLS → AGENTS.md → tool guidance
-- [ ] Frozen-snapshot reads at session start
-- [ ] `tests/test_instructions_assembly.py` green
+- [x] `agent/instructions.py` — SOUL → time → MEMORY → USER → SKILLS → AGENTS.md → tool guidance
+- [x] Frozen-snapshot reads at session start
+- [x] `tests/test_instructions_assembly.py` green
 
 ## Phase 7 — Agent factory
 - [ ] `agent/factory.py` — `build_agent()` assembling model, tools, hooks
