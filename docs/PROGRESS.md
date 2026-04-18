@@ -44,9 +44,9 @@ box as the acceptance criteria for that phase are met.
 - [x] `tests/test_evolution_hook.py` green
 
 ## Phase 5 — Iteration budget pressure
-- [ ] `agent/budget.py` — `BudgetHook` with caution/warning tiers
-- [ ] Tier change injected once per threshold into tool-result stream
-- [ ] `tests/test_budget_hook.py` green
+- [x] `agent/budget.py` — `BudgetHook` with caution/warning tiers
+- [x] Tier change injected once per threshold into tool-result stream
+- [x] `tests/test_budget_hook.py` green
 
 ## Phase 6 — Dynamic instructions
 - [ ] `agent/instructions.py` — SOUL → time → MEMORY → USER → SKILLS → AGENTS.md → tool guidance
