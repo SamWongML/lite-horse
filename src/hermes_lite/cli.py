@@ -13,7 +13,13 @@ import click
 
 from hermes_lite import __version__
 from hermes_lite.constants import hermeslite_home
+from hermes_lite.sessions.db import SessionDB
+from hermes_lite.sessions.search_tool import bind_db
 from hermes_lite.skills.source import sync_bundled_skills
+
+# Module-level DB singleton shared across CLI/gateway/cron invocations so the
+# session_search tool has a handle to query. Populated by :func:`_startup`.
+_DB: SessionDB | None = None
 
 
 def _ensure_state_dirs() -> None:
@@ -24,11 +30,21 @@ def _ensure_state_dirs() -> None:
     sync_bundled_skills()
 
 
+def _startup() -> SessionDB:
+    """Prepare state dirs and bind the session DB used by tool singletons."""
+    global _DB  # noqa: PLW0603 — single-process singleton, intentional
+    _ensure_state_dirs()
+    if _DB is None:
+        _DB = SessionDB()
+    bind_db(_DB)
+    return _DB
+
+
 @click.group()
 @click.version_option(__version__, prog_name="hermeslite")
 def main() -> None:
     """hermes-lite: OpenAI-only personal assistant."""
-    _ensure_state_dirs()
+    _startup()
 
 
 @main.command()

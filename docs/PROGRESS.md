@@ -54,9 +54,9 @@ box as the acceptance criteria for that phase are met.
 - [x] `tests/test_instructions_assembly.py` green
 
 ## Phase 7 — Agent factory
-- [ ] `agent/factory.py` — `build_agent()` assembling model, tools, hooks
-- [ ] `HermesLiteHooks` composite wrapping `BudgetHook` + `EvolutionHook`
-- [ ] `bind_db()` wired at CLI/gateway/cron startup
+- [x] `agent/factory.py` — `build_agent()` assembling model, tools, hooks
+- [x] `HermesLiteHooks` composite wrapping `BudgetHook` + `EvolutionHook`
+- [x] `bind_db()` wired at CLI/gateway/cron startup
 
 ## Phase 8 — CLI chat
 - [ ] `cli.py` chat REPL with SDK `Runner.run`
