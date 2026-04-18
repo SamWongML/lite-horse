@@ -31,12 +31,12 @@ box as the acceptance criteria for that phase are met.
 - [x] `tests/test_memory_store.py` green
 
 ## Phase 3 — Skills
-- [ ] `skills/source.py` — `make_skills_capability()` wrapping `LocalDirLazySkillSource`
-- [ ] `skills/manage_tool.py` — `skill_manage` with create/patch/edit/delete/write_file/remove_file/list
-- [ ] Slug validation + path-traversal guard
-- [ ] Bundled `skills/plan/SKILL.md` and `skills/skill-creator/SKILL.md`
-- [ ] First-run sync into `~/.hermeslite/skills/`
-- [ ] `tests/test_skill_manage_tool.py` green
+- [x] `skills/source.py` — `make_skills_capability()` wrapping `LocalDirLazySkillSource`
+- [x] `skills/manage_tool.py` — `skill_manage` with create/patch/edit/delete/write_file/remove_file/list
+- [x] Slug validation + path-traversal guard
+- [x] Bundled `skills/plan/SKILL.md` and `skills/skill-creator/SKILL.md`
+- [x] First-run sync into `~/.hermeslite/skills/`
+- [x] `tests/test_skill_manage_tool.py` green
 
 ## Phase 4 — Autonomous skill creation hook
 - [ ] `agent/evolution.py` — `EvolutionHook` counting tool calls, side-agent distiller

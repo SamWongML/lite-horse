@@ -12,12 +12,23 @@ from __future__ import annotations
 import click
 
 from hermes_lite import __version__
+from hermes_lite.constants import hermeslite_home
+from hermes_lite.skills.source import sync_bundled_skills
+
+
+def _ensure_state_dirs() -> None:
+    """Create state subdirectories and copy bundled skills on first run."""
+    home = hermeslite_home()
+    for sub in ("memories", "skills", "sessions"):
+        (home / sub).mkdir(parents=True, exist_ok=True)
+    sync_bundled_skills()
 
 
 @click.group()
 @click.version_option(__version__, prog_name="hermeslite")
 def main() -> None:
     """hermes-lite: OpenAI-only personal assistant."""
+    _ensure_state_dirs()
 
 
 @main.command()
