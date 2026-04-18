@@ -1,25 +1,34 @@
 """`hermeslite` CLI entrypoint.
 
-Exposes three subcommands as stubs during Phase 0; each will be wired up in
-later phases:
+Exposes three subcommands:
 
-- `chat`    — interactive REPL (Phase 8)
-- `gateway` — Telegram gateway runner (Phase 9)
-- `cron`    — APScheduler worker (Phase 10)
+- `chat`    — interactive REPL (Phase 8, implemented)
+- `gateway` — Telegram gateway runner (Phase 9, stub)
+- `cron`    — APScheduler worker (Phase 10, stub)
 """
 from __future__ import annotations
 
+import asyncio
+import uuid
+from collections.abc import Awaitable, Callable
+
 import click
+from agents import Runner
+from rich.console import Console
 
 from hermes_lite import __version__
+from hermes_lite.agent.factory import build_agent
+from hermes_lite.config import Config, load_config
 from hermes_lite.constants import hermeslite_home
 from hermes_lite.sessions.db import SessionDB
+from hermes_lite.sessions.sdk_session import SDKSession
 from hermes_lite.sessions.search_tool import bind_db
 from hermes_lite.skills.source import sync_bundled_skills
 
-# Module-level DB singleton shared across CLI/gateway/cron invocations so the
-# session_search tool has a handle to query. Populated by :func:`_startup`.
 _DB: SessionDB | None = None
+_CONSOLE = Console()
+
+_EXIT_COMMANDS = {"/exit", "/quit", ":q"}
 
 
 def _ensure_state_dirs() -> None:
@@ -40,6 +49,43 @@ def _startup() -> SessionDB:
     return _DB
 
 
+async def _default_input(prompt: str) -> str:
+    """Read a line from the user, off-thread so asyncio stays responsive."""
+    return await asyncio.to_thread(_CONSOLE.input, prompt)
+
+
+async def _repl_loop(
+    *,
+    session: SDKSession,
+    agent: object,
+    max_turns: int,
+    console: Console,
+    input_fn: Callable[[str], Awaitable[str]],
+) -> None:
+    """Drive the REPL until the user exits or stdin closes."""
+    while True:
+        try:
+            user_in = await input_fn("[bold cyan]you[/]: ")
+        except (EOFError, KeyboardInterrupt):
+            break
+        stripped = user_in.strip()
+        if stripped in _EXIT_COMMANDS:
+            break
+        if not stripped:
+            continue
+        try:
+            result = await Runner.run(
+                agent,  # type: ignore[arg-type]
+                user_in,
+                session=session,  # type: ignore[arg-type]
+                max_turns=max_turns,
+            )
+        except Exception as exc:
+            console.print(f"[red]error:[/] {exc}")
+            continue
+        console.print(f"[bold green]hermes[/]: {result.final_output}\n")
+
+
 @click.group()
 @click.version_option(__version__, prog_name="hermeslite")
 def main() -> None:
@@ -48,9 +94,36 @@ def main() -> None:
 
 
 @main.command()
-def chat() -> None:
-    """Start an interactive chat session (not yet implemented)."""
-    raise click.ClickException("chat is not implemented yet (Phase 8).")
+@click.option(
+    "--session-id",
+    "session_id",
+    default=None,
+    help="Resume an existing session by id.",
+)
+def chat(session_id: str | None) -> None:
+    """Interactive chat REPL with full session persistence."""
+    db = _startup()
+    cfg: Config = load_config()
+    sid = session_id or f"cli-{uuid.uuid4().hex[:12]}"
+    session = SDKSession(sid, db, source="cli", model=cfg.model)
+    agent = build_agent(config=cfg)
+
+    _CONSOLE.print(
+        f"[dim]session: {sid}[/dim]\n[dim]type /exit, /quit, or :q to quit[/dim]\n"
+    )
+
+    try:
+        asyncio.run(
+            _repl_loop(
+                session=session,
+                agent=agent,
+                max_turns=cfg.agent.max_turns,
+                console=_CONSOLE,
+                input_fn=_default_input,
+            )
+        )
+    finally:
+        db.end_session(sid)
 
 
 @main.command()

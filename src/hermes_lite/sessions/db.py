@@ -113,11 +113,14 @@ class SessionDB:
         return c
 
     def _init_schema(self) -> None:
-        with self._writer() as c:
-            c.executescript(_SCHEMA)
-            row = c.execute("SELECT version FROM schema_version").fetchone()
-            if row is None:
-                c.execute(
+        # ``executescript`` issues an implicit COMMIT before running, so we must
+        # not wrap it in ``_writer()`` (which has already begun a transaction).
+        c = self._conn()
+        c.executescript(_SCHEMA)
+        row = c.execute("SELECT version FROM schema_version").fetchone()
+        if row is None:
+            with self._writer() as wc:
+                wc.execute(
                     "INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,)
                 )
 

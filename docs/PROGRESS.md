@@ -59,9 +59,12 @@ box as the acceptance criteria for that phase are met.
 - [x] `bind_db()` wired at CLI/gateway/cron startup
 
 ## Phase 8 — CLI chat
-- [ ] `cli.py` chat REPL with SDK `Runner.run`
-- [ ] Session persistence across restarts verified
-- [ ] `memory(...)` and `session_search(...)` callable end-to-end
+- [x] `cli.py` chat REPL with SDK `Runner.run` (factored `_repl_loop` for testability)
+- [x] `--session-id` flag resumes an existing session; fresh `cli-<uuid>` otherwise
+- [x] `db.end_session` called on REPL exit (`/exit`, `/quit`, `:q`, EOF, ^C)
+- [x] Session persistence across restarts verified (`tests/e2e/test_chat_roundtrip.py`)
+- [x] `memory(...)` and `session_search(...)` callable end-to-end
+- [x] Fixed latent `SessionDB._init_schema` bug (executescript auto-commit vs. `_writer()`)
 
 ## Phase 9 — Telegram gateway
 - [ ] `gateway/session_key.py` — `build_session_key()`
