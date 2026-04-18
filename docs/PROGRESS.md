@@ -39,9 +39,9 @@ box as the acceptance criteria for that phase are met.
 - [x] `tests/test_skill_manage_tool.py` green
 
 ## Phase 4 — Autonomous skill creation hook
-- [ ] `agent/evolution.py` — `EvolutionHook` counting tool calls, side-agent distiller
-- [ ] Cost/error guards (`max_turns=4`, swallow exceptions)
-- [ ] `tests/test_evolution_hook.py` green
+- [x] `agent/evolution.py` — `EvolutionHook` counting tool calls, side-agent distiller
+- [x] Cost/error guards (`max_turns=4`, swallow exceptions)
+- [x] `tests/test_evolution_hook.py` green
 
 ## Phase 5 — Iteration budget pressure
 - [ ] `agent/budget.py` — `BudgetHook` with caution/warning tiers
