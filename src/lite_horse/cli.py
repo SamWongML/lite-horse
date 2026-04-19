@@ -3,7 +3,7 @@
 Exposes three subcommands:
 
 - `chat`    — interactive REPL (Phase 8, implemented)
-- `gateway` — Telegram gateway runner (Phase 9, stub)
+- `gateway` — Telegram gateway runner (Phase 9, implemented)
 - `cron`    — APScheduler worker (Phase 10, stub)
 """
 from __future__ import annotations
@@ -20,6 +20,7 @@ from lite_horse import __version__
 from lite_horse.agent.factory import build_agent
 from lite_horse.config import Config, load_config
 from lite_horse.constants import litehorse_home
+from lite_horse.gateway.runner import run_gateway
 from lite_horse.sessions.db import SessionDB
 from lite_horse.sessions.sdk_session import SDKSession
 from lite_horse.sessions.search_tool import bind_db
@@ -128,8 +129,9 @@ def chat(session_id: str | None) -> None:
 
 @main.command()
 def gateway() -> None:
-    """Run the Telegram gateway (not yet implemented)."""
-    raise click.ClickException("gateway is not implemented yet (Phase 9).")
+    """Run the Telegram gateway."""
+    _startup()
+    asyncio.run(run_gateway())
 
 
 @main.command()

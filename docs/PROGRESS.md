@@ -67,12 +67,15 @@ box as the acceptance criteria for that phase are met.
 - [x] Fixed latent `SessionDB._init_schema` bug (executescript auto-commit vs. `_writer()`)
 
 ## Phase 9 — Telegram gateway
-- [ ] `gateway/session_key.py` — `build_session_key()`
-- [ ] `gateway/guard.py` — per-session lock + interrupt queue
-- [ ] `gateway/platforms/telegram.py` — allowlist-guarded adapter
-- [ ] `gateway/runner.py` — dispatch + signal-driven shutdown
-- [ ] `gateway.pid` written/removed on start/stop
-- [ ] DM round-trip works
+- [x] `gateway/session_key.py` — `build_session_key()`
+- [x] `gateway/guard.py` — per-session lock + interrupt queue
+- [x] `gateway/platforms/telegram.py` — allowlist-guarded adapter
+- [x] `gateway/runner.py` — dispatch + signal-driven shutdown (`make_handler` factored for tests)
+- [x] `gateway.pid` written/removed on start/stop
+- [x] `litehorse gateway` CLI wired to `run_gateway`
+- [x] Guardrails: disabled config / missing token / empty allowlist all `SystemExit`
+- [x] Tests green — `test_gateway_session_key.py`, `test_gateway_guard.py`, `test_gateway_runner.py`
+- [ ] DM round-trip works (requires live `TELEGRAM_BOT_TOKEN`; verify manually)
 
 ## Phase 10 — APScheduler cron
 - [ ] `cron/jobs.py` — `JobStore` (jobs.json)
