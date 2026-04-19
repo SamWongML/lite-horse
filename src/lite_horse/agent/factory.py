@@ -8,7 +8,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from agents import Agent, AgentHooks, ModelSettings, RunContextWrapper, Tool
+from agents import (
+    Agent,
+    AgentHooks,
+    ModelSettings,
+    RunContextWrapper,
+    Tool,
+    WebSearchTool,
+)
 from openai.types.shared import Reasoning
 
 from lite_horse.agent.budget import BudgetHook
@@ -59,6 +66,9 @@ def build_agent(*, name: str = "lite-horse", config: Config | None = None) -> Ag
     ``config`` can be passed in by tests to skip the on-disk load.
     """
     cfg = config or load_config()
+    tools: list[Tool] = [memory_tool, session_search, skill_manage]
+    if cfg.tools.web_search:
+        tools.append(WebSearchTool())
     return Agent(
         name=name,
         model=cfg.model,
@@ -69,6 +79,6 @@ def build_agent(*, name: str = "lite-horse", config: Config | None = None) -> Ag
             store=True,
             prompt_cache_retention="24h",
         ),
-        tools=[memory_tool, session_search, skill_manage],
+        tools=tools,
         hooks=LiteHorseHooks(max_turns=cfg.agent.max_turns, model=cfg.model),
     )

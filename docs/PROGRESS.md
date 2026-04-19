@@ -87,8 +87,8 @@ box as the acceptance criteria for that phase are met.
 - [ ] `@hourly`/`@daily` job fires and delivers end-to-end (requires live run; verify manually)
 
 ## Phase 11 — Built-in tools
-- [ ] `WebSearchTool()` wired (opt-in)
-- [ ] MCP server attach example documented
+- [x] `WebSearchTool()` wired (opt-in via `tools.web_search` in `config.yaml`)
+- [x] MCP server attach example documented (README — `MCPServerStreamableHttp` recipe)
 
 ## Phase 12 — Telemetry (optional v1)
 - [ ] Default SDK tracing left on (no custom processor in v1)

@@ -109,10 +109,23 @@ def test_build_agent_uses_config_values(litehorse_home: Path) -> None:
 
     tool_names = {getattr(t, "name", None) for t in agent.tools}
     assert {"memory", "session_search", "skill_manage"} <= tool_names
+    # web_search stays off unless explicitly enabled.
+    assert "web_search" not in tool_names
+    assert "web_search_preview" not in tool_names
 
     assert isinstance(agent.hooks, LiteHorseHooks)
     assert agent.hooks._budget.max_turns == 42
     assert agent.hooks._evo.model == "gpt-test"
+
+
+def test_build_agent_wires_web_search_when_enabled(litehorse_home: Path) -> None:
+    del litehorse_home
+    cfg = Config.model_validate({"tools": {"web_search": True}})
+    agent = build_agent(config=cfg)
+
+    tool_names = {getattr(t, "name", None) for t in agent.tools}
+    # The SDK names the hosted tool "web_search_preview" (Responses API).
+    assert any(n and n.startswith("web_search") for n in tool_names), tool_names
 
 
 def test_build_agent_falls_back_to_load_config(litehorse_home: Path) -> None:

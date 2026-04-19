@@ -32,6 +32,8 @@ gateway:
   telegram:
     enabled: false
     allowed_user_ids: []        # int Telegram user IDs
+tools:
+  web_search: false             # WebSearchTool — billed per call by OpenAI
 sandbox:
   enabled: false
 """
@@ -64,12 +66,17 @@ class SandboxSettings(BaseModel):
     enabled: bool = False
 
 
+class ToolsSettings(BaseModel):
+    web_search: bool = False
+
+
 class Config(BaseModel):
     model: str = "gpt-5.4"
     model_settings: ModelSettings = Field(default_factory=ModelSettings)
     agent: AgentSettings = Field(default_factory=AgentSettings)
     memory: MemorySettings = Field(default_factory=MemorySettings)
     gateway: GatewaySettings = Field(default_factory=GatewaySettings)
+    tools: ToolsSettings = Field(default_factory=ToolsSettings)
     sandbox: SandboxSettings = Field(default_factory=SandboxSettings)
 
 
