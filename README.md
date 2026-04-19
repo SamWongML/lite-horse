@@ -18,6 +18,39 @@ State lives in `~/.litehorse/` (override with `LITEHORSE_HOME`). On first run
 `load_config()` writes a default `config.yaml`; copy `.env.example` to
 `~/.litehorse/.env` and fill in `OPENAI_API_KEY`.
 
+## Running
+
+```bash
+# Interactive chat (fresh session each invocation)
+uv run litehorse chat
+
+# Resume a prior session
+uv run litehorse chat --session-id cli-abc123
+
+# Telegram gateway (needs TELEGRAM_BOT_TOKEN and allowlist in config.yaml)
+uv run litehorse gateway
+
+# APScheduler cron worker (reads ~/.litehorse/jobs.json)
+uv run litehorse cron
+```
+
+Gateway and cron MUST run as separate processes — cron uses `loop.run_forever()`,
+gateway uses signal-driven shutdown.
+
+## systemd deployment
+
+User-mode unit files live in `deploy/`. Install per user:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp deploy/gateway.service deploy/cron.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now gateway.service cron.service
+```
+
+Both units read `~/.litehorse/.env` for `OPENAI_API_KEY` / `TELEGRAM_BOT_TOKEN`.
+Adjust `ExecStart` if `litehorse` is not at `/usr/local/bin/litehorse`.
+
 ## Built-in tools
 
 The agent always ships with `memory`, `session_search`, and `skill_manage`. Extra

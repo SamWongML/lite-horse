@@ -1,0 +1,19 @@
+[Unit]
+Description=lite-horse Telegram gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+Environment=LITEHORSE_HOME=%h/.litehorse
+EnvironmentFile=%h/.litehorse/.env
+WorkingDirectory=%h/.litehorse
+ExecStart=/usr/local/bin/litehorse gateway
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target

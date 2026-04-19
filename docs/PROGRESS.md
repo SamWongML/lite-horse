@@ -91,12 +91,12 @@ box as the acceptance criteria for that phase are met.
 - [x] MCP server attach example documented (README — `MCPServerStreamableHttp` recipe)
 
 ## Phase 12 — Telemetry (optional v1)
-- [ ] Default SDK tracing left on (no custom processor in v1)
+- [x] Default SDK tracing left on (no custom processor in v1)
 
 ## Hardening
-- [ ] `ruff check src tests` clean
-- [ ] `mypy src` (strict) clean
-- [ ] `pytest -q` clean (unit + e2e)
-- [ ] `README.md` with install + run instructions
-- [ ] systemd unit files (`gateway.service`, `cron.service`)
-- [ ] `cloc src/lite_horse/` under 4,000 lines
+- [x] `ruff check src tests` clean
+- [x] `mypy src` (strict) clean
+- [x] `pytest -q` clean (unit + e2e) — 105 passed
+- [x] `README.md` with install + run instructions (chat / gateway / cron + systemd)
+- [x] systemd unit files (`deploy/gateway.service`, `deploy/cron.service`)
+- [x] `cloc src/lite_horse/` under 4,000 lines — 2,115 lines of Python

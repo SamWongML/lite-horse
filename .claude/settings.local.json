@@ -8,7 +8,8 @@
       "Bash(git commit *)",
       "Bash(git checkout *)",
       "Bash(/Users/demon/codes/lite-horse/.venv/bin/python -c \"from agents import WebSearchTool; print\\(WebSearchTool\\)\")",
-      "Bash(/Users/demon/codes/lite-horse/.venv/bin/python -c \"from agents.mcp import MCPServerStreamableHttp; print\\(MCPServerStreamableHttp\\)\")"
+      "Bash(/Users/demon/codes/lite-horse/.venv/bin/python -c \"from agents.mcp import MCPServerStreamableHttp; print\\(MCPServerStreamableHttp\\)\")",
+      "Bash(cloc src/lite_horse/)"
     ]
   }
 }
