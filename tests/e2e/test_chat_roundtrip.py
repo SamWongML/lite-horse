@@ -14,11 +14,11 @@ import pytest
 from click.testing import CliRunner
 from rich.console import Console
 
-from hermes_lite import cli
-from hermes_lite.memory.store import MemoryStore
-from hermes_lite.sessions.db import SessionDB
-from hermes_lite.sessions.sdk_session import SDKSession
-from hermes_lite.sessions.search_tool import bind_db
+from lite_horse import cli
+from lite_horse.memory.store import MemoryStore
+from lite_horse.sessions.db import SessionDB
+from lite_horse.sessions.sdk_session import SDKSession
+from lite_horse.sessions.search_tool import bind_db
 
 
 class _FakeResult:
@@ -53,7 +53,7 @@ def stubbed_runner(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 
 def test_chat_persists_messages_and_honors_max_turns(
-    hermeslite_home: Path, stubbed_runner: list[dict[str, Any]]
+    litehorse_home: Path, stubbed_runner: list[dict[str, Any]]
 ) -> None:
     runner = CliRunner()
     result = runner.invoke(
@@ -66,7 +66,7 @@ def test_chat_persists_messages_and_honors_max_turns(
     # config default max_turns flows through from load_config.
     assert stubbed_runner[0]["max_turns"] == 90
 
-    db = SessionDB(hermeslite_home / "sessions.db")
+    db = SessionDB(litehorse_home / "sessions.db")
     msgs = db.get_messages("e2e-persist")
     assert [m["role"] for m in msgs] == ["user", "assistant"]
     assert msgs[0]["content"] == "hello there"
@@ -74,7 +74,7 @@ def test_chat_persists_messages_and_honors_max_turns(
 
 
 def test_chat_resumes_existing_session(
-    hermeslite_home: Path, stubbed_runner: list[dict[str, Any]]
+    litehorse_home: Path, stubbed_runner: list[dict[str, Any]]
 ) -> None:
     runner = CliRunner()
     first = runner.invoke(
@@ -91,7 +91,7 @@ def test_chat_resumes_existing_session(
     )
     assert second.exit_code == 0, second.output
 
-    db = SessionDB(hermeslite_home / "sessions.db")
+    db = SessionDB(litehorse_home / "sessions.db")
     msgs = db.get_messages("e2e-resume")
     assert [m["content"] for m in msgs] == [
         "first",
@@ -102,9 +102,9 @@ def test_chat_resumes_existing_session(
 
 
 def test_chat_blank_lines_and_errors_do_not_kill_repl(
-    hermeslite_home: Path, monkeypatch: pytest.MonkeyPatch
+    litehorse_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    del hermeslite_home
+    del litehorse_home
     errors: list[str] = []
     good: list[str] = []
 
@@ -135,7 +135,7 @@ def test_chat_blank_lines_and_errors_do_not_kill_repl(
 # ---------- Direct callable sanity: memory + session_search end-to-end ----------
 
 
-def test_memory_and_session_search_survive_chat_sessions(hermeslite_home: Path) -> None:
+def test_memory_and_session_search_survive_chat_sessions(litehorse_home: Path) -> None:
     """Phase 8 acceptance: memory and session_search survive across invocations.
 
     We invoke the underlying stores the way the tools do — exercising the same
@@ -146,7 +146,7 @@ def test_memory_and_session_search_survive_chat_sessions(hermeslite_home: Path) 
     # memory.add writes USER block to disk.
     store = MemoryStore.for_user()
     store.add("prefers concise answers")
-    user_md = (hermeslite_home / "memories" / "USER.md").read_text(encoding="utf-8")
+    user_md = (litehorse_home / "memories" / "USER.md").read_text(encoding="utf-8")
     assert "prefers concise answers" in user_md
 
     # session_search sees content written through SDKSession.add_items.
@@ -164,9 +164,9 @@ def test_memory_and_session_search_survive_chat_sessions(hermeslite_home: Path) 
 # ---------- REPL loop unit test without CliRunner ----------
 
 
-def test_repl_loop_exits_on_eof(hermeslite_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_repl_loop_exits_on_eof(litehorse_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Directly drive :func:`cli._repl_loop` to verify clean EOF handling."""
-    del hermeslite_home
+    del litehorse_home
     cli._startup()  # ensures bind_db for session_search
 
     async def fake_run(

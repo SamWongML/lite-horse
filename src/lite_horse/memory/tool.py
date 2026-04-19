@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from agents import RunContextWrapper, function_tool
 
-from hermes_lite.memory.store import MemoryFull, MemoryStore, UnsafeMemoryContent
+from lite_horse.memory.store import MemoryFull, MemoryStore, UnsafeMemoryContent
 
 
 @function_tool(

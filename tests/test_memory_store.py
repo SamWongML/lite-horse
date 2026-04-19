@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from hermes_lite.constants import ENTRY_DELIMITER, MEMORY_CHAR_LIMIT
-from hermes_lite.memory.store import MemoryFull, MemoryStore, UnsafeMemoryContent
+from lite_horse.constants import ENTRY_DELIMITER, MEMORY_CHAR_LIMIT
+from lite_horse.memory.store import MemoryFull, MemoryStore, UnsafeMemoryContent
 
 
 @pytest.fixture()
-def store(hermeslite_home: Path) -> MemoryStore:
-    del hermeslite_home  # fixture configures HERMESLITE_HOME env var
+def store(litehorse_home: Path) -> MemoryStore:
+    del litehorse_home  # fixture configures LITEHORSE_HOME env var
     return MemoryStore.for_memory()
 
 
@@ -92,11 +92,11 @@ def test_render_block_format(store: MemoryStore) -> None:
     assert "second entry" in block
 
 
-def test_user_store_uses_user_label_and_separate_file(hermeslite_home: Path) -> None:
+def test_user_store_uses_user_label_and_separate_file(litehorse_home: Path) -> None:
     user = MemoryStore.for_user()
     user.add("likes terse answers")
     assert user.label == "USER PROFILE"
-    assert user.path == hermeslite_home / "memories" / "USER.md"
+    assert user.path == litehorse_home / "memories" / "USER.md"
     # Memory store is independent.
     mem = MemoryStore.for_memory()
     assert mem.entries() == []

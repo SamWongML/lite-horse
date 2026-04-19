@@ -1,4 +1,4 @@
-"""`hermeslite` CLI entrypoint.
+"""`litehorse` CLI entrypoint.
 
 Exposes three subcommands:
 
@@ -16,14 +16,14 @@ import click
 from agents import Runner
 from rich.console import Console
 
-from hermes_lite import __version__
-from hermes_lite.agent.factory import build_agent
-from hermes_lite.config import Config, load_config
-from hermes_lite.constants import hermeslite_home
-from hermes_lite.sessions.db import SessionDB
-from hermes_lite.sessions.sdk_session import SDKSession
-from hermes_lite.sessions.search_tool import bind_db
-from hermes_lite.skills.source import sync_bundled_skills
+from lite_horse import __version__
+from lite_horse.agent.factory import build_agent
+from lite_horse.config import Config, load_config
+from lite_horse.constants import litehorse_home
+from lite_horse.sessions.db import SessionDB
+from lite_horse.sessions.sdk_session import SDKSession
+from lite_horse.sessions.search_tool import bind_db
+from lite_horse.skills.source import sync_bundled_skills
 
 _DB: SessionDB | None = None
 _CONSOLE = Console()
@@ -33,7 +33,7 @@ _EXIT_COMMANDS = {"/exit", "/quit", ":q"}
 
 def _ensure_state_dirs() -> None:
     """Create state subdirectories and copy bundled skills on first run."""
-    home = hermeslite_home()
+    home = litehorse_home()
     for sub in ("memories", "skills", "sessions"):
         (home / sub).mkdir(parents=True, exist_ok=True)
     sync_bundled_skills()
@@ -83,13 +83,13 @@ async def _repl_loop(
         except Exception as exc:
             console.print(f"[red]error:[/] {exc}")
             continue
-        console.print(f"[bold green]hermes[/]: {result.final_output}\n")
+        console.print(f"[bold green]horse[/]: {result.final_output}\n")
 
 
 @click.group()
-@click.version_option(__version__, prog_name="hermeslite")
+@click.version_option(__version__, prog_name="litehorse")
 def main() -> None:
-    """hermes-lite: OpenAI-only personal assistant."""
+    """lite-horse: OpenAI-only personal assistant."""
     _startup()
 
 

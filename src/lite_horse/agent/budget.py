@@ -11,7 +11,7 @@ from typing import Any
 
 from agents import Agent, AgentHooks, RunContextWrapper, Tool
 
-from hermes_lite.constants import (
+from lite_horse.constants import (
     BUDGET_CAUTION_THRESHOLD,
     BUDGET_WARNING_THRESHOLD,
     DEFAULT_MAX_TURNS,

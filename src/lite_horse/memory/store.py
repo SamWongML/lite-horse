@@ -1,15 +1,15 @@
-"""Hermes-style char-bounded memory: MEMORY.md (agent notes) + USER.md (user profile)."""
+"""Char-bounded memory: MEMORY.md (agent notes) + USER.md (user profile)."""
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermes_lite.constants import (
+from lite_horse.constants import (
     ENTRY_DELIMITER,
     MEMORY_CHAR_LIMIT,
     USER_PROFILE_CHAR_LIMIT,
-    hermeslite_home,
+    litehorse_home,
 )
 
 _INVISIBLE_RE = re.compile(r"[\u200B-\u200F\u202A-\u202E\u2060-\u206F]")
@@ -20,7 +20,7 @@ _INJECTION_PATTERNS = [
 ]
 
 
-class MemoryFull(Exception):  # noqa: N818 — Hermes-compat name; kept across versions
+class MemoryFull(Exception):  # noqa: N818
     """Raised when adding/replacing an entry would exceed the char limit."""
 
     def __init__(self, current: int, limit: int, attempted: int) -> None:
@@ -33,13 +33,13 @@ class MemoryFull(Exception):  # noqa: N818 — Hermes-compat name; kept across v
         self.attempted = attempted
 
 
-class UnsafeMemoryContent(Exception):  # noqa: N818 — Hermes-compat name; kept across versions
+class UnsafeMemoryContent(Exception):  # noqa: N818
     """Raised when an entry contains invisible Unicode or injection patterns."""
 
 
 @dataclass
 class MemoryStore:
-    """One file = one store. Hermes uses two: MEMORY.md and USER.md."""
+    """One file = one store. Two instances: MEMORY.md and USER.md."""
 
     path: Path
     char_limit: int
@@ -47,14 +47,14 @@ class MemoryStore:
 
     @classmethod
     def for_memory(cls) -> MemoryStore:
-        p = hermeslite_home() / "memories" / "MEMORY.md"
+        p = litehorse_home() / "memories" / "MEMORY.md"
         p.parent.mkdir(parents=True, exist_ok=True)
         p.touch(exist_ok=True)
         return cls(path=p, char_limit=MEMORY_CHAR_LIMIT, label="MEMORY")
 
     @classmethod
     def for_user(cls) -> MemoryStore:
-        p = hermeslite_home() / "memories" / "USER.md"
+        p = litehorse_home() / "memories" / "USER.md"
         p.parent.mkdir(parents=True, exist_ok=True)
         p.touch(exist_ok=True)
         return cls(path=p, char_limit=USER_PROFILE_CHAR_LIMIT, label="USER PROFILE")

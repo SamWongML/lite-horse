@@ -12,8 +12,8 @@ from typing import Any
 
 from agents import Agent, AgentHooks, RunContextWrapper, Runner, Tool
 
-from hermes_lite.constants import SKILL_CREATION_MIN_TOOL_CALLS
-from hermes_lite.skills.manage_tool import skill_manage
+from lite_horse.constants import SKILL_CREATION_MIN_TOOL_CALLS
+from lite_horse.skills.manage_tool import skill_manage
 
 _DISTILLER_INSTRUCTIONS = (
     "You inspect a completed agent trajectory and decide whether the work "

@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from hermes_lite.agent.budget import BudgetHook
+from lite_horse.agent.budget import BudgetHook
 
 
 @dataclass

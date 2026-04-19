@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from hermes_lite.sessions.db import SessionDB
+from lite_horse.sessions.db import SessionDB
 
 
 @pytest.fixture()

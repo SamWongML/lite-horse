@@ -7,14 +7,14 @@ from pathlib import Path
 from agents.sandbox.capabilities import LocalDirLazySkillSource, Skills
 from agents.sandbox.entries import LocalDir
 
-from hermes_lite.constants import hermeslite_home
+from lite_horse.constants import litehorse_home
 
 _BUNDLED_DIR = Path(__file__).parent / "bundled"
 
 
 def skills_root() -> Path:
     """Return the user's writable skills directory, ensuring it exists."""
-    p = hermeslite_home() / "skills"
+    p = litehorse_home() / "skills"
     p.mkdir(parents=True, exist_ok=True)
     return p
 
@@ -42,7 +42,7 @@ def sync_bundled_skills() -> list[str]:
 
 
 def make_skills_capability() -> Skills:
-    """Build the SDK :class:`Skills` capability backed by ``~/.hermeslite/skills``."""
+    """Build the SDK :class:`Skills` capability backed by ``~/.litehorse/skills``."""
     return Skills(
         lazy_from=LocalDirLazySkillSource(source=LocalDir(src=skills_root())),
     )

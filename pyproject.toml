@@ -1,5 +1,5 @@
 [project]
-name = "hermes-lite"
+name = "lite-horse"
 version = "0.1.0"
 description = "Single-user OpenAI-only personal assistant built on the OpenAI Agents SDK"
 requires-python = ">=3.11"
@@ -28,14 +28,14 @@ dev = [
 ]
 
 [project.scripts]
-hermeslite = "hermes_lite.cli:main"
+litehorse = "lite_horse.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/hermes_lite"]
+packages = ["src/lite_horse"]
 
 [tool.ruff]
 line-length = 100
@@ -51,7 +51,7 @@ python_version = "3.11"
 strict = true
 ignore_missing_imports = true
 mypy_path = "src"
-packages = ["hermes_lite"]
+packages = ["lite_horse"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,4 +1,4 @@
-"""``skill_manage`` @function_tool — agent-managed CRUD over ~/.hermeslite/skills/.
+"""``skill_manage`` @function_tool — agent-managed CRUD over ~/.litehorse/skills/.
 
 The tool is intentionally a thin wrapper around :func:`dispatch`; tests target
 the pure dispatch helper rather than the SDK-decorated callable.
@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from agents import RunContextWrapper, function_tool
 
-from hermes_lite.skills.source import skills_root
+from lite_horse.skills.source import skills_root
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 

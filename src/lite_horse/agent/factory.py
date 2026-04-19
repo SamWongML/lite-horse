@@ -1,7 +1,7 @@
-"""Agent factory for hermes-lite.
+"""Agent factory for lite-horse.
 
 Wires together the dynamic instructions, model settings, tool bundle, and the
-composite :class:`HermesLiteHooks` (budget + evolution). Used by the CLI,
+composite :class:`LiteHorseHooks` (budget + evolution). Used by the CLI,
 gateway, and cron entrypoints so everyone talks to the same agent shape.
 """
 from __future__ import annotations
@@ -11,16 +11,16 @@ from typing import Any
 from agents import Agent, AgentHooks, ModelSettings, RunContextWrapper, Tool
 from openai.types.shared import Reasoning
 
-from hermes_lite.agent.budget import BudgetHook
-from hermes_lite.agent.evolution import EvolutionHook
-from hermes_lite.agent.instructions import make_instructions
-from hermes_lite.config import Config, load_config
-from hermes_lite.memory.tool import memory_tool
-from hermes_lite.sessions.search_tool import session_search
-from hermes_lite.skills.manage_tool import skill_manage
+from lite_horse.agent.budget import BudgetHook
+from lite_horse.agent.evolution import EvolutionHook
+from lite_horse.agent.instructions import make_instructions
+from lite_horse.config import Config, load_config
+from lite_horse.memory.tool import memory_tool
+from lite_horse.sessions.search_tool import session_search
+from lite_horse.skills.manage_tool import skill_manage
 
 
-class HermesLiteHooks(AgentHooks[Any]):
+class LiteHorseHooks(AgentHooks[Any]):
     """Composite hook forwarding lifecycle events to budget + evolution.
 
     The SDK's ``Agent.hooks`` slot accepts a single ``AgentHooks`` instance, so
@@ -53,7 +53,7 @@ class HermesLiteHooks(AgentHooks[Any]):
         await self._evo.on_end(context, agent, output)
 
 
-def build_agent(*, name: str = "hermes-lite", config: Config | None = None) -> Agent[Any]:
+def build_agent(*, name: str = "lite-horse", config: Config | None = None) -> Agent[Any]:
     """Construct the main user-facing agent.
 
     ``config`` can be passed in by tests to skip the on-disk load.
@@ -70,5 +70,5 @@ def build_agent(*, name: str = "hermes-lite", config: Config | None = None) -> A
             prompt_cache_retention="24h",
         ),
         tools=[memory_tool, session_search, skill_manage],
-        hooks=HermesLiteHooks(max_turns=cfg.agent.max_turns, model=cfg.model),
+        hooks=LiteHorseHooks(max_turns=cfg.agent.max_turns, model=cfg.model),
     )

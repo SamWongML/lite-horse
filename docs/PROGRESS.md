@@ -1,16 +1,16 @@
-# hermes-lite — implementation progress
+# lite-horse — implementation progress
 
 Tracks execution of [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md). Check each
 box as the acceptance criteria for that phase are met.
 
 ## Phase 0 — scaffold
 - [x] `pyproject.toml` with `openai-agents>=0.14.1,<0.15` pin
-- [x] Source tree (`src/hermes_lite/{agent,memory,sessions,skills,gateway/platforms,cron,tools}`)
+- [x] Source tree (`src/lite_horse/{agent,memory,sessions,skills,gateway/platforms,cron,tools}`)
 - [x] `constants.py` with char limits, thresholds, schema version
 - [x] `config.py` YAML + `.env` loader
 - [x] `cli.py` click group stub (`chat`, `gateway`, `cron`)
-- [x] `tests/conftest.py` with isolated `HERMESLITE_HOME` fixture
-- [x] `uv run hermeslite --help` prints subcommands
+- [x] `tests/conftest.py` with isolated `LITEHORSE_HOME` fixture
+- [x] `uv run litehorse --help` prints subcommands
 - [x] `uv run pytest -q`, `ruff check`, `mypy src` all clean
 
 ## Phase 1 — SQLite + FTS5 session store
@@ -26,7 +26,7 @@ box as the acceptance criteria for that phase are met.
 - [x] `memory/store.py` — `MemoryStore` with `add` / `replace` / `remove`
 - [x] Char-limit enforcement (`MemoryFull`) and duplicate guard
 - [x] Injection-pattern / invisible-Unicode validators (`UnsafeMemoryContent`)
-- [x] `render_block()` Hermes-format header + `§` delimiters
+- [x] `render_block()` header + `§` delimiters
 - [x] `memory/tool.py` — `memory` `@function_tool`
 - [x] `tests/test_memory_store.py` green
 
@@ -35,7 +35,7 @@ box as the acceptance criteria for that phase are met.
 - [x] `skills/manage_tool.py` — `skill_manage` with create/patch/edit/delete/write_file/remove_file/list
 - [x] Slug validation + path-traversal guard
 - [x] Bundled `skills/plan/SKILL.md` and `skills/skill-creator/SKILL.md`
-- [x] First-run sync into `~/.hermeslite/skills/`
+- [x] First-run sync into `~/.litehorse/skills/`
 - [x] `tests/test_skill_manage_tool.py` green
 
 ## Phase 4 — Autonomous skill creation hook
@@ -55,7 +55,7 @@ box as the acceptance criteria for that phase are met.
 
 ## Phase 7 — Agent factory
 - [x] `agent/factory.py` — `build_agent()` assembling model, tools, hooks
-- [x] `HermesLiteHooks` composite wrapping `BudgetHook` + `EvolutionHook`
+- [x] `LiteHorseHooks` composite wrapping `BudgetHook` + `EvolutionHook`
 - [x] `bind_db()` wired at CLI/gateway/cron startup
 
 ## Phase 8 — CLI chat
@@ -93,4 +93,4 @@ box as the acceptance criteria for that phase are met.
 - [ ] `pytest -q` clean (unit + e2e)
 - [ ] `README.md` with install + run instructions
 - [ ] systemd unit files (`gateway.service`, `cron.service`)
-- [ ] `cloc src/hermes_lite/` under 4,000 lines
+- [ ] `cloc src/lite_horse/` under 4,000 lines

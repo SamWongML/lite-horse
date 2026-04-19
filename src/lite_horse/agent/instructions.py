@@ -1,13 +1,12 @@
 """Dynamic system prompt assembly.
 
-Order matches Hermes for cache stability:
+Cache-stable block order:
 SOUL persona → Current time → MEMORY snapshot → USER PROFILE snapshot →
 skills index → AGENTS.md → tool guidance.
 
 The SDK evaluates ``instructions`` once per ``Runner.run``, so each of these
 reads is a frozen snapshot for the duration of the run. Writes that happen
-during the run land on disk but won't enter the prompt until the next run —
-identical to Hermes's frozen-snapshot pattern.
+during the run land on disk but won't enter the prompt until the next run.
 """
 from __future__ import annotations
 
@@ -18,8 +17,8 @@ from typing import Any
 
 from agents import Agent, RunContextWrapper
 
-from hermes_lite.constants import hermeslite_home
-from hermes_lite.memory.store import MemoryStore
+from lite_horse.constants import litehorse_home
+from lite_horse.memory.store import MemoryStore
 
 _SKILLS_INDEX_HEADER = "AVAILABLE SKILLS (load with skill_view)"
 
@@ -57,7 +56,7 @@ def _skill_description(skill_md: Path) -> str:
 
 def _skills_index() -> str:
     """Render a stable, alphabetised index of bundled + user skills."""
-    skills_dir = hermeslite_home() / "skills"
+    skills_dir = litehorse_home() / "skills"
     if not skills_dir.is_dir():
         return ""
     lines: list[str] = []
@@ -84,7 +83,7 @@ def make_instructions() -> InstructionsFn:
         ctx: RunContextWrapper[Any], agent: Agent[Any]
     ) -> str:
         del ctx, agent
-        home = hermeslite_home()
+        home = litehorse_home()
         soul = _read_optional(home / "soul.md")
         agents_md = _read_optional(home / "AGENTS.md", max_chars=4_000)
         mem_block = MemoryStore.for_memory().render_block()

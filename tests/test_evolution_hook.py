@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from hermes_lite.agent import evolution as evo_mod
-from hermes_lite.agent.evolution import EvolutionHook
+from lite_horse.agent import evolution as evo_mod
+from lite_horse.agent.evolution import EvolutionHook
 
 
 @dataclass
@@ -39,9 +39,9 @@ async def _tick(hook: EvolutionHook, ctx: _FakeCtx, n: int) -> None:
 
 @pytest.mark.asyncio
 async def test_distiller_not_called_below_threshold(
-    hermeslite_home: Any, monkeypatch: pytest.MonkeyPatch
+    litehorse_home: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    del hermeslite_home
+    del litehorse_home
     calls = _stub_runner(monkeypatch)
     hook = EvolutionHook(min_tool_calls=5)
     ctx = _FakeCtx(turn_input=[{"role": "user", "content": "hi"}])
@@ -55,9 +55,9 @@ async def test_distiller_not_called_below_threshold(
 
 @pytest.mark.asyncio
 async def test_distiller_called_at_threshold(
-    hermeslite_home: Any, monkeypatch: pytest.MonkeyPatch
+    litehorse_home: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    del hermeslite_home
+    del litehorse_home
     calls = _stub_runner(monkeypatch)
     hook = EvolutionHook(min_tool_calls=5)
     ctx = _FakeCtx(turn_input=[{"role": "user", "content": "plan a trip"}])
@@ -78,9 +78,9 @@ async def test_distiller_called_at_threshold(
 
 @pytest.mark.asyncio
 async def test_distiller_exceptions_are_swallowed(
-    hermeslite_home: Any, monkeypatch: pytest.MonkeyPatch
+    litehorse_home: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    del hermeslite_home
+    del litehorse_home
 
     async def boom(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("distiller exploded")
@@ -97,9 +97,9 @@ async def test_distiller_exceptions_are_swallowed(
 
 @pytest.mark.asyncio
 async def test_on_start_resets_counter_between_runs(
-    hermeslite_home: Any, monkeypatch: pytest.MonkeyPatch
+    litehorse_home: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    del hermeslite_home
+    del litehorse_home
     calls = _stub_runner(monkeypatch)
     hook = EvolutionHook(min_tool_calls=3)
     ctx = _FakeCtx(turn_input=[{"role": "user", "content": "first"}])
@@ -119,9 +119,9 @@ async def test_on_start_resets_counter_between_runs(
 
 @pytest.mark.asyncio
 async def test_user_request_extracted_from_structured_content(
-    hermeslite_home: Any, monkeypatch: pytest.MonkeyPatch
+    litehorse_home: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    del hermeslite_home
+    del litehorse_home
     calls = _stub_runner(monkeypatch)
     hook = EvolutionHook(min_tool_calls=2)
     ctx = _FakeCtx(
@@ -143,9 +143,9 @@ async def test_user_request_extracted_from_structured_content(
 
 @pytest.mark.asyncio
 async def test_missing_user_request_is_none_not_crash(
-    hermeslite_home: Any, monkeypatch: pytest.MonkeyPatch
+    litehorse_home: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    del hermeslite_home
+    del litehorse_home
     calls = _stub_runner(monkeypatch)
     hook = EvolutionHook(min_tool_calls=2)
     ctx = _FakeCtx(turn_input=[])  # no items at all

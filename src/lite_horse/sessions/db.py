@@ -1,8 +1,7 @@
-"""SessionDB — SQLite + FTS5 store for hermes-lite sessions and messages.
+"""SessionDB — SQLite + FTS5 store for lite-horse sessions and messages.
 
-Trimmed port of the write-retry + FTS5 patterns from NousResearch/hermes-agent
-``hermes_state.py`` (MIT). We keep the hard-won WAL / ``BEGIN IMMEDIATE`` retry
-logic and the FTS5 triggers; we drop billing, lineage, and migrations.
+WAL journal + ``BEGIN IMMEDIATE`` retry with jitter for write contention, plus
+FTS5 triggers that mirror ``messages.content`` into a searchable virtual table.
 """
 from __future__ import annotations
 
@@ -18,7 +17,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any
 
-from hermes_lite.constants import SCHEMA_VERSION, hermeslite_home
+from lite_horse.constants import SCHEMA_VERSION, litehorse_home
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -95,7 +94,7 @@ class SessionDB:
     """Thin SQLite wrapper. One instance per process; safe for multiple threads."""
 
     def __init__(self, db_path: Path | None = None) -> None:
-        self.db_path = db_path or (hermeslite_home() / "sessions.db")
+        self.db_path = db_path or (litehorse_home() / "sessions.db")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
         self._writes_since_checkpoint = 0

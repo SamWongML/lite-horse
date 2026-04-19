@@ -1,9 +1,9 @@
-"""Configuration loading for hermes-lite.
+"""Configuration loading for lite-horse.
 
-`load_config()` reads `~/.hermeslite/config.yaml` (creating it on first run from
-`DEFAULT_CONFIG_YAML`) and loads `~/.hermeslite/.env` into the process
+`load_config()` reads `~/.litehorse/config.yaml` (creating it on first run from
+`DEFAULT_CONFIG_YAML`) and loads `~/.litehorse/.env` into the process
 environment. The location of the state dir is controlled by
-`HERMESLITE_HOME`; see `constants.hermeslite_home`.
+`LITEHORSE_HOME`; see `constants.litehorse_home`.
 """
 from __future__ import annotations
 
@@ -14,11 +14,11 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
-from hermes_lite.constants import DEFAULT_MAX_TURNS, hermeslite_home
+from lite_horse.constants import DEFAULT_MAX_TURNS, litehorse_home
 
 ReasoningEffort = Literal["none", "low", "medium", "high"]
 
-DEFAULT_CONFIG_YAML = """# hermes-lite config (edit to taste)
+DEFAULT_CONFIG_YAML = """# lite-horse config (edit to taste)
 model: gpt-5.4
 model_settings:
   reasoning_effort: medium      # none | low | medium | high
@@ -74,7 +74,7 @@ class Config(BaseModel):
 
 
 def _ensure_state_dir() -> Path:
-    home = hermeslite_home()
+    home = litehorse_home()
     home.mkdir(parents=True, exist_ok=True)
     return home
 

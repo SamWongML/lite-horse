@@ -7,7 +7,7 @@ from typing import Any
 
 from agents import RunContextWrapper, function_tool
 
-from hermes_lite.sessions.db import SessionDB
+from lite_horse.sessions.db import SessionDB
 
 # Module-level singleton; the CLI / gateway / cron entrypoints wire this up
 # once at startup via :func:`bind_db`. Tools are module-level callables so we

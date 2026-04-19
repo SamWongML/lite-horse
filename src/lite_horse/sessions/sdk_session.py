@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from hermes_lite.sessions.db import SessionDB
+from lite_horse.sessions.db import SessionDB
 
 
 class SDKSession:
