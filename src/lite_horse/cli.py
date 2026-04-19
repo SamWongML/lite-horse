@@ -4,7 +4,7 @@ Exposes three subcommands:
 
 - `chat`    — interactive REPL (Phase 8, implemented)
 - `gateway` — Telegram gateway runner (Phase 9, implemented)
-- `cron`    — APScheduler worker (Phase 10, stub)
+- `cron`    — APScheduler worker (Phase 10, implemented)
 """
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from lite_horse import __version__
 from lite_horse.agent.factory import build_agent
 from lite_horse.config import Config, load_config
 from lite_horse.constants import litehorse_home
+from lite_horse.cron.scheduler import run_scheduler_blocking
 from lite_horse.gateway.runner import run_gateway
 from lite_horse.sessions.db import SessionDB
 from lite_horse.sessions.sdk_session import SDKSession
@@ -136,8 +137,9 @@ def gateway() -> None:
 
 @main.command()
 def cron() -> None:
-    """Run the cron scheduler (not yet implemented)."""
-    raise click.ClickException("cron is not implemented yet (Phase 10).")
+    """Run the APScheduler cron worker in the foreground."""
+    _startup()
+    run_scheduler_blocking()
 
 
 if __name__ == "__main__":

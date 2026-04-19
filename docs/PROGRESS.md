@@ -78,10 +78,13 @@ box as the acceptance criteria for that phase are met.
 - [ ] DM round-trip works (requires live `TELEGRAM_BOT_TOKEN`; verify manually)
 
 ## Phase 10 — APScheduler cron
-- [ ] `cron/jobs.py` — `JobStore` (jobs.json)
-- [ ] `cron/scheduler.py` — AsyncIOScheduler + crontab/aliases + delivery
-- [ ] Log + Telegram delivery handlers
-- [ ] `@hourly`/`@daily` job fires and delivers
+- [x] `cron/jobs.py` — `JobStore` (jobs.json) with atomic tmp+rename writes
+- [x] `cron/scheduler.py` — `AsyncIOScheduler` + alias/crontab parser + signal-driven shutdown
+- [x] Log + Telegram delivery handlers (`DELIVERY_HANDLERS` dispatch)
+- [x] `cron.pid` written/removed on start/stop
+- [x] `litehorse cron` CLI wired to `run_scheduler_blocking`
+- [x] Tests green — `test_cron_jobs.py`, `test_cron_scheduler.py`
+- [ ] `@hourly`/`@daily` job fires and delivers end-to-end (requires live run; verify manually)
 
 ## Phase 11 — Built-in tools
 - [ ] `WebSearchTool()` wired (opt-in)
