@@ -6,7 +6,6 @@ the pure dispatch helper rather than the SDK-decorated callable.
 from __future__ import annotations
 
 import json
-import re
 import shutil
 from pathlib import Path
 from typing import Any, Literal
@@ -14,9 +13,8 @@ from typing import Any, Literal
 from agents import RunContextWrapper, function_tool
 
 from lite_horse.security.validators import UnsafeContent, check_untrusted
+from lite_horse.skills._slug import _SLUG_RE
 from lite_horse.skills.source import skills_root
-
-_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 Action = Literal[
     "create", "patch", "edit", "delete", "write_file", "remove_file", "list",

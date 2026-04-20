@@ -25,6 +25,7 @@ from lite_horse.config import Config, load_config
 from lite_horse.memory.tool import memory_tool
 from lite_horse.sessions.search_tool import session_search
 from lite_horse.skills.manage_tool import skill_manage
+from lite_horse.skills.view_tool import skill_view
 
 
 class LiteHorseHooks(AgentHooks[Any]):
@@ -66,7 +67,7 @@ def build_agent(*, name: str = "lite-horse", config: Config | None = None) -> Ag
     ``config`` can be passed in by tests to skip the on-disk load.
     """
     cfg = config or load_config()
-    tools: list[Tool] = [memory_tool, session_search, skill_manage]
+    tools: list[Tool] = [memory_tool, session_search, skill_manage, skill_view]
     if cfg.tools.web_search:
         tools.append(WebSearchTool())
     return Agent(

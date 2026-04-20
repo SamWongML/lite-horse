@@ -1,11 +1,13 @@
-"""Skills capability + first-run sync of bundled skills into the state dir."""
+"""Bundled-skill sync + skills-root path helper.
+
+The SDK's ``Skills`` capability was explored in v0.1 but never wired into
+``Agent(...)`` (the SDK has no ``capabilities`` kwarg on ``Agent.__init__``).
+v0.2 Phase 14 replaces that dead path with an explicit ``skill_view`` tool.
+"""
 from __future__ import annotations
 
 import shutil
 from pathlib import Path
-
-from agents.sandbox.capabilities import LocalDirLazySkillSource, Skills
-from agents.sandbox.entries import LocalDir
 
 from lite_horse.constants import litehorse_home
 
@@ -39,10 +41,3 @@ def sync_bundled_skills() -> list[str]:
         shutil.copytree(src, dst)
         synced.append(src.name)
     return synced
-
-
-def make_skills_capability() -> Skills:
-    """Build the SDK :class:`Skills` capability backed by ``~/.litehorse/skills``."""
-    return Skills(
-        lazy_from=LocalDirLazySkillSource(source=LocalDir(src=skills_root())),
-    )
