@@ -35,7 +35,7 @@ in the plan file.
 |---|---|---|
 | 13 | prompt-cache fix + skill-write injection defense   | ✅ |
 | 14 | `skill_view` tool + kill dead capability           | ✅ |
-| 15 | drops: gateway, CLI REPL, systemd, Telegram dep    | ☐ |
+| 15 | drops: gateway, CLI REPL, systemd, Telegram dep    | ✅ |
 | 16 | `lite_horse.api` webapp surface                    | ☐ |
 | 17 | cron webhook delivery + `cron_manage` tool         | ☐ |
 | 18 | compression-as-consolidation                       | ☐ |

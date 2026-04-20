@@ -1,7 +1,7 @@
 [project]
 name = "lite-horse"
-version = "0.1.0"
-description = "Single-user OpenAI-only personal assistant built on the OpenAI Agents SDK"
+version = "0.2.0"
+description = "Embeddable OpenAI-only assistant runtime built on the OpenAI Agents SDK"
 requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [
@@ -10,9 +10,6 @@ dependencies = [
     "pydantic>=2.6",
     "pyyaml>=6.0",
     "apscheduler>=3.10,<4",
-    "python-telegram-bot>=21.0,<22",
-    "click>=8.1",
-    "rich>=13.7",
     "python-dotenv>=1.0",
 ]
 
@@ -28,7 +25,7 @@ dev = [
 ]
 
 [project.scripts]
-litehorse = "lite_horse.cli:main"
+litehorse-debug = "lite_horse._debug_cli:main"
 
 [build-system]
 requires = ["hatchling"]

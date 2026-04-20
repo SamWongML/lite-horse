@@ -174,42 +174,6 @@ async def test_deliver_unknown_platform_logs_error(
     assert any("unknown delivery platform" in r.message for r in caplog.records)
 
 
-@pytest.mark.asyncio
-async def test_deliver_telegram_dispatches_to_bot(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    sent: list[dict[str, Any]] = []
-
-    class _StubBot:
-        def __init__(self, *, token: str) -> None:
-            self.token = token
-
-        async def send_message(self, *, chat_id: int, text: str) -> None:
-            sent.append({"token": self.token, "chat_id": chat_id, "text": text})
-
-    # Patch the local `Bot` reference imported into the scheduler module.
-    monkeypatch.setattr(sched_mod, "Bot", _StubBot)
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok-123")
-
-    await sched_mod.deliver(
-        {"platform": "telegram", "chat_id": 99}, "scheduled hi"
-    )
-
-    assert sent == [{"token": "tok-123", "chat_id": 99, "text": "scheduled hi"}]
-
-
-@pytest.mark.asyncio
-async def test_deliver_telegram_skips_when_token_missing(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
-    caplog.set_level(logging.ERROR, logger="lite_horse.cron.scheduler")
-    await sched_mod.deliver(
-        {"platform": "telegram", "chat_id": 1}, "x"
-    )
-    assert any("TELEGRAM_BOT_TOKEN" in r.message for r in caplog.records)
-
-
 # ---------- _schedule_jobs + run_scheduler ----------
 
 

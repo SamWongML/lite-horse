@@ -2,8 +2,9 @@
 
 One ``AsyncIOScheduler`` runs on the main event loop; each firing builds a
 fresh agent + session (source ``"cron"``) and hands the final output to a
-delivery handler (log, Telegram). Shutdown is signal-driven — SIGINT / SIGTERM
-stop the scheduler and remove ``cron.pid`` — mirroring the gateway.
+delivery handler. Phase 15 dropped Telegram delivery; Phase 17 adds webhook.
+Shutdown is signal-driven — SIGINT / SIGTERM stop the scheduler and remove
+``cron.pid``.
 """
 from __future__ import annotations
 
@@ -18,7 +19,6 @@ from typing import Any
 from agents import Runner
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from telegram import Bot
 
 from lite_horse.agent.factory import build_agent
 from lite_horse.config import Config, load_config
@@ -59,23 +59,8 @@ async def deliver_log(_spec: dict[str, Any], text: str) -> None:
     log.info("[cron output] %s", text)
 
 
-async def deliver_telegram(spec: dict[str, Any], text: str) -> None:
-    """Send to Telegram via a fresh ``Bot`` (no shared state with the gateway)."""
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    if not token:
-        log.error("telegram delivery skipped: TELEGRAM_BOT_TOKEN not set")
-        return
-    chat_id = spec.get("chat_id")
-    if chat_id is None:
-        log.error("telegram delivery skipped: missing chat_id")
-        return
-    bot = Bot(token=token)
-    await bot.send_message(chat_id=int(chat_id), text=text)
-
-
 DELIVERY_HANDLERS: dict[str, Deliver] = {
     "log": deliver_log,
-    "telegram": deliver_telegram,
 }
 
 

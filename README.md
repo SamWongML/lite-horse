@@ -1,60 +1,57 @@
 # lite-horse
 
-Single-user, OpenAI-only personal assistant built on top of the
+Embeddable OpenAI-only assistant runtime built on the
 [OpenAI Agents SDK](https://github.com/openai/openai-agents-python). Skills with
 progressive disclosure, persistent memory, FTS5 recall, iteration-budget
-pressure, and a Telegram gateway — nothing else.
+pressure, and an offline self-evolution loop — consumed as a Python package
+by a single project-management webapp. No standalone CLI, no chat-platform
+adapters.
 
-See [`docs/PROGRESS.md`](docs/PROGRESS.md) for phase status and the active engineering plan.
+See [`docs/PROGRESS.md`](docs/PROGRESS.md) for phase status and the active
+engineering plan.
 
 ## Quick start
 
 ```bash
 uv sync --extra dev
-uv run litehorse --help
 ```
 
 State lives in `~/.litehorse/` (override with `LITEHORSE_HOME`). On first run
 `load_config()` writes a default `config.yaml`; copy `.env.example` to
 `~/.litehorse/.env` and fill in `OPENAI_API_KEY`.
 
-## Running
+## Embedding
 
-```bash
-# Interactive chat (fresh session each invocation)
-uv run litehorse chat
+From Phase 16 onward the webapp imports a single module:
 
-# Resume a prior session
-uv run litehorse chat --session-id cli-abc123
-
-# Telegram gateway (needs TELEGRAM_BOT_TOKEN and allowlist in config.yaml)
-uv run litehorse gateway
-
-# APScheduler cron worker (reads ~/.litehorse/jobs.json)
-uv run litehorse cron
+```python
+from lite_horse.api import run_turn   # wired in Phase 16
 ```
 
-Gateway and cron MUST run as separate processes — cron uses `loop.run_forever()`,
-gateway uses signal-driven shutdown.
-
-## systemd deployment
-
-User-mode unit files live in `deploy/`. Install per user:
+Until Phase 16 lands, a minimal debug REPL is available for local development
+only:
 
 ```bash
-mkdir -p ~/.config/systemd/user
-cp deploy/gateway.service deploy/cron.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now gateway.service cron.service
+uv run litehorse-debug
 ```
 
-Both units read `~/.litehorse/.env` for `OPENAI_API_KEY` / `TELEGRAM_BOT_TOKEN`.
-Adjust `ExecStart` if `litehorse` is not at `/usr/local/bin/litehorse`.
+`litehorse-debug` is not a product surface and may change or disappear without
+notice.
+
+## Cron worker
+
+```bash
+uv run python -c "from lite_horse.cron.scheduler import run_scheduler_blocking; run_scheduler_blocking()"
+```
+
+Reads `~/.litehorse/jobs.json`. Delivery is `log` only until Phase 17 adds
+webhook delivery to the webapp. The cron worker MUST run in its own process
+(the webapp supervises it on boot).
 
 ## Built-in tools
 
-The agent always ships with `memory`, `session_search`, and `skill_manage`. Extra
-tools are opt-in through `config.yaml`:
+The agent always ships with `memory`, `session_search`, `skill_manage`, and
+`skill_view`. Extra tools are opt-in through `config.yaml`:
 
 ```yaml
 tools:
@@ -84,4 +81,5 @@ async def run(prompt: str, session) -> str:
         return result.final_output
 ```
 
-Never accept MCP server URLs from user messages — keep them in config or code.
+Phase 23 moves this wiring into `config.yaml`. Never accept MCP server URLs
+from user messages — keep them in config or code.
