@@ -9,7 +9,10 @@
       "Bash(git checkout *)",
       "Bash(/Users/demon/codes/lite-horse/.venv/bin/python -c \"from agents import WebSearchTool; print\\(WebSearchTool\\)\")",
       "Bash(/Users/demon/codes/lite-horse/.venv/bin/python -c \"from agents.mcp import MCPServerStreamableHttp; print\\(MCPServerStreamableHttp\\)\")",
-      "Bash(cloc src/lite_horse/)"
+      "Bash(cloc src/lite_horse/)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "WebFetch(domain:hermes-agent.nousresearch.com)"
     ]
   }
 }

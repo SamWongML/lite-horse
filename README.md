@@ -5,7 +5,7 @@ Single-user, OpenAI-only personal assistant built on top of the
 progressive disclosure, persistent memory, FTS5 recall, iteration-budget
 pressure, and a Telegram gateway — nothing else.
 
-See `docs/IMPLEMENTATION_PLAN.md` for the engineering plan.
+See [`docs/PROGRESS.md`](docs/PROGRESS.md) for phase status and the active engineering plan.
 
 ## Quick start
 
