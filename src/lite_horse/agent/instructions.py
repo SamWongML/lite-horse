@@ -1,8 +1,12 @@
 """Dynamic system prompt assembly.
 
 Cache-stable block order:
-SOUL persona → Current time → MEMORY snapshot → USER PROFILE snapshot →
-skills index → AGENTS.md → tool guidance.
+SOUL persona → MEMORY snapshot → USER PROFILE snapshot → skills index →
+AGENTS.md → tool guidance → Current time.
+
+The time block is last so the volatile ``Current time:`` line does not
+invalidate the OpenAI prompt cache on every turn — only the trailing bytes
+change, and cache matching keys on the prefix.
 
 The SDK evaluates ``instructions`` once per ``Runner.run``, so each of these
 reads is a frozen snapshot for the duration of the run. Writes that happen
@@ -94,7 +98,6 @@ def make_instructions() -> InstructionsFn:
         parts: list[str] = []
         if soul:
             parts.append(soul)
-        parts.append(f"Current time: {now}")
         if mem_block:
             parts.append(mem_block)
         if usr_block:
@@ -104,6 +107,7 @@ def make_instructions() -> InstructionsFn:
         if agents_md:
             parts.append("PROJECT CONTEXT (AGENTS.md):\n" + agents_md)
         parts.append(_TOOL_GUIDANCE)
+        parts.append(f"Current time: {now}")
         return "\n\n".join(parts)
 
     return _instructions

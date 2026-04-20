@@ -33,7 +33,7 @@ in the plan file.
 
 | # | Subject | Status |
 |---|---|---|
-| 13 | prompt-cache fix + skill-write injection defense   | ☐ |
+| 13 | prompt-cache fix + skill-write injection defense   | ✅ |
 | 14 | `skill_view` tool + kill dead capability           | ☐ |
 | 15 | drops: gateway, CLI REPL, systemd, Telegram dep    | ☐ |
 | 16 | `lite_horse.api` webapp surface                    | ☐ |

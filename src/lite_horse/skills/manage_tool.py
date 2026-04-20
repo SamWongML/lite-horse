@@ -13,6 +13,7 @@ from typing import Any, Literal
 
 from agents import RunContextWrapper, function_tool
 
+from lite_horse.security.validators import UnsafeContent, check_untrusted
 from lite_horse.skills.source import skills_root
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
@@ -40,7 +41,7 @@ def _resolve_inside(root: Path, rel: str) -> Path:
     return target
 
 
-def dispatch(  # noqa: PLR0911, PLR0912 — branch-per-action; flat dispatch is the readable shape
+def dispatch(  # noqa: PLR0911, PLR0912, PLR0915 — branch-per-action; flat dispatch is the readable shape
     action: Action,
     *,
     name: str | None = None,
@@ -76,6 +77,10 @@ def dispatch(  # noqa: PLR0911, PLR0912 — branch-per-action; flat dispatch is 
                     "(--- name: ... description: ... ---)"
                 ),
             }
+        try:
+            check_untrusted(content)
+        except UnsafeContent as e:
+            return {"success": False, "error": f"unsafe skill content: {e}"}
         d.mkdir(parents=True)
         skill_md.write_text(content, encoding="utf-8")
         return {"success": True, "path": f"skills/{name}/SKILL.md"}
@@ -102,6 +107,10 @@ def dispatch(  # noqa: PLR0911, PLR0912 — branch-per-action; flat dispatch is 
             return {"success": False, "error": f"skill {name!r} does not exist"}
         if not content or "---" not in content:
             return {"success": False, "error": "content must include YAML frontmatter"}
+        try:
+            check_untrusted(content)
+        except UnsafeContent as e:
+            return {"success": False, "error": f"unsafe skill content: {e}"}
         skill_md.write_text(content, encoding="utf-8")
         return {"success": True}
 
@@ -120,6 +129,10 @@ def dispatch(  # noqa: PLR0911, PLR0912 — branch-per-action; flat dispatch is 
             target = _resolve_inside(d, file_path)
         except ValueError as e:
             return {"success": False, "error": str(e)}
+        try:
+            check_untrusted(content)
+        except UnsafeContent as e:
+            return {"success": False, "error": f"unsafe file content: {e}"}
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return {"success": True, "path": f"skills/{name}/{file_path}"}

@@ -76,7 +76,10 @@ async def test_soul_and_agents_md_render(litehorse_home: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_block_ordering_is_stable(litehorse_home: Path) -> None:
-    """SOUL → time → MEMORY → USER PROFILE → SKILLS → AGENTS.md → tool guidance."""
+    """SOUL → MEMORY → USER PROFILE → SKILLS → AGENTS.md → tool guidance → time.
+
+    Current time is last so it does not bust the OpenAI prompt cache every turn.
+    """
     (litehorse_home / "soul.md").write_text("SOUL_MARK", encoding="utf-8")
     MemoryStore.for_memory().add("MEM_MARK_entry")
     MemoryStore.for_user().add("USR_MARK_entry")
@@ -91,11 +94,19 @@ async def test_block_ordering_is_stable(litehorse_home: Path) -> None:
 
     positions = [
         prompt.index("SOUL_MARK"),
-        prompt.index("Current time:"),
         prompt.index("MEM_MARK_entry"),
         prompt.index("USR_MARK_entry"),
         prompt.index("SKILL_MARK"),
         prompt.index("AGENTS_MARK"),
         prompt.index("TOOL USE GUIDANCE:"),
+        prompt.index("Current time:"),
     ]
     assert positions == sorted(positions), f"block order violated: {positions}"
+
+
+@pytest.mark.asyncio
+async def test_current_time_is_last_for_prompt_cache(litehorse_home: Path) -> None:
+    """The volatile ``Current time:`` line must come AFTER ``TOOL USE GUIDANCE:``."""
+    del litehorse_home
+    prompt = await make_instructions()(None, None)  # type: ignore[arg-type]
+    assert prompt.index("TOOL USE GUIDANCE:") < prompt.index("Current time:")

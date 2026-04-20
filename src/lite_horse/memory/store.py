@@ -1,7 +1,6 @@
 """Char-bounded memory: MEMORY.md (agent notes) + USER.md (user profile)."""
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,13 +10,7 @@ from lite_horse.constants import (
     USER_PROFILE_CHAR_LIMIT,
     litehorse_home,
 )
-
-_INVISIBLE_RE = re.compile(r"[\u200B-\u200F\u202A-\u202E\u2060-\u206F]")
-_INJECTION_PATTERNS = [
-    re.compile(r"ignore\s+(all\s+)?previous\s+instructions", re.I),
-    re.compile(r"system\s*:\s*you\s+are", re.I),
-    re.compile(r"<\s*\|im_start\s*\|>", re.I),
-]
+from lite_horse.security.validators import UnsafeContent, check_untrusted
 
 
 class MemoryFull(Exception):  # noqa: N818
@@ -33,7 +26,7 @@ class MemoryFull(Exception):  # noqa: N818
         self.attempted = attempted
 
 
-class UnsafeMemoryContent(Exception):  # noqa: N818
+class UnsafeMemoryContent(UnsafeContent):
     """Raised when an entry contains invisible Unicode or injection patterns."""
 
 
@@ -131,13 +124,10 @@ class MemoryStore:
     def _validate(self, content: str) -> None:
         if not content.strip():
             raise ValueError("empty memory entry")
-        if _INVISIBLE_RE.search(content):
-            raise UnsafeMemoryContent("memory entry contains invisible Unicode characters")
-        for pat in _INJECTION_PATTERNS:
-            if pat.search(content):
-                raise UnsafeMemoryContent(
-                    f"memory entry matches injection pattern: {pat.pattern}"
-                )
+        try:
+            check_untrusted(content)
+        except UnsafeContent as e:
+            raise UnsafeMemoryContent(str(e)) from e
 
     def _save(self, entries: list[str]) -> None:
         text = ENTRY_DELIMITER.join(entries)
