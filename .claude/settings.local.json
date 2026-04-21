@@ -12,7 +12,8 @@
       "Bash(cloc src/lite_horse/)",
       "WebFetch(domain:github.com)",
       "WebSearch",
-      "WebFetch(domain:hermes-agent.nousresearch.com)"
+      "WebFetch(domain:hermes-agent.nousresearch.com)",
+      "Bash(uv lock *)"
     ]
   }
 }

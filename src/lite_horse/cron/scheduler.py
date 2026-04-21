@@ -2,9 +2,9 @@
 
 One ``AsyncIOScheduler`` runs on the main event loop; each firing builds a
 fresh agent + session (source ``"cron"``) and hands the final output to a
-delivery handler. Phase 15 dropped Telegram delivery; Phase 17 adds webhook.
-Shutdown is signal-driven — SIGINT / SIGTERM stop the scheduler and remove
-``cron.pid``.
+delivery handler. Phase 15 dropped Telegram delivery; Phase 17 wires the
+webhook handler so cron output reaches the embedding webapp. Shutdown is
+signal-driven — SIGINT / SIGTERM stop the scheduler and remove ``cron.pid``.
 """
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ from agents import Runner
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from lite_horse.agent.factory import build_agent
 from lite_horse.config import Config, load_config
 from lite_horse.constants import litehorse_home
+from lite_horse.cron.delivery import deliver_webhook
 from lite_horse.cron.jobs import Job, JobStore
 from lite_horse.sessions.db import SessionDB
 from lite_horse.sessions.sdk_session import SDKSession
@@ -31,7 +31,7 @@ from lite_horse.sessions.search_tool import bind_db
 log = logging.getLogger(__name__)
 
 Fire = Callable[[Job], Awaitable[None]]
-Deliver = Callable[[dict[str, Any], str], Awaitable[None]]
+Deliver = Callable[[dict[str, Any], str, str], Awaitable[None]]
 
 _ALIASES: dict[str, str] = {
     "@minutely": "* * * * *",
@@ -55,30 +55,35 @@ def parse_schedule(schedule: str) -> CronTrigger:
     return CronTrigger.from_crontab(s)
 
 
-async def deliver_log(_spec: dict[str, Any], text: str) -> None:
+async def deliver_log(
+    _spec: dict[str, Any], text: str, _session_key: str
+) -> None:
     log.info("[cron output] %s", text)
 
 
 DELIVERY_HANDLERS: dict[str, Deliver] = {
     "log": deliver_log,
+    "webhook": deliver_webhook,
 }
 
 
-async def deliver(spec: dict[str, Any], text: str) -> None:
+async def deliver(spec: dict[str, Any], text: str, session_key: str) -> None:
     platform = spec.get("platform", "log")
     handler = DELIVERY_HANDLERS.get(platform)
     if handler is None:
         log.error("unknown delivery platform: %s", platform)
         return
-    await handler(spec, text)
+    await handler(spec, text, session_key)
 
 
 def make_fire(*, db: SessionDB, cfg: Config) -> Fire:
     """Build the closure APScheduler calls when a job is due.
 
     Exposed so tests can invoke a firing directly without standing up a real
-    scheduler.
+    scheduler. ``build_agent`` is imported lazily to avoid a cron ↔ factory
+    import cycle (``factory`` pulls in ``cron_manage``).
     """
+    from lite_horse.agent.factory import build_agent  # noqa: PLC0415
 
     async def fire(job: Job) -> None:
         log.info("cron firing: %s", job.id)
@@ -92,10 +97,10 @@ def make_fire(*, db: SessionDB, cfg: Config) -> Fire:
                 session=session,  # type: ignore[arg-type]
                 max_turns=cfg.agent.max_turns,
             )
-            await deliver(job.delivery, str(result.final_output))
+            await deliver(job.delivery, str(result.final_output), sid)
         except Exception as exc:
             log.exception("cron job %s failed", job.id)
-            await deliver(job.delivery, f"⚠ cron job {job.id} failed: {exc}")
+            await deliver(job.delivery, f"⚠ cron job {job.id} failed: {exc}", sid)
         finally:
             db.end_session(sid, end_reason="cron_done")
 

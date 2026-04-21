@@ -108,7 +108,13 @@ def test_build_agent_uses_config_values(litehorse_home: Path) -> None:
     assert agent.model_settings.reasoning.effort == "high"
 
     tool_names = {getattr(t, "name", None) for t in agent.tools}
-    assert {"memory", "session_search", "skill_manage"} <= tool_names
+    assert {
+        "memory",
+        "session_search",
+        "skill_manage",
+        "skill_view",
+        "cron_manage",
+    } <= tool_names
     # web_search stays off unless explicitly enabled.
     assert "web_search" not in tool_names
     assert "web_search_preview" not in tool_names

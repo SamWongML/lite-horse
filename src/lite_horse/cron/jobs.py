@@ -80,6 +80,18 @@ class JobStore:
         self._write(after)
         return True
 
+    def set_enabled(self, job_id: str, enabled: bool) -> bool:
+        """Flip ``enabled`` on one job. Returns ``False`` if no such job."""
+        jobs = self.all()
+        for j in jobs:
+            if j.id == job_id:
+                if j.enabled == enabled:
+                    return True
+                j.enabled = enabled
+                self._write(jobs)
+                return True
+        return False
+
     def _write(self, jobs: list[Job]) -> None:
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         tmp.write_text(

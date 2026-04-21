@@ -66,8 +66,11 @@ async def test_fire_runs_agent_and_delivers(
         captured_prompts.append(text)
         return _StubResult(f"answer:{text}")
 
-    async def fake_deliver(spec: dict[str, Any], text: str) -> None:
+    async def fake_deliver(
+        spec: dict[str, Any], text: str, session_key: str
+    ) -> None:
         delivered.append((spec, text))
+        del session_key
 
     monkeypatch.setattr(sched_mod.Runner, "run", fake_run)
     monkeypatch.setattr(sched_mod, "deliver", fake_deliver)
@@ -97,8 +100,11 @@ async def test_fire_delivers_error_when_runner_raises(
     async def boom(agent: Any, text: str, **_kw: Any) -> _StubResult:
         raise RuntimeError("kaboom")
 
-    async def fake_deliver(spec: dict[str, Any], text: str) -> None:
+    async def fake_deliver(
+        spec: dict[str, Any], text: str, session_key: str
+    ) -> None:
         delivered.append(text)
+        del spec, session_key
 
     monkeypatch.setattr(sched_mod.Runner, "run", boom)
     monkeypatch.setattr(sched_mod, "deliver", fake_deliver)
@@ -128,8 +134,10 @@ async def test_fire_ends_session_after_run(
     async def fake_run(agent: Any, text: str, **_kw: Any) -> _StubResult:
         return _StubResult("ok")
 
-    async def fake_deliver(spec: dict[str, Any], text: str) -> None:
-        pass
+    async def fake_deliver(
+        spec: dict[str, Any], text: str, session_key: str
+    ) -> None:
+        del spec, text, session_key
 
     monkeypatch.setattr(sched_mod.Runner, "run", fake_run)
     monkeypatch.setattr(sched_mod, "deliver", fake_deliver)
@@ -161,7 +169,7 @@ async def test_deliver_log_writes_to_logger(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.INFO, logger="lite_horse.cron.scheduler")
-    await sched_mod.deliver({"platform": "log"}, "hello world")
+    await sched_mod.deliver({"platform": "log"}, "hello world", "sid-1")
     assert any("hello world" in r.message for r in caplog.records)
 
 
@@ -170,7 +178,7 @@ async def test_deliver_unknown_platform_logs_error(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.ERROR, logger="lite_horse.cron.scheduler")
-    await sched_mod.deliver({"platform": "carrier-pigeon"}, "msg")
+    await sched_mod.deliver({"platform": "carrier-pigeon"}, "msg", "sid-2")
     assert any("unknown delivery platform" in r.message for r in caplog.records)
 
 
