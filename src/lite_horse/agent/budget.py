@@ -5,6 +5,12 @@ inside the most recent tool-role item in ``context.turn_input``, nudging the
 model to wind down before the ceiling hits. Each tier (caution / warning) is
 injected at most once per run.
 
+Every ``NUDGE_EVERY_N_TOOL_CALLS`` iterations the hook also stamps a
+persistence-nudge note into the same tool item — independent of the budget
+tiers. The nudge asks the model to push any durable fact it just learned
+into MEMORY.md before continuing. Idempotent per N-bucket by virtue of
+monotonic iteration counting.
+
 On the WARNING-tier transition the hook also fires a :class:`Consolidator`
 side-agent once per run to distill durable facts out of the trajectory into
 MEMORY.md before truncation. Consolidation failures are swallowed — it must
@@ -22,6 +28,7 @@ from lite_horse.constants import (
     BUDGET_CAUTION_THRESHOLD,
     BUDGET_WARNING_THRESHOLD,
     DEFAULT_MAX_TURNS,
+    NUDGE_EVERY_N_TOOL_CALLS,
 )
 from lite_horse.memory.store import MemoryFull, MemoryStore, UnsafeMemoryContent
 
@@ -61,6 +68,7 @@ class BudgetHook(AgentHooks[Any]):
     ) -> None:
         del agent, tool, result
         self.iteration += 1
+        self._maybe_emit_nudge(context)
         tier = self._tier_for(self.iteration / max(1, self.max_turns))
         if tier is None or tier == self._last_tier:
             return
@@ -69,6 +77,20 @@ class BudgetHook(AgentHooks[Any]):
             if tier == _TIER_WARNING and not self._consolidated:
                 self._consolidated = True
                 await self._consolidate(context)
+
+    def _maybe_emit_nudge(self, context: RunContextWrapper[Any]) -> None:
+        """Append a persistence nudge every N iterations.
+
+        Monotonic iteration counting gives us idempotency for free — each
+        multiple of N is hit exactly once per run.
+        """
+        if NUDGE_EVERY_N_TOOL_CALLS <= 0:
+            return
+        if self.iteration <= 0:
+            return
+        if self.iteration % NUDGE_EVERY_N_TOOL_CALLS != 0:
+            return
+        self._append_note(context, self._nudge_note())
 
     def _tier_for(self, ratio: float) -> str | None:
         if ratio >= BUDGET_WARNING_THRESHOLD:
@@ -87,6 +109,13 @@ class BudgetHook(AgentHooks[Any]):
         return (
             f"[BUDGET: Iteration {self.iteration}/{self.max_turns}. "
             f"{left} iterations left. Start consolidating your work.]"
+        )
+
+    def _nudge_note(self) -> str:
+        return (
+            f"[NUDGE: You have done {self.iteration} tool calls. If you learned "
+            "a durable fact — user preference, environmental constant, lesson "
+            "— consider `memory(action='add', ...)` before continuing.]"
         )
 
     @staticmethod

@@ -143,3 +143,89 @@ async def test_no_tool_item_in_turn_input_does_not_advance_tier() -> None:
     await hook.on_tool_end(ctx, agent=None, tool=_Sentinel(), result="ok")  # type: ignore[arg-type]
     assert "[BUDGET" in ctx.turn_input[-1]["content"]
     assert hook._last_tier == "caution"
+
+
+@pytest.mark.asyncio
+async def test_nudge_fires_at_iteration_ten_only_once_per_bucket() -> None:
+    """Nudge lands at iter 10, stays silent 11-19, lands again at 20."""
+    hook = BudgetHook(max_turns=100)  # keep budget tiers out of the way
+    ctx = _FakeCtx()
+    await hook.on_start(ctx, agent=None)  # type: ignore[arg-type]
+
+    nudges_by_iter: dict[int, str] = {}
+    for i in range(1, 21):
+        ctx.turn_input = [_tool_item(f"step{i}")]
+        await hook.on_tool_end(ctx, agent=None, tool=_Sentinel(), result="ok")  # type: ignore[arg-type]
+        content = ctx.turn_input[-1]["content"]
+        if "[NUDGE" in content:
+            nudges_by_iter[i] = content
+
+    assert list(nudges_by_iter) == [10, 20]
+    assert "10 tool calls" in nudges_by_iter[10]
+    assert "20 tool calls" in nudges_by_iter[20]
+    assert "memory(action='add'" in nudges_by_iter[10]
+
+
+@pytest.mark.asyncio
+async def test_nudge_coexists_with_budget_tier_when_same_iteration() -> None:
+    """At max_turns=14, iter 10 crosses caution (10/14 ≈ 0.71) AND nudges.
+
+    Both notes must land on the same tool item and be visibly distinct.
+    """
+    hook = BudgetHook(max_turns=14)
+    ctx = _FakeCtx()
+    await hook.on_start(ctx, agent=None)  # type: ignore[arg-type]
+
+    for i in range(1, 10):
+        ctx.turn_input = [_tool_item(f"step{i}")]
+        await hook.on_tool_end(ctx, agent=None, tool=_Sentinel(), result="ok")  # type: ignore[arg-type]
+        assert "[NUDGE" not in ctx.turn_input[-1]["content"]
+
+    ctx.turn_input = [_tool_item("step10")]
+    await hook.on_tool_end(ctx, agent=None, tool=_Sentinel(), result="ok")  # type: ignore[arg-type]
+    content = ctx.turn_input[-1]["content"]
+    assert "[NUDGE" in content
+    assert "[BUDGET" in content
+    assert "WARNING" not in content  # caution, not warning
+    assert hook._last_tier == "caution"
+
+
+@pytest.mark.asyncio
+async def test_twenty_five_tool_calls_produce_two_nudges_caution_and_warning() -> None:
+    """Acceptance: 25 tool calls, max_turns=25 → 2 nudges + 1 CAUTION + 1 WARNING."""
+    hook = BudgetHook(max_turns=25)
+    ctx = _FakeCtx()
+    await hook.on_start(ctx, agent=None)  # type: ignore[arg-type]
+
+    events: list[tuple[int, str]] = []
+    for i in range(1, 26):
+        ctx.turn_input = [_tool_item(f"step{i}")]
+        await hook.on_tool_end(ctx, agent=None, tool=_Sentinel(), result="ok")  # type: ignore[arg-type]
+        content = ctx.turn_input[-1]["content"]
+        if "[NUDGE" in content:
+            events.append((i, "nudge"))
+        if "[BUDGET WARNING" in content:
+            events.append((i, "warning"))
+        elif "[BUDGET" in content:
+            events.append((i, "caution"))
+
+    assert [kind for _, kind in events] == ["nudge", "caution", "nudge", "warning"]
+    assert [i for i, _ in events] == [10, 18, 20, 23]
+
+
+@pytest.mark.asyncio
+async def test_nudge_resets_between_runs() -> None:
+    """on_start clears iteration, so the next run restarts the nudge cadence."""
+    hook = BudgetHook(max_turns=100)
+    ctx = _FakeCtx()
+
+    await hook.on_start(ctx, agent=None)  # type: ignore[arg-type]
+    await _tick(hook, ctx, 10)
+    assert "[NUDGE" in ctx.turn_input[-1]["content"]
+
+    await hook.on_start(ctx, agent=None)  # type: ignore[arg-type]
+    assert hook.iteration == 0
+    # After reset, one tool call should NOT trigger a nudge (iter 1, not 10).
+    ctx.turn_input = [_tool_item("post-reset")]
+    await hook.on_tool_end(ctx, agent=None, tool=_Sentinel(), result="ok")  # type: ignore[arg-type]
+    assert "[NUDGE" not in ctx.turn_input[-1]["content"]

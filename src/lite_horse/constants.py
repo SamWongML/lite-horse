@@ -19,6 +19,12 @@ DEFAULT_MAX_TURNS = 90
 BUDGET_CAUTION_THRESHOLD = 0.70
 BUDGET_WARNING_THRESHOLD = 0.90
 
+# Every N tool calls, BudgetHook injects a one-shot persistence nudge so the
+# model is reminded to push durable facts to MEMORY.md mid-run. Independent
+# of the budget tiers: CAUTION/WARNING signal "wind down", nudges signal
+# "remember".
+NUDGE_EVERY_N_TOOL_CALLS = 10
+
 # Skills auto-creation heuristic
 SKILL_CREATION_MIN_TOOL_CALLS = 5
 
