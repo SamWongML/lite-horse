@@ -23,8 +23,12 @@ from agents import Agent, RunContextWrapper
 
 from lite_horse.constants import litehorse_home
 from lite_horse.memory.store import MemoryStore
+from lite_horse.skills import stats as skill_stats
 
 _SKILLS_INDEX_HEADER = "AVAILABLE SKILLS (load with skill_view)"
+_FRAGILE_MIN_ERRORS = 3
+_FRAGILE_MAX_SUCCESS_RATIO = 0.5
+_FRAGILE_TAG = " (fragile — see stats)"
 
 _TOOL_GUIDANCE = (
     "TOOL USE GUIDANCE:\n"
@@ -71,10 +75,25 @@ def _skills_index() -> str:
         if not skill_md.is_file():
             continue
         desc = _skill_description(skill_md)
-        lines.append(f"- **{p.name}**: {desc or '(no description)'}")
+        suffix = _fragile_suffix(p.name)
+        lines.append(f"- **{p.name}**: {desc or '(no description)'}{suffix}")
     if not lines:
         return ""
     return f"{_SKILLS_INDEX_HEADER}\n" + "\n".join(lines)
+
+
+def _fragile_suffix(name: str) -> str:
+    data = skill_stats.read(name)
+    if not data:
+        return ""
+    errors = int(data.get("error_count", 0) or 0)
+    successes = int(data.get("success_count", 0) or 0)
+    uses = int(data.get("usage_count", 0) or 0)
+    if errors < _FRAGILE_MIN_ERRORS or uses <= 0:
+        return ""
+    if successes / max(1, uses) >= _FRAGILE_MAX_SUCCESS_RATIO:
+        return ""
+    return _FRAGILE_TAG
 
 
 InstructionsFn = Callable[[RunContextWrapper[Any], Agent[Any]], Awaitable[str]]

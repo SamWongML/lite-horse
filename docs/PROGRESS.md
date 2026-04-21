@@ -40,7 +40,7 @@ in the plan file.
 | 17 | cron webhook delivery + `cron_manage` tool         | ✅ |
 | 18 | compression-as-consolidation                       | ✅ |
 | 19 | periodic memory nudge                              | ✅ |
-| 20 | skill stats sidecar + in-use refinement            | ☐ |
+| 20 | skill stats sidecar + in-use refinement            | ✅ |
 | 21 | conditional skill activation                       | ☐ |
 | 22 | structured error classifier                        | ☐ |
 | 23 | `config.mcp_servers` + `token_count` cleanup       | ☐ |

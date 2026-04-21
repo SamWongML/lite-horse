@@ -11,6 +11,7 @@ from typing import Any
 
 from agents import RunContextWrapper, function_tool
 
+from lite_horse.skills import stats as skill_stats
 from lite_horse.skills._slug import _SLUG_RE
 from lite_horse.skills.source import skills_root
 
@@ -39,6 +40,7 @@ def _view(name: str) -> dict[str, Any]:
     if len(text.encode("utf-8")) > _VIEW_MAX_BYTES:
         encoded = text.encode("utf-8")[: _VIEW_MAX_BYTES - len(_TRUNCATION_MARKER)]
         text = encoded.decode("utf-8", errors="ignore") + _TRUNCATION_MARKER
+    skill_stats.record_view(name)
     return {"success": True, "name": name, "content": text}
 
 
