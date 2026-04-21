@@ -19,6 +19,7 @@ from agents import (
 from openai.types.shared import Reasoning
 
 from lite_horse.agent.budget import BudgetHook
+from lite_horse.agent.consolidator import Consolidator
 from lite_horse.agent.evolution import EvolutionHook
 from lite_horse.agent.instructions import make_instructions
 from lite_horse.config import Config, load_config
@@ -37,7 +38,10 @@ class LiteHorseHooks(AgentHooks[Any]):
     """
 
     def __init__(self, *, max_turns: int, model: str) -> None:
-        self._budget = BudgetHook(max_turns=max_turns)
+        self._budget = BudgetHook(
+            max_turns=max_turns,
+            consolidator=Consolidator(model=model),
+        )
         self._evo = EvolutionHook(model=model)
 
     async def on_start(

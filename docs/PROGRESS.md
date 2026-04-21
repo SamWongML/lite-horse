@@ -38,7 +38,7 @@ in the plan file.
 | 15 | drops: gateway, CLI REPL, systemd, Telegram dep    | ✅ |
 | 16 | `lite_horse.api` webapp surface                    | ✅ |
 | 17 | cron webhook delivery + `cron_manage` tool         | ✅ |
-| 18 | compression-as-consolidation                       | ☐ |
+| 18 | compression-as-consolidation                       | ✅ |
 | 19 | periodic memory nudge                              | ☐ |
 | 20 | skill stats sidecar + in-use refinement            | ☐ |
 | 21 | conditional skill activation                       | ☐ |

@@ -4,18 +4,26 @@ The SDK's ``max_turns`` is the hard ceiling. This hook adds a *soft* signal
 inside the most recent tool-role item in ``context.turn_input``, nudging the
 model to wind down before the ceiling hits. Each tier (caution / warning) is
 injected at most once per run.
+
+On the WARNING-tier transition the hook also fires a :class:`Consolidator`
+side-agent once per run to distill durable facts out of the trajectory into
+MEMORY.md before truncation. Consolidation failures are swallowed — it must
+never break the user's run (same rule as :class:`EvolutionHook`).
 """
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from agents import Agent, AgentHooks, RunContextWrapper, Tool
 
+from lite_horse.agent.consolidator import Consolidator
 from lite_horse.constants import (
     BUDGET_CAUTION_THRESHOLD,
     BUDGET_WARNING_THRESHOLD,
     DEFAULT_MAX_TURNS,
 )
+from lite_horse.memory.store import MemoryFull, MemoryStore, UnsafeMemoryContent
 
 _TIER_CAUTION = "caution"
 _TIER_WARNING = "warning"
@@ -24,10 +32,17 @@ _TIER_WARNING = "warning"
 class BudgetHook(AgentHooks[Any]):
     """Tracks tool-call iterations and stamps pressure notes into turn input."""
 
-    def __init__(self, max_turns: int = DEFAULT_MAX_TURNS) -> None:
+    def __init__(
+        self,
+        max_turns: int = DEFAULT_MAX_TURNS,
+        *,
+        consolidator: Consolidator | None = None,
+    ) -> None:
         self.max_turns = max_turns
         self.iteration = 0
         self._last_tier: str | None = None
+        self._consolidator = consolidator
+        self._consolidated = False
 
     async def on_start(
         self, context: RunContextWrapper[Any], agent: Agent[Any]
@@ -35,6 +50,7 @@ class BudgetHook(AgentHooks[Any]):
         del context, agent
         self.iteration = 0
         self._last_tier = None
+        self._consolidated = False
 
     async def on_tool_end(
         self,
@@ -50,6 +66,9 @@ class BudgetHook(AgentHooks[Any]):
             return
         if self._append_note(context, self._note(tier)):
             self._last_tier = tier
+            if tier == _TIER_WARNING and not self._consolidated:
+                self._consolidated = True
+                await self._consolidate(context)
 
     def _tier_for(self, ratio: float) -> str | None:
         if ratio >= BUDGET_WARNING_THRESHOLD:
@@ -89,3 +108,31 @@ class BudgetHook(AgentHooks[Any]):
         except Exception:
             return False
         return False
+
+    async def _consolidate(self, context: RunContextWrapper[Any]) -> None:
+        """Run the distiller once; write surviving entries straight to MEMORY.md.
+
+        Every failure path is swallowed — consolidation is best-effort and
+        must not break the user's run.
+        """
+        if self._consolidator is None:
+            return
+        try:
+            items = getattr(context, "turn_input", None)
+            snapshot = copy.deepcopy(items) if isinstance(items, list) else []
+            entries = await self._consolidator.run(turn_input=snapshot)
+        except Exception:
+            return
+        if not entries:
+            return
+        try:
+            store = MemoryStore.for_memory()
+        except Exception:
+            return
+        for entry in entries:
+            try:
+                store.add(entry)
+            except (MemoryFull, UnsafeMemoryContent, ValueError):
+                continue
+            except Exception:
+                return
