@@ -33,4 +33,8 @@ SKILL_CREATION_MIN_TOOL_CALLS = 5
 # frontmatter are always eligible and score as defaults.
 ACTIVATION_TOP_K = 8
 
+# Phase 24 — offline evolve. SKILL.md must stay small so retrieval-time cost is
+# bounded; the reflector rejects candidates larger than this.
+SKILL_MAX_BYTES = 15_360
+
 SCHEMA_VERSION = 2
