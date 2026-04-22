@@ -28,4 +28,9 @@ NUDGE_EVERY_N_TOOL_CALLS = 10
 # Skills auto-creation heuristic
 SKILL_CREATION_MIN_TOOL_CALLS = 5
 
+# Conditional skill activation (Phase 21). At most this many skills render in
+# the prompt's AVAILABLE SKILLS index per turn; ones without `activate_when`
+# frontmatter are always eligible and score as defaults.
+ACTIVATION_TOP_K = 8
+
 SCHEMA_VERSION = 1

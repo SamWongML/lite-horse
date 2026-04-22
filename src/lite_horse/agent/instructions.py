@@ -24,11 +24,13 @@ from agents import Agent, RunContextWrapper
 from lite_horse.constants import litehorse_home
 from lite_horse.memory.store import MemoryStore
 from lite_horse.skills import stats as skill_stats
+from lite_horse.skills.activation import filter_for_turn
 
 _SKILLS_INDEX_HEADER = "AVAILABLE SKILLS (load with skill_view)"
 _FRAGILE_MIN_ERRORS = 3
 _FRAGILE_MAX_SUCCESS_RATIO = 0.5
 _FRAGILE_TAG = " (fragile — see stats)"
+_USER_REQUEST_MAX_CHARS = 500
 
 _TOOL_GUIDANCE = (
     "TOOL USE GUIDANCE:\n"
@@ -50,38 +52,6 @@ def _read_optional(path: Path, max_chars: int = 8_000) -> str:
         return ""
 
 
-def _skill_description(skill_md: Path) -> str:
-    """Cheap frontmatter parse — we only need the description line."""
-    try:
-        text = skill_md.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return ""
-    for line in text.splitlines()[:80]:
-        if line.lower().startswith("description:"):
-            return line.split(":", 1)[1].strip()
-    return ""
-
-
-def _skills_index() -> str:
-    """Render a stable, alphabetised index of bundled + user skills."""
-    skills_dir = litehorse_home() / "skills"
-    if not skills_dir.is_dir():
-        return ""
-    lines: list[str] = []
-    for p in sorted(skills_dir.iterdir()):
-        if not p.is_dir():
-            continue
-        skill_md = p / "SKILL.md"
-        if not skill_md.is_file():
-            continue
-        desc = _skill_description(skill_md)
-        suffix = _fragile_suffix(p.name)
-        lines.append(f"- **{p.name}**: {desc or '(no description)'}{suffix}")
-    if not lines:
-        return ""
-    return f"{_SKILLS_INDEX_HEADER}\n" + "\n".join(lines)
-
-
 def _fragile_suffix(name: str) -> str:
     data = skill_stats.read(name)
     if not data:
@@ -96,6 +66,60 @@ def _fragile_suffix(name: str) -> str:
     return _FRAGILE_TAG
 
 
+def _skills_index(user_text: str | None = None) -> str:
+    """Render a stable, alphabetised index of relevant skills for this turn.
+
+    Phase 21: ``user_text`` drives conditional activation. When None, the
+    filter returns every skill (fallback); otherwise the top-K most relevant
+    are selected and re-sorted alphabetically for prompt stability.
+    """
+    skills_dir = litehorse_home() / "skills"
+    entries = filter_for_turn(skills_dir=skills_dir, user_text=user_text)
+    if not entries:
+        return ""
+    lines: list[str] = []
+    for entry in sorted(entries, key=lambda e: e.name):
+        desc = entry.description or "(no description)"
+        suffix = _fragile_suffix(entry.name)
+        lines.append(f"- **{entry.name}**: {desc}{suffix}")
+    return f"{_SKILLS_INDEX_HEADER}\n" + "\n".join(lines)
+
+
+def _extract_user_request(  # noqa: PLR0911 — branches are the shape
+    ctx: RunContextWrapper[Any] | None,
+) -> str | None:
+    """Best-effort scrape of the latest user message from ``ctx.turn_input``.
+
+    Mirrors :meth:`EvolutionHook._extract_user_request` — kept local so the
+    instructions module has no dependency on the evolution hook.
+    """
+    if ctx is None:
+        return None
+    try:
+        items = getattr(ctx, "turn_input", None)
+        if not isinstance(items, list):
+            return None
+        for item in reversed(items):
+            if isinstance(item, dict) and item.get("role") == "user":
+                content = item.get("content")
+                if isinstance(content, str):
+                    return content[:_USER_REQUEST_MAX_CHARS]
+                if isinstance(content, list):
+                    parts = [
+                        p.get("text", "")
+                        for p in content
+                        if isinstance(p, dict)
+                        and p.get("type") in {"text", "input_text"}
+                    ]
+                    joined = "".join(parts)
+                    return joined[:_USER_REQUEST_MAX_CHARS] if joined else None
+            elif isinstance(item, str):
+                return item[:_USER_REQUEST_MAX_CHARS]
+    except Exception:
+        return None
+    return None
+
+
 InstructionsFn = Callable[[RunContextWrapper[Any], Agent[Any]], Awaitable[str]]
 
 
@@ -105,13 +129,13 @@ def make_instructions() -> InstructionsFn:
     async def _instructions(
         ctx: RunContextWrapper[Any], agent: Agent[Any]
     ) -> str:
-        del ctx, agent
+        del agent
         home = litehorse_home()
         soul = _read_optional(home / "soul.md")
         agents_md = _read_optional(home / "AGENTS.md", max_chars=4_000)
         mem_block = MemoryStore.for_memory().render_block()
         usr_block = MemoryStore.for_user().render_block()
-        skills_index = _skills_index()
+        skills_index = _skills_index(_extract_user_request(ctx))
         now = datetime.now().astimezone().isoformat(timespec="seconds")
 
         parts: list[str] = []

@@ -33,3 +33,17 @@ re-orient against if you get lost.
 - Writing the plan, then ignoring it.
 - Padding the plan with steps you already know how to do trivially.
 - Treating the plan as immutable once written.
+
+## Note on activation
+
+This skill intentionally omits `activate_when:` frontmatter — planning is
+broadly useful, so it stays always-on and surfaces whenever no more
+specialised skill out-scores it for the current turn. If you *do* write a
+narrow variant (e.g. a release-plan skill), declare its triggers:
+
+```
+activate_when:
+  - keywords: ["plan", "roadmap", "break down"]
+```
+
+See `skill-creator` for the full schema.

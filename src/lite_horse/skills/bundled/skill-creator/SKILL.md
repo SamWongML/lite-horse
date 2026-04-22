@@ -25,6 +25,36 @@ state plainly: *what the skill is for* and *when to use it*. Avoid marketing
 language. A reader skimming a list of 30 skills should be able to tell in one
 sentence whether yours applies.
 
+## Frontmatter (optional — conditional activation)
+
+To keep the prompt lean as the skill library grows, a skill can declare
+signals that make it eligible for that turn's top-K index:
+
+```
+---
+name: deploy-helper
+description: Build/push image and roll the staging deployment.
+category: devops
+activate_when:
+  - keywords: ["deploy", "ship", "release", "rollout"]
+  - file_globs: ["Dockerfile", "k8s/*.yaml", "deploy/*.sh"]
+---
+```
+
+Rules:
+
+- `activate_when` is a list of rules; each rule has `keywords` and/or
+  `file_globs`. Matches are case-insensitive for keywords, case-sensitive
+  for globs (filenames care about case).
+- Omit `activate_when` entirely to make the skill **always-on** — it stays
+  eligible every turn and fills remaining top-K slots when no specialist
+  out-scores it. Core skills (`plan`, `skill-creator`) are always-on.
+- `category` is a free-form label used only for grouping / reporting;
+  activation itself ignores it.
+
+Keep keywords short and concrete. A skill triggered by *everything* is
+triggered by *nothing* — it becomes prompt noise.
+
 ## Body structure
 
 Keep the body short. Aim for under 200 lines. Three sections cover most cases:

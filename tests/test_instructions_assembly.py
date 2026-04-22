@@ -110,3 +110,107 @@ async def test_current_time_is_last_for_prompt_cache(litehorse_home: Path) -> No
     del litehorse_home
     prompt = await make_instructions()(None, None)  # type: ignore[arg-type]
     assert prompt.index("TOOL USE GUIDANCE:") < prompt.index("Current time:")
+
+
+class _FakeCtx:
+    """Minimal stand-in for ``RunContextWrapper`` — only ``turn_input`` is read."""
+
+    def __init__(self, user_text: str) -> None:
+        self.turn_input = [{"role": "user", "content": user_text}]
+
+
+def _write_skill(home: Path, name: str, *, description: str, activate_when: str | None) -> None:
+    skill_dir = home / "skills" / name
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    lines = ["---", f"name: {name}", f"description: {description}"]
+    if activate_when is not None:
+        lines.append(activate_when.rstrip())
+    lines.append("---")
+    lines.append(f"\n# {name}\n")
+    (skill_dir / "SKILL.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_conditional_activation_includes_matching_skill(
+    litehorse_home: Path,
+) -> None:
+    _write_skill(
+        litehorse_home,
+        "devops",
+        description="ship a release",
+        activate_when='activate_when:\n  - keywords: ["deploy", "ship"]',
+    )
+    _write_skill(
+        litehorse_home,
+        "poetry",
+        description="writes verse",
+        activate_when='activate_when:\n  - keywords: ["poem", "haiku"]',
+    )
+    prompt = await make_instructions()(
+        _FakeCtx("please deploy the app to staging"), None  # type: ignore[arg-type]
+    )
+    assert "**devops**" in prompt
+    assert "**poetry**" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_conditional_activation_excludes_unmatched_skill(
+    litehorse_home: Path,
+) -> None:
+    _write_skill(
+        litehorse_home,
+        "devops",
+        description="ship a release",
+        activate_when='activate_when:\n  - keywords: ["deploy", "ship"]',
+    )
+    _write_skill(
+        litehorse_home,
+        "poetry",
+        description="writes verse",
+        activate_when='activate_when:\n  - keywords: ["poem", "haiku"]',
+    )
+    prompt = await make_instructions()(
+        _FakeCtx("write a poem about spring"), None  # type: ignore[arg-type]
+    )
+    assert "**poetry**" in prompt
+    assert "**devops**" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_fallback_includes_all_skills_when_no_turn_input(
+    litehorse_home: Path,
+) -> None:
+    """ctx=None means extraction fails → all skills render."""
+    _write_skill(
+        litehorse_home,
+        "devops",
+        description="ship a release",
+        activate_when='activate_when:\n  - keywords: ["deploy"]',
+    )
+    _write_skill(
+        litehorse_home,
+        "plan",
+        description="planning skill",
+        activate_when=None,
+    )
+    prompt = await make_instructions()(None, None)  # type: ignore[arg-type]
+    assert "**devops**" in prompt
+    assert "**plan**" in prompt
+
+
+@pytest.mark.asyncio
+async def test_top_k_cap_bounds_prompt_index(litehorse_home: Path) -> None:
+    """25 activatable skills in the library → prompt lists at most 8."""
+    for i in range(25):
+        _write_skill(
+            litehorse_home,
+            f"helper{i:02d}",
+            description=f"helper {i}",
+            activate_when='activate_when:\n  - keywords: ["deploy"]',
+        )
+    prompt = await make_instructions()(
+        _FakeCtx("please deploy it"), None  # type: ignore[arg-type]
+    )
+    rendered = sum(1 for i in range(25) if f"**helper{i:02d}**" in prompt)
+    assert rendered <= 8
+    assert rendered > 0
