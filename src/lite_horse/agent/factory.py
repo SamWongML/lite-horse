@@ -16,6 +16,7 @@ from agents import (
     Tool,
     WebSearchTool,
 )
+from agents.mcp import MCPServer, MCPServerStreamableHttp
 from openai.types.shared import Reasoning
 
 from lite_horse.agent.budget import BudgetHook
@@ -66,10 +67,32 @@ class LiteHorseHooks(AgentHooks[Any]):
         await self._evo.on_end(context, agent, output)
 
 
-def build_agent(*, name: str = "lite-horse", config: Config | None = None) -> Agent[Any]:
+def build_mcp_servers(config: Config) -> list[MCPServer]:
+    """Instantiate one :class:`MCPServerStreamableHttp` per configured entry.
+
+    Caller owns connect/cleanup lifecycle.
+    """
+    return [
+        MCPServerStreamableHttp(
+            name=spec.name,
+            params={"url": spec.url},
+            cache_tools_list=spec.cache_tools_list,
+        )
+        for spec in config.mcp_servers
+    ]
+
+
+def build_agent(
+    *,
+    name: str = "lite-horse",
+    config: Config | None = None,
+    mcp_servers: list[MCPServer] | None = None,
+) -> Agent[Any]:
     """Construct the main user-facing agent.
 
     ``config`` can be passed in by tests to skip the on-disk load.
+    ``mcp_servers`` is an already-constructed list whose lifecycle the caller
+    manages; when omitted, none are attached.
     """
     cfg = config or load_config()
     tools: list[Tool] = [
@@ -92,5 +115,6 @@ def build_agent(*, name: str = "lite-horse", config: Config | None = None) -> Ag
             prompt_cache_retention="24h",
         ),
         tools=tools,
+        mcp_servers=mcp_servers or [],
         hooks=LiteHorseHooks(max_turns=cfg.agent.max_turns, model=cfg.model),
     )

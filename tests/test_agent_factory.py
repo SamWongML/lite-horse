@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from lite_horse.agent import evolution as evo_mod
-from lite_horse.agent.factory import LiteHorseHooks, build_agent
+from lite_horse.agent.factory import LiteHorseHooks, build_agent, build_mcp_servers
 from lite_horse.config import Config
 
 
@@ -132,6 +132,37 @@ def test_build_agent_wires_web_search_when_enabled(litehorse_home: Path) -> None
     tool_names = {getattr(t, "name", None) for t in agent.tools}
     # The SDK names the hosted tool "web_search_preview" (Responses API).
     assert any(n and n.startswith("web_search") for n in tool_names), tool_names
+
+
+def test_build_mcp_servers_creates_one_per_config_entry(litehorse_home: Path) -> None:
+    del litehorse_home
+    cfg = Config.model_validate(
+        {
+            "mcp_servers": [
+                {"name": "rag", "url": "http://localhost:7444/mcp"},
+                {"name": "pm", "url": "https://pm.example.com/mcp", "cache_tools_list": False},
+            ]
+        }
+    )
+    servers = build_mcp_servers(cfg)
+    assert [s.name for s in servers] == ["rag", "pm"]
+
+
+def test_build_agent_attaches_mcp_servers(litehorse_home: Path) -> None:
+    del litehorse_home
+    cfg = Config.model_validate(
+        {"mcp_servers": [{"name": "rag", "url": "http://localhost:7444/mcp"}]}
+    )
+    servers = build_mcp_servers(cfg)
+    agent = build_agent(config=cfg, mcp_servers=servers)
+    assert [s.name for s in agent.mcp_servers] == ["rag"]
+
+
+def test_mcp_server_rejects_non_http_url() -> None:
+    with pytest.raises(ValueError):
+        Config.model_validate(
+            {"mcp_servers": [{"name": "bad", "url": "file:///etc/passwd"}]}
+        )
 
 
 def test_build_agent_falls_back_to_load_config(litehorse_home: Path) -> None:

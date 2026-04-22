@@ -33,4 +33,4 @@ SKILL_CREATION_MIN_TOOL_CALLS = 5
 # frontmatter are always eligible and score as defaults.
 ACTIVATION_TOP_K = 8
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2

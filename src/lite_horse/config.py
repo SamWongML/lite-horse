@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from lite_horse.constants import DEFAULT_MAX_TURNS, litehorse_home
 
@@ -36,6 +37,7 @@ tools:
   web_search: false             # WebSearchTool — billed per call by OpenAI
 sandbox:
   enabled: false
+mcp_servers: []                 # list of {name, url, cache_tools_list}
 """
 
 
@@ -70,6 +72,22 @@ class ToolsSettings(BaseModel):
     web_search: bool = False
 
 
+class MCPServerConfig(BaseModel):
+    """One MCP server attached to the agent. URL must be http(s)."""
+
+    name: str
+    url: str
+    cache_tools_list: bool = True
+
+    @field_validator("url")
+    @classmethod
+    def _scheme_is_http(cls, v: str) -> str:
+        scheme = urlparse(v).scheme.lower()
+        if scheme not in ("http", "https"):
+            raise ValueError(f"mcp_servers[].url must be http or https, got {scheme!r}")
+        return v
+
+
 class Config(BaseModel):
     model: str = "gpt-5.4"
     model_settings: ModelSettings = Field(default_factory=ModelSettings)
@@ -78,6 +96,7 @@ class Config(BaseModel):
     gateway: GatewaySettings = Field(default_factory=GatewaySettings)
     tools: ToolsSettings = Field(default_factory=ToolsSettings)
     sandbox: SandboxSettings = Field(default_factory=SandboxSettings)
+    mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
 
 
 def _ensure_state_dir() -> Path:

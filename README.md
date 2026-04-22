@@ -60,26 +60,16 @@ tools:
 
 ## Attaching an MCP server
 
-For external capabilities (e.g. a RAG broker) mount an MCP server at runtime
-instead of adding more builtins. Example using the SDK's streamable-HTTP client:
+Declare external MCP servers in `~/.litehorse/config.yaml`; `lite_horse.api`
+connects them once on first `run_turn` and the agent sees their tools for
+every subsequent turn:
 
-```python
-from agents import Runner
-from agents.mcp import MCPServerStreamableHttp
-
-from lite_horse.agent.factory import build_agent
-
-async def run(prompt: str, session) -> str:
-    async with MCPServerStreamableHttp(
-        name="rag-broker",
-        params={"url": "http://localhost:7444/mcp"},
-        cache_tools_list=True,
-    ) as rag:
-        agent = build_agent()
-        agent.mcp_servers = [rag]
-        result = await Runner.run(agent, prompt, session=session)
-        return result.final_output
+```yaml
+mcp_servers:
+  - name: rag-broker
+    url: http://localhost:7444/mcp
+    cache_tools_list: true
 ```
 
-Phase 23 moves this wiring into `config.yaml`. Never accept MCP server URLs
-from user messages — keep them in config or code.
+Only `http` and `https` URLs are accepted. MCP server URLs must live in
+config or code — never accept them from user messages.

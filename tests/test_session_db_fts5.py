@@ -1,10 +1,12 @@
 """Tests for the SQLite + FTS5 session store (Phase 1)."""
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
 
+from lite_horse.constants import SCHEMA_VERSION
 from lite_horse.sessions.db import SessionDB
 
 
@@ -72,6 +74,53 @@ def test_get_messages_limit_returns_latest(db: SessionDB) -> None:
         db.append_message(session_id="s1", role="user", content=f"m{i}")
     latest_two = db.get_messages("s1", limit=2)
     assert [m["content"] for m in latest_two] == ["m3", "m4"]
+
+
+def test_migrates_v1_db_to_v2(tmp_path: Path) -> None:
+    db_path = tmp_path / "legacy.db"
+    # Seed a v1-shape DB: messages has a token_count column, version=1.
+    raw = sqlite3.connect(db_path)
+    raw.executescript(
+        """
+        CREATE TABLE sessions (
+            id TEXT PRIMARY KEY, source TEXT NOT NULL, user_id TEXT, model TEXT,
+            started_at REAL NOT NULL, ended_at REAL, end_reason TEXT,
+            message_count INTEGER DEFAULT 0, tool_call_count INTEGER DEFAULT 0,
+            input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
+            title TEXT
+        );
+        CREATE TABLE messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT,
+            tool_call_id TEXT,
+            tool_calls TEXT,
+            tool_name TEXT,
+            timestamp REAL NOT NULL,
+            token_count INTEGER
+        );
+        CREATE TABLE schema_version (version INTEGER NOT NULL);
+        INSERT INTO schema_version(version) VALUES (1);
+        INSERT INTO sessions(id, source, started_at) VALUES ('s1', 'cli', 0.0);
+        INSERT INTO messages(session_id, role, content, timestamp, token_count)
+            VALUES ('s1', 'user', 'legacy row', 1.0, 123);
+        """
+    )
+    raw.commit()
+    raw.close()
+
+    db = SessionDB(db_path=db_path)
+    c = db._conn()
+    cols = {r[1] for r in c.execute("PRAGMA table_info(messages)").fetchall()}
+    assert "token_count" not in cols
+    version = int(c.execute("SELECT version FROM schema_version").fetchone()["version"])
+    assert version == SCHEMA_VERSION
+
+    # Pre-existing row survives the migration and append still works.
+    db.append_message(session_id="s1", role="assistant", content="post-migration")
+    contents = [m["content"] for m in db.get_messages("s1")]
+    assert contents == ["legacy row", "post-migration"]
 
 
 def test_fts5_exclude_sources(db: SessionDB) -> None:

@@ -47,8 +47,7 @@ CREATE TABLE IF NOT EXISTS messages (
     tool_call_id TEXT,
     tool_calls TEXT,
     tool_name TEXT,
-    timestamp REAL NOT NULL,
-    token_count INTEGER
+    timestamp REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, timestamp);
 
@@ -122,6 +121,23 @@ class SessionDB:
                 wc.execute(
                     "INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,)
                 )
+            return
+        current = int(row["version"])
+        if current < SCHEMA_VERSION:
+            self._migrate(from_version=current)
+
+    def _migrate(self, *, from_version: int) -> None:
+        """Apply in-place migrations up to ``SCHEMA_VERSION``."""
+        c = self._conn()
+        if from_version < 2:
+            # v2: drop the unused ``token_count`` column. SQLite >= 3.35 supports
+            # ALTER TABLE DROP COLUMN directly.
+            cols = {r[1] for r in c.execute("PRAGMA table_info(messages)").fetchall()}
+            if "token_count" in cols:
+                with self._writer() as wc:
+                    wc.execute("ALTER TABLE messages DROP COLUMN token_count")
+        with self._writer() as wc:
+            wc.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
 
     # ---------- write contention helper ----------
     def _writer(self) -> _Writer:
@@ -171,13 +187,12 @@ class SessionDB:
         tool_call_id: str | None = None,
         tool_calls: Iterable[dict[str, Any]] | None = None,
         tool_name: str | None = None,
-        token_count: int | None = None,
     ) -> int:
         tool_calls_json = json.dumps(list(tool_calls)) if tool_calls else None
         with self._writer() as c:
             cur = c.execute(
                 "INSERT INTO messages(session_id, role, content, tool_call_id, tool_calls, "
-                "tool_name, timestamp, token_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "tool_name, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     session_id,
                     role,
@@ -186,7 +201,6 @@ class SessionDB:
                     tool_calls_json,
                     tool_name,
                     time.time(),
-                    token_count,
                 ),
             )
             c.execute(

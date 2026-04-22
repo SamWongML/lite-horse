@@ -20,9 +20,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from agents import Agent, Runner, ToolCallItem
+from agents.mcp import MCPServer
 
 from lite_horse.agent.errors import ErrorKind, classify
-from lite_horse.agent.factory import build_agent
+from lite_horse.agent.factory import build_agent, build_mcp_servers
 from lite_horse.config import Config, load_config
 from lite_horse.core.session_lock import SessionLockRegistry
 from lite_horse.sessions.db import SearchHit, SessionDB
@@ -66,13 +67,19 @@ class RunResult:
 _DB: SessionDB | None = None
 _AGENT: Agent[Any] | None = None
 _CFG: Config | None = None
+_MCP_SERVERS: list[MCPServer] = []
 _LOCKS = SessionLockRegistry()
 _INIT_LOCK = asyncio.Lock()
 
 
 async def _ensure_ready() -> tuple[SessionDB, Agent[Any], Config]:
-    """Materialize the process-wide singletons on first call. Idempotent."""
-    global _DB, _AGENT, _CFG
+    """Materialize the process-wide singletons on first call. Idempotent.
+
+    MCP servers declared in ``config.mcp_servers`` are connected once here and
+    kept alive for the process lifetime; their ``cache_tools_list`` then
+    actually caches across turns.
+    """
+    global _DB, _AGENT, _CFG, _MCP_SERVERS
     if _DB is not None and _AGENT is not None and _CFG is not None:
         return _DB, _AGENT, _CFG
     async with _INIT_LOCK:
@@ -81,10 +88,27 @@ async def _ensure_ready() -> tuple[SessionDB, Agent[Any], Config]:
             cfg = load_config()
             db = SessionDB()
             bind_db(db)
-            agent = build_agent(config=cfg)
-            _DB, _AGENT, _CFG = db, agent, cfg
+            mcp_servers = build_mcp_servers(cfg)
+            for server in mcp_servers:
+                try:
+                    await server.connect()  # type: ignore[no-untyped-call]
+                except Exception:
+                    log.exception("MCP server %s failed to connect; skipping", server.name)
+            agent = build_agent(config=cfg, mcp_servers=mcp_servers)
+            _DB, _AGENT, _CFG, _MCP_SERVERS = db, agent, cfg, mcp_servers
     assert _DB is not None and _AGENT is not None and _CFG is not None
     return _DB, _AGENT, _CFG
+
+
+async def shutdown() -> None:
+    """Close any connected MCP servers. Optional; intended for graceful exits."""
+    global _MCP_SERVERS  # noqa: PLW0603
+    for server in _MCP_SERVERS:
+        try:
+            await server.cleanup()  # type: ignore[no-untyped-call]
+        except Exception:
+            log.exception("MCP server %s cleanup failed", server.name)
+    _MCP_SERVERS = []
 
 
 async def run_turn(
