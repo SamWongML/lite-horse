@@ -13,7 +13,8 @@
       "WebFetch(domain:github.com)",
       "WebSearch",
       "WebFetch(domain:hermes-agent.nousresearch.com)",
-      "Bash(uv lock *)"
+      "Bash(uv lock *)",
+      "Bash(uv pip *)"
     ]
   }
 }

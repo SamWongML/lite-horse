@@ -20,6 +20,7 @@ from agents import Runner
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from lite_horse.agent.errors import ErrorKind, classify
 from lite_horse.config import Config, load_config
 from lite_horse.constants import litehorse_home
 from lite_horse.cron.delivery import deliver_webhook
@@ -32,6 +33,11 @@ log = logging.getLogger(__name__)
 
 Fire = Callable[[Job], Awaitable[None]]
 Deliver = Callable[[dict[str, Any], str, str], Awaitable[None]]
+
+# Three consecutive MODEL_REFUSAL firings and the job is auto-disabled with a
+# reason stamped into the JobStore. Strikes are in-memory (per scheduler
+# process) and reset on any successful firing.
+_REFUSAL_STRIKE_LIMIT = 3
 
 _ALIASES: dict[str, str] = {
     "@minutely": "* * * * *",
@@ -76,14 +82,22 @@ async def deliver(spec: dict[str, Any], text: str, session_key: str) -> None:
     await handler(spec, text, session_key)
 
 
-def make_fire(*, db: SessionDB, cfg: Config) -> Fire:
+def make_fire(
+    *, db: SessionDB, cfg: Config, store: JobStore | None = None
+) -> Fire:
     """Build the closure APScheduler calls when a job is due.
 
     Exposed so tests can invoke a firing directly without standing up a real
     scheduler. ``build_agent`` is imported lazily to avoid a cron ↔ factory
     import cycle (``factory`` pulls in ``cron_manage``).
+
+    ``store`` enables the Phase-22 strike-based auto-disable. When None
+    (older callers, tests that only exercise the happy path), refusals are
+    still classified and logged but never disable the job.
     """
     from lite_horse.agent.factory import build_agent  # noqa: PLC0415
+
+    refusal_strikes: dict[str, int] = {}
 
     async def fire(job: Job) -> None:
         log.info("cron firing: %s", job.id)
@@ -97,10 +111,37 @@ def make_fire(*, db: SessionDB, cfg: Config) -> Fire:
                 session=session,  # type: ignore[arg-type]
                 max_turns=cfg.agent.max_turns,
             )
+            refusal_strikes.pop(job.id, None)
             await deliver(job.delivery, str(result.final_output), sid)
         except Exception as exc:
-            log.exception("cron job %s failed", job.id)
-            await deliver(job.delivery, f"⚠ cron job {job.id} failed: {exc}", sid)
+            classified = classify(exc)
+            log.error(
+                "cron job %s failed (%s): %s",
+                job.id,
+                classified.kind,
+                classified.summary,
+            )
+            if classified.kind is ErrorKind.MODEL_REFUSAL:
+                strikes = refusal_strikes.get(job.id, 0) + 1
+                refusal_strikes[job.id] = strikes
+                if store is not None and strikes >= _REFUSAL_STRIKE_LIMIT:
+                    store.disable_with_reason(
+                        job.id, f"auto-disabled: {strikes} model refusals"
+                    )
+                    refusal_strikes.pop(job.id, None)
+                    log.warning(
+                        "cron job %s auto-disabled after %d refusals",
+                        job.id,
+                        strikes,
+                    )
+            else:
+                refusal_strikes.pop(job.id, None)
+            await deliver(
+                job.delivery,
+                f"⚠ cron job {job.id} failed ({classified.kind}): "
+                f"{classified.summary}",
+                sid,
+            )
         finally:
             db.end_session(sid, end_reason="cron_done")
 
@@ -133,7 +174,7 @@ async def run_scheduler() -> None:
     store = JobStore()
     sched = AsyncIOScheduler()
 
-    fire = make_fire(db=db, cfg=cfg)
+    fire = make_fire(db=db, cfg=cfg, store=store)
     loaded = _schedule_jobs(sched, store, fire)
 
     home = litehorse_home()

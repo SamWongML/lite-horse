@@ -42,7 +42,7 @@ in the plan file.
 | 19 | periodic memory nudge                              | ✅ |
 | 20 | skill stats sidecar + in-use refinement            | ✅ |
 | 21 | conditional skill activation                       | ✅ |
-| 22 | structured error classifier                        | ☐ |
+| 22 | structured error classifier                        | ✅ |
 | 23 | `config.mcp_servers` + `token_count` cleanup       | ☐ |
 | 24 | offline `lite_horse.evolve` pipeline               | ☐ |
 | 25 | final hardening & docs                             | ☐ |

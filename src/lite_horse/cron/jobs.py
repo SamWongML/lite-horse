@@ -23,7 +23,11 @@ class Job:
     ``schedule`` is either a 5-field crontab (``"min hr day mon dow"``) or one
     of the aliases ``@minutely`` / ``@hourly`` / ``@daily`` / ``@weekly``.
     ``delivery`` is a dict such as ``{"platform": "log"}`` or
-    ``{"platform": "telegram", "chat_id": 123}``.
+    ``{"platform": "webhook", "url": "..."}``.
+
+    ``disabled_reason`` is set by the scheduler when it auto-disables a job —
+    currently the only path is three consecutive ``MODEL_REFUSAL`` firings
+    (Phase 22). Empty on jobs the user disabled manually.
     """
 
     id: str
@@ -31,6 +35,7 @@ class Job:
     prompt: str
     delivery: dict[str, Any]
     enabled: bool = True
+    disabled_reason: str | None = None
 
 
 @dataclass
@@ -81,13 +86,30 @@ class JobStore:
         return True
 
     def set_enabled(self, job_id: str, enabled: bool) -> bool:
-        """Flip ``enabled`` on one job. Returns ``False`` if no such job."""
+        """Flip ``enabled`` on one job. Returns ``False`` if no such job.
+
+        Re-enabling clears ``disabled_reason`` so operator intent wipes the
+        auto-disable stamp.
+        """
         jobs = self.all()
         for j in jobs:
             if j.id == job_id:
-                if j.enabled == enabled:
-                    return True
+                changed = j.enabled != enabled or (enabled and j.disabled_reason)
                 j.enabled = enabled
+                if enabled:
+                    j.disabled_reason = None
+                if changed:
+                    self._write(jobs)
+                return True
+        return False
+
+    def disable_with_reason(self, job_id: str, reason: str) -> bool:
+        """Mark a job disabled and stamp ``reason``. Returns False if missing."""
+        jobs = self.all()
+        for j in jobs:
+            if j.id == job_id:
+                j.enabled = False
+                j.disabled_reason = reason
                 self._write(jobs)
                 return True
         return False

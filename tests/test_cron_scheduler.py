@@ -6,8 +6,10 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import openai
 import pytest
 from apscheduler.triggers.cron import CronTrigger
+from httpx import Request, Response
 
 from lite_horse.config import Config
 from lite_horse.cron import scheduler as sched_mod
@@ -121,7 +123,7 @@ async def test_fire_delivers_error_when_runner_raises(
     await fire(job)
 
     assert len(delivered) == 1
-    assert delivered[0].startswith("⚠ cron job bad failed:")
+    assert delivered[0].startswith("⚠ cron job bad failed (unknown):")
     assert "kaboom" in delivered[0]
 
 
@@ -159,6 +161,152 @@ async def test_fire_ends_session_after_run(
     assert len(ended) == 1
     assert ended[0][0].startswith("cron-j-")
     assert ended[0][1] == "cron_done"
+
+
+# ---------- Phase 22: error classifier + strike-based disable ----------
+
+
+def _rate_limit_exc() -> openai.RateLimitError:
+    resp = Response(429, request=Request("POST", "https://api.openai.com/v1/x"))
+    return openai.RateLimitError("slow down", response=resp, body=None)
+
+
+@pytest.mark.asyncio
+async def test_fire_classifies_rate_limit_and_does_not_strike(
+    litehorse_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del litehorse_home
+    delivered: list[str] = []
+
+    async def blow_up(agent: Any, text: str, **_kw: Any) -> Any:
+        del agent, text
+        raise _rate_limit_exc()
+
+    async def fake_deliver(
+        spec: dict[str, Any], text: str, session_key: str
+    ) -> None:
+        delivered.append(text)
+        del spec, session_key
+
+    monkeypatch.setattr(sched_mod.Runner, "run", blow_up)
+    monkeypatch.setattr(sched_mod, "deliver", fake_deliver)
+
+    store = JobStore()
+    job = store.add(schedule="@hourly", prompt="p", delivery={"platform": "log"})
+    fire = make_fire(db=SessionDB(), cfg=_cfg(), store=store)
+
+    for _ in range(5):
+        await fire(job)
+
+    # Non-refusal errors never auto-disable.
+    loaded = store.get(job.id)
+    assert loaded is not None
+    assert loaded.enabled is True
+    assert loaded.disabled_reason is None
+    assert all("rate_limit" in msg for msg in delivered)
+
+
+@pytest.mark.asyncio
+async def test_fire_disables_job_after_three_model_refusals(
+    litehorse_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del litehorse_home
+    delivered: list[str] = []
+
+    async def refuse(agent: Any, text: str, **_kw: Any) -> Any:
+        del agent, text
+        raise openai.ContentFilterFinishReasonError()
+
+    async def fake_deliver(
+        spec: dict[str, Any], text: str, session_key: str
+    ) -> None:
+        delivered.append(text)
+        del spec, session_key
+
+    monkeypatch.setattr(sched_mod.Runner, "run", refuse)
+    monkeypatch.setattr(sched_mod, "deliver", fake_deliver)
+
+    store = JobStore()
+    job = store.add(schedule="@hourly", prompt="p", delivery={"platform": "log"})
+    fire = make_fire(db=SessionDB(), cfg=_cfg(), store=store)
+
+    # First two firings: still enabled, strike counter building up.
+    await fire(job)
+    assert store.get(job.id) is not None
+    assert store.get(job.id).enabled is True  # type: ignore[union-attr]
+
+    await fire(job)
+    assert store.get(job.id).enabled is True  # type: ignore[union-attr]
+
+    # Third firing crosses the limit.
+    await fire(job)
+    loaded = store.get(job.id)
+    assert loaded is not None
+    assert loaded.enabled is False
+    assert loaded.disabled_reason is not None
+    assert "model refusals" in loaded.disabled_reason
+    assert len(delivered) == 3
+    assert all("model_refusal" in msg for msg in delivered)
+
+
+@pytest.mark.asyncio
+async def test_fire_strike_counter_resets_on_success(
+    litehorse_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del litehorse_home
+    sequence: list[Any] = [
+        openai.ContentFilterFinishReasonError(),
+        openai.ContentFilterFinishReasonError(),
+        _StubResult("all good"),
+        openai.ContentFilterFinishReasonError(),
+        openai.ContentFilterFinishReasonError(),
+    ]
+
+    async def driven(agent: Any, text: str, **_kw: Any) -> Any:
+        del agent, text
+        nxt = sequence.pop(0)
+        if isinstance(nxt, BaseException):
+            raise nxt
+        return nxt
+
+    async def fake_deliver(
+        spec: dict[str, Any], text: str, session_key: str
+    ) -> None:
+        del spec, text, session_key
+
+    monkeypatch.setattr(sched_mod.Runner, "run", driven)
+    monkeypatch.setattr(sched_mod, "deliver", fake_deliver)
+
+    store = JobStore()
+    job = store.add(schedule="@hourly", prompt="p", delivery={"platform": "log"})
+    fire = make_fire(db=SessionDB(), cfg=_cfg(), store=store)
+
+    for _ in range(5):
+        await fire(job)
+
+    loaded = store.get(job.id)
+    assert loaded is not None
+    # Only 2 refusals accumulated after the success reset — below the limit.
+    assert loaded.enabled is True
+    assert loaded.disabled_reason is None
+
+
+def test_set_enabled_clears_disabled_reason(litehorse_home: Path) -> None:
+    del litehorse_home
+    store = JobStore()
+    job = store.add(schedule="@hourly", prompt="p", delivery={"platform": "log"})
+    store.disable_with_reason(job.id, "auto-disabled: 3 model refusals")
+
+    loaded = store.get(job.id)
+    assert loaded is not None
+    assert loaded.enabled is False
+    assert loaded.disabled_reason is not None
+
+    assert store.set_enabled(job.id, True) is True
+    loaded = store.get(job.id)
+    assert loaded is not None
+    assert loaded.enabled is True
+    assert loaded.disabled_reason is None
 
 
 # ---------- deliver ----------

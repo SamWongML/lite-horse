@@ -5,7 +5,9 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+import openai
 import pytest
+from httpx import Request, Response
 
 from lite_horse import api as api_mod
 from lite_horse.api import (
@@ -240,3 +242,126 @@ def test_search_sessions_requires_initialization(
     del litehorse_home
     with pytest.raises(RuntimeError, match="not initialized"):
         search_sessions("anything")
+
+
+# ---------- Phase 22: structured error classifier ----------
+
+
+def _rate_limit() -> openai.RateLimitError:
+    resp = Response(429, request=Request("POST", "https://api.openai.com/v1/x"))
+    return openai.RateLimitError("slow down", response=resp, body=None)
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_retries_then_succeeds(
+    litehorse_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del litehorse_home
+    _patch_tool_call_item(monkeypatch)
+
+    calls = 0
+
+    async def fake_run(agent: Any, text: str, **_kw: Any) -> _FakeResult:
+        del agent, text
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise _rate_limit()
+        return _FakeResult(final_output="ok")
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(api_mod.Runner, "run", fake_run)
+    monkeypatch.setattr(api_mod.asyncio, "sleep", fake_sleep)
+
+    result = await run_turn(session_key="k-rl", user_text="hi")
+
+    assert result.final_output == "ok"
+    assert calls == 3
+    # Exponential backoff 1s, 4s between the three attempts.
+    assert sleeps == [1.0, 4.0]
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_exhausts_retries_and_raises(
+    litehorse_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del litehorse_home
+    _patch_tool_call_item(monkeypatch)
+
+    calls = 0
+
+    async def fake_run(agent: Any, text: str, **_kw: Any) -> _FakeResult:
+        del agent, text
+        nonlocal calls
+        calls += 1
+        raise _rate_limit()
+
+    async def fake_sleep(seconds: float) -> None:
+        del seconds
+
+    monkeypatch.setattr(api_mod.Runner, "run", fake_run)
+    monkeypatch.setattr(api_mod.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(openai.RateLimitError):
+        await run_turn(session_key="k-rl-out", user_text="hi")
+    assert calls == 3
+
+
+@pytest.mark.asyncio
+async def test_model_refusal_surfaces_on_first_call(
+    litehorse_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del litehorse_home
+    _patch_tool_call_item(monkeypatch)
+
+    calls = 0
+
+    async def fake_run(agent: Any, text: str, **_kw: Any) -> _FakeResult:
+        del agent, text
+        nonlocal calls
+        calls += 1
+        raise openai.ContentFilterFinishReasonError()
+
+    slept: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr(api_mod.Runner, "run", fake_run)
+    monkeypatch.setattr(api_mod.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(openai.ContentFilterFinishReasonError):
+        await run_turn(session_key="k-refusal", user_text="hi")
+    assert calls == 1
+    assert slept == []
+
+
+@pytest.mark.asyncio
+async def test_context_overflow_raises_without_retry(
+    litehorse_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del litehorse_home
+    _patch_tool_call_item(monkeypatch)
+
+    calls = 0
+
+    async def fake_run(agent: Any, text: str, **_kw: Any) -> _FakeResult:
+        del agent, text
+        nonlocal calls
+        calls += 1
+        resp = Response(400, request=Request("POST", "https://api.openai.com/v1/x"))
+        raise openai.BadRequestError(
+            "This model's maximum context length is 128000 tokens.",
+            response=resp,
+            body={"code": "context_length_exceeded"},
+        )
+
+    monkeypatch.setattr(api_mod.Runner, "run", fake_run)
+
+    with pytest.raises(openai.BadRequestError):
+        await run_turn(session_key="k-ctx", user_text="hi")
+    assert calls == 1

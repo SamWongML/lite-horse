@@ -21,6 +21,7 @@ from typing import Any
 
 from agents import Agent, Runner, ToolCallItem
 
+from lite_horse.agent.errors import ErrorKind, classify
 from lite_horse.agent.factory import build_agent
 from lite_horse.config import Config, load_config
 from lite_horse.core.session_lock import SessionLockRegistry
@@ -38,6 +39,18 @@ __all__ = [
 ]
 
 log = logging.getLogger(__name__)
+
+# Retry schedule for RATE_LIMIT / NETWORK failures in ``run_turn``.
+# 1 initial attempt + 2 retries; delays 1s, 4s (exponential base 4).
+_MAX_RUN_ATTEMPTS = 3
+_RETRY_BASE_SECONDS = 1.0
+_RETRY_BACKOFF_FACTOR = 4.0
+
+
+def _retry_delay(attempt: int) -> float:
+    """Seconds to sleep before ``attempt`` (1-indexed past the first)."""
+    exponent = max(0, attempt - 1)
+    return _RETRY_BASE_SECONDS * (_RETRY_BACKOFF_FACTOR ** exponent)
 
 
 @dataclass
@@ -94,12 +107,47 @@ async def run_turn(
         session = SDKSession(
             session_key, db, source=source, user_id=user_id, model=cfg.model
         )
-        result = await Runner.run(
-            agent,
-            user_text,
-            session=session,  # type: ignore[arg-type]
-            max_turns=max_turns or cfg.agent.max_turns,
-        )
+        turns = max_turns or cfg.agent.max_turns
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                result = await Runner.run(
+                    agent,
+                    user_text,
+                    session=session,  # type: ignore[arg-type]
+                    max_turns=turns,
+                )
+                break
+            except Exception as exc:
+                classified = classify(exc)
+                if classified.retryable and attempt < _MAX_RUN_ATTEMPTS:
+                    delay = _retry_delay(attempt)
+                    log.warning(
+                        "run_turn %s retry %d/%d in %.1fs: %s",
+                        classified.kind,
+                        attempt,
+                        _MAX_RUN_ATTEMPTS - 1,
+                        delay,
+                        classified.summary,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                if classified.kind is ErrorKind.CONTEXT_OVERFLOW:
+                    log.error(
+                        "run_turn context overflow on %s: %s",
+                        session_key,
+                        classified.summary,
+                    )
+                elif classified.kind is ErrorKind.MODEL_REFUSAL:
+                    log.warning(
+                        "run_turn model refusal on %s: %s",
+                        session_key,
+                        classified.summary,
+                    )
+                elif classified.kind is ErrorKind.UNKNOWN:
+                    log.exception("run_turn unknown failure on %s", session_key)
+                raise
     tool_calls = sum(1 for item in result.new_items if isinstance(item, ToolCallItem))
     return RunResult(
         final_output=str(result.final_output),
