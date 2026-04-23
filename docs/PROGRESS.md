@@ -1,6 +1,6 @@
 # lite-horse — phase status
 
-**Active plan:** [plans/v0.2-embed-and-evolve.md](plans/v0.2-embed-and-evolve.md)
+**Active plan:** [plans/v0.3-cli-entrypoint.md](plans/v0.3-cli-entrypoint.md)
 
 One row per phase. Flip ☐ → ✅ only when every acceptance checkbox in the
 plan file for that phase is green. Do not put plan detail here — it belongs
@@ -52,6 +52,21 @@ out-of-band in the PM webapp repo.
 | 23 | `config.mcp_servers` + `token_count` cleanup       | ✅ |
 | 24 | offline `lite_horse.evolve` pipeline               | ✅ |
 | 25 | final hardening & docs                             | ✅ |
+
+## v0.3 — scripted subcommand CLI (`litehorse`) — ACTIVE (started 2026-04-23)
+
+Detail: [plans/v0.3-cli-entrypoint.md](plans/v0.3-cli-entrypoint.md).
+Reverses v0.2's no-CLI stance: adds a scripted, subcommand CLI at
+`litehorse` as a second consumer of `lite_horse.api`. No TUI, no REPL, no
+chat adapter. `litehorse-debug` is deleted at the end of the plan.
+
+| # | Subject | Status |
+|---|---|---|
+| 26 | CLI foundation (app, settings, output, signals, doctor) | ☐ |
+| 27 | `run` + `sessions` commands                             | ☐ |
+| 28 | `skills` + `proposals` + `evolve` commands              | ☐ |
+| 29 | `cron` + `memory` commands                              | ☐ |
+| 30 | structured logs, `logs`, `debug share`, drop legacy     | ☐ |
 
 ### Blocked / in progress
 (none yet)
