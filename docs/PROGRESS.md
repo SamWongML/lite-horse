@@ -53,20 +53,23 @@ out-of-band in the PM webapp repo.
 | 24 | offline `lite_horse.evolve` pipeline               | ✅ |
 | 25 | final hardening & docs                             | ✅ |
 
-## v0.3 — scripted subcommand CLI (`litehorse`) — ACTIVE (started 2026-04-23)
+## v0.3 — interactive-first `litehorse` CLI — ACTIVE (started 2026-04-23)
 
 Detail: [plans/v0.3-cli-entrypoint.md](plans/v0.3-cli-entrypoint.md).
-Reverses v0.2's no-CLI stance: adds a scripted, subcommand CLI at
-`litehorse` as a second consumer of `lite_horse.api`. No TUI, no REPL, no
-chat adapter. `litehorse-debug` is deleted at the end of the plan.
+Reverses v0.2's no-CLI stance. Bare `litehorse` drops into a persistent
+REPL with streaming markdown, slash commands, tool-call approval,
+session resume, and cost meter — same class of interaction as the
+webapp. Scripted subcommand tree (`sessions`, `skills`, `cron`, …) is
+the secondary surface. Stack: prompt_toolkit + rich + click-default-group
++ Typer. `litehorse-debug` is deleted in Phase 30.
 
 | # | Subject | Status |
 |---|---|---|
-| 26 | CLI foundation (app, settings, output, signals, doctor) | ☐ |
-| 27 | `run` + `sessions` commands                             | ☐ |
-| 28 | `skills` + `proposals` + `evolve` commands              | ☐ |
-| 29 | `cron` + `memory` commands                              | ☐ |
-| 30 | structured logs, `logs`, `debug share`, drop legacy     | ☐ |
+| 26 | CLI foundation + scripted skeleton (doctor/version/config)       | ☐ |
+| 27 | Interactive REPL core (streaming, toolbar, Ctrl-C, /help/exit)   | ☐ |
+| 28 | Slash commands + session mgmt + tool approval + attachments     | ☐ |
+| 29 | Scripted subcommand parity (sessions/skills/cron/memory/logs)    | ☐ |
+| 30 | Structured logs, `/logs`, `debug share`, delete litehorse-debug  | ☐ |
 
 ### Blocked / in progress
 (none yet)
