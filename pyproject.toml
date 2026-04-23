@@ -49,6 +49,12 @@ src = ["src", "tests"]
 select = ["E", "F", "W", "I", "B", "UP", "N", "PL", "RUF"]
 ignore = ["PLR0913", "PLR2004"]
 
+[tool.ruff.lint.per-file-ignores]
+# CLI command bodies defer heavy imports to satisfy the --help fast-path
+# contract (see docs/plans/v0.3-cli-entrypoint.md). PLC0415 forbids
+# function-level imports; waive it only inside the cli/ tree.
+"src/lite_horse/cli/**/*.py" = ["PLC0415"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true
