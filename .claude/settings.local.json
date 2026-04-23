@@ -14,7 +14,10 @@
       "WebSearch",
       "WebFetch(domain:hermes-agent.nousresearch.com)",
       "Bash(uv lock *)",
-      "Bash(uv pip *)"
+      "Bash(uv pip *)",
+      "Bash(python -m pytest tests/test_evolve_constraints.py tests/test_evolve_e2e.py -x -q)",
+      "Bash(xargs awk *)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }
