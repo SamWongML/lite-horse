@@ -64,3 +64,7 @@ def _attach_typer_commands() -> None:
 def main() -> None:
     _attach_typer_commands()
     cli()
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised by completion subprocess
+    main()
