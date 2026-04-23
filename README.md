@@ -1,75 +1,91 @@
 # lite-horse
 
 Embeddable OpenAI-only assistant runtime built on the
-[OpenAI Agents SDK](https://github.com/openai/openai-agents-python). Skills with
-progressive disclosure, persistent memory, FTS5 recall, iteration-budget
-pressure, and an offline self-evolution loop — consumed as a Python package
-by a single project-management webapp. No standalone CLI, no chat-platform
-adapters.
+[OpenAI Agents SDK](https://github.com/openai/openai-agents-python).
 
-See [`docs/PROGRESS.md`](docs/PROGRESS.md) for phase status and the active
-engineering plan.
+Skills with progressive disclosure, persistent memory, FTS5 recall,
+iteration-budget pressure, structured error handling, and an offline
+self-evolution loop — all consumed as a Python package by a single
+project-management webapp. No standalone CLI, no chat-platform adapters.
 
-## Quick start
+- [`docs/EMBEDDING.md`](docs/EMBEDDING.md) — integration contract (env,
+  `config.yaml`, MCP, cron webhook spec).
+- [`docs/EVOLVE.md`](docs/EVOLVE.md) — offline SKILL.md evolution loop.
+- [`docs/PROGRESS.md`](docs/PROGRESS.md) — phase status and active plan.
+
+## Install
 
 ```bash
 uv sync --extra dev
 ```
 
-State lives in `~/.litehorse/` (override with `LITEHORSE_HOME`). On first run
-`load_config()` writes a default `config.yaml`; copy `.env.example` to
+State lives in `~/.litehorse/` (override with `LITEHORSE_HOME`). On first
+run, `load_config()` writes a default `config.yaml`; copy `.env.example` to
 `~/.litehorse/.env` and fill in `OPENAI_API_KEY`.
 
-## Embedding
+## Quickstart
 
-From Phase 16 onward the webapp imports a single module:
+Drive one turn from the webapp:
 
 ```python
-from lite_horse.api import run_turn   # wired in Phase 16
+import asyncio
+from lite_horse.api import run_turn
+from lite_horse.core.session_key import build_session_key
+
+async def demo() -> None:
+    key = build_session_key(platform="web", chat_type="dm", chat_id=42)
+    result = await run_turn(session_key=key, user_text="hello")
+    print(result.final_output)
+
+asyncio.run(demo())
 ```
 
-Until Phase 16 lands, a minimal debug REPL is available for local development
-only:
-
-```bash
-uv run litehorse-debug
-```
-
-`litehorse-debug` is not a product surface and may change or disappear without
-notice.
+Same-`session_key` calls serialize; distinct keys run in parallel. See
+[`docs/EMBEDDING.md`](docs/EMBEDDING.md) for the full surface
+(`run_turn`, `end_session`, `search_sessions`, `shutdown`).
 
 ## Cron worker
 
+Runs in its own process. Reads `~/.litehorse/jobs.json`, fires jobs on
+schedule, POSTs the result to the webapp with an HMAC-SHA256 signature:
+
 ```bash
-uv run python -c "from lite_horse.cron.scheduler import run_scheduler_blocking; run_scheduler_blocking()"
+uv run python -c \
+  "from lite_horse.cron.scheduler import run_scheduler_blocking; \
+   run_scheduler_blocking()"
 ```
 
-Reads `~/.litehorse/jobs.json`. Delivery is `log` only until Phase 17 adds
-webhook delivery to the webapp. The cron worker MUST run in its own process
-(the webapp supervises it on boot).
+Webhook body + signature format:
+[`docs/EMBEDDING.md#webhook-delivery-protocol`](docs/EMBEDDING.md#webhook-delivery-protocol).
 
 ## Built-in tools
 
-The agent always ships with `memory`, `session_search`, `skill_manage`, and
-`skill_view`. Extra tools are opt-in through `config.yaml`:
+The agent always ships with `memory`, `session_search`, `skill_manage`,
+`skill_view`, and `cron_manage`. Extras are opt-in through `config.yaml`:
 
 ```yaml
 tools:
-  web_search: true    # OpenAI-hosted WebSearchTool (billed per call)
+  web_search: true     # OpenAI-hosted WebSearchTool (billed per call)
 ```
 
-## Attaching an MCP server
+External MCP servers attach through `config.mcp_servers`; see
+[`docs/EMBEDDING.md#mcp-servers`](docs/EMBEDDING.md#mcp-servers).
 
-Declare external MCP servers in `~/.litehorse/config.yaml`; `lite_horse.api`
-connects them once on first `run_turn` and the agent sees their tools for
-every subsequent turn:
+## Offline evolve
 
-```yaml
-mcp_servers:
-  - name: rag-broker
-    url: http://localhost:7444/mcp
-    cache_tools_list: true
+A separate module proposes skill revisions based on recorded failures:
+
+```bash
+python -m lite_horse.evolve <skill-slug>
 ```
 
-Only `http` and `https` URLs are accepted. MCP server URLs must live in
-config or code — never accept them from user messages.
+Proposals land under `~/.litehorse/skills/.proposals/` for human approval
+— they never auto-merge. Gates, fitness, and the approval workflow are
+documented in [`docs/EVOLVE.md`](docs/EVOLVE.md).
+
+## Dev surface
+
+- `uv run pytest -q` — 245+ tests, hermetic.
+- `uv run ruff check src tests` — lint.
+- `uv run mypy src` — strict typing.
+- `uv run litehorse-debug` — local debug REPL. Not a product surface.

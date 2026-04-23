@@ -29,7 +29,13 @@ in the plan file.
 | 12 | telemetry                          | ✅ |
 |    | hardening                          | ✅ |
 
-## v0.2 — embed in webapp + strengthen self-evolution
+## v0.2 — embed in webapp + strengthen self-evolution — ✅ SHIPPED (2026-04-23)
+
+~2,720 runtime LOC + ~450 evolve LOC, 245 tests green. Detail:
+[plans/v0.2-embed-and-evolve.md](plans/v0.2-embed-and-evolve.md).
+Webapp-side acceptance (round-trip + proposal merge UI) is verified
+out-of-band in the PM webapp repo.
+
 
 | # | Subject | Status |
 |---|---|---|
@@ -45,7 +51,7 @@ in the plan file.
 | 22 | structured error classifier                        | ✅ |
 | 23 | `config.mcp_servers` + `token_count` cleanup       | ✅ |
 | 24 | offline `lite_horse.evolve` pipeline               | ✅ |
-| 25 | final hardening & docs                             | ☐ |
+| 25 | final hardening & docs                             | ✅ |
 
 ### Blocked / in progress
 (none yet)
