@@ -65,7 +65,7 @@ the secondary surface. Stack: prompt_toolkit + rich + click-default-group
 
 | # | Subject | Status |
 |---|---|---|
-| 26 | CLI foundation + scripted skeleton (doctor/version/config)       | ☐ |
+| 26 | CLI foundation + scripted skeleton (doctor/version/config)       | ✅ |
 | 27 | Interactive REPL core (streaming, toolbar, Ctrl-C, /help/exit)   | ☐ |
 | 28 | Slash commands + session mgmt + tool approval + attachments     | ☐ |
 | 29 | Scripted subcommand parity (sessions/skills/cron/memory/logs)    | ☐ |
