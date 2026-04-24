@@ -1,15 +1,21 @@
 # lite-horse
 
-Embeddable OpenAI-only assistant runtime built on the
-[OpenAI Agents SDK](https://github.com/openai/openai-agents-python).
+OpenAI-only assistant runtime built on the
+[OpenAI Agents SDK](https://github.com/openai/openai-agents-python) with
+skills, persistent memory, FTS5 recall, iteration-budget pressure,
+structured error handling, and an offline self-evolution loop.
 
-Skills with progressive disclosure, persistent memory, FTS5 recall,
-iteration-budget pressure, structured error handling, and an offline
-self-evolution loop — all consumed as a Python package by a single
-project-management webapp. No standalone CLI, no chat-platform adapters.
+Two first-class surfaces:
 
-- [`docs/EMBEDDING.md`](docs/EMBEDDING.md) — integration contract (env,
-  `config.yaml`, MCP, cron webhook spec).
+- **`litehorse` CLI** — interactive REPL with streaming markdown, slash
+  commands, tool-call display, session resume, and a scripted subcommand
+  tree (`sessions`, `skills`, `cron`, `memory`, `logs`, …). See
+  [`docs/CLI.md`](docs/CLI.md).
+- **`lite_horse.api`** — Python import for embedding in a webapp. See
+  [`docs/EMBEDDING.md`](docs/EMBEDDING.md).
+
+More reading:
+
 - [`docs/EVOLVE.md`](docs/EVOLVE.md) — offline SKILL.md evolution loop.
 - [`docs/PROGRESS.md`](docs/PROGRESS.md) — phase status and active plan.
 
@@ -23,9 +29,22 @@ State lives in `~/.litehorse/` (override with `LITEHORSE_HOME`). On first
 run, `load_config()` writes a default `config.yaml`; copy `.env.example` to
 `~/.litehorse/.env` and fill in `OPENAI_API_KEY`.
 
-## Quickstart
+## Quickstart — CLI
 
-Drive one turn from the webapp:
+```bash
+litehorse                        # interactive REPL
+litehorse "write a haiku"        # one-shot; streams to stdout, exits
+litehorse --session <key>        # REPL bound to an existing session
+echo "hi" | litehorse            # one-shot from piped stdin
+```
+
+In the REPL, type `/help` for slash commands, Meta-Enter (Esc-Enter) to
+submit, Ctrl-C to cancel the in-flight turn (second press within 2 s
+exits), Ctrl-D on an empty prompt to exit.
+
+## Quickstart — embedded
+
+Drive one turn from a webapp request handler:
 
 ```python
 import asyncio
@@ -40,9 +59,29 @@ async def demo() -> None:
 asyncio.run(demo())
 ```
 
-Same-`session_key` calls serialize; distinct keys run in parallel. See
-[`docs/EMBEDDING.md`](docs/EMBEDDING.md) for the full surface
-(`run_turn`, `end_session`, `search_sessions`, `shutdown`).
+Same-`session_key` calls serialize; distinct keys run in parallel. The
+full contract (`run_turn`, `end_session`, `search_sessions`, `shutdown`)
+is in [`docs/EMBEDDING.md`](docs/EMBEDDING.md).
+
+## Automation — scripted subcommands
+
+Anywhere you'd drive the runtime from a script or CI:
+
+```bash
+litehorse sessions list --json
+litehorse sessions search "deploy" -n 10
+litehorse skills list
+litehorse skills evolve <slug> --days 14
+litehorse cron list
+litehorse cron scheduler                 # runs the scheduler loop
+litehorse memory show
+litehorse logs tail -n 100
+litehorse doctor                         # env + DB + OpenAI key + MCP
+litehorse debug share                    # bundle logs + transcript + config
+```
+
+Every structured command honors `--json` and emits one NDJSON record per
+line to stdout. Structured stderr logging: `LITEHORSE_STRUCTURED_LOGS=1`.
 
 ## Cron worker
 
@@ -50,9 +89,7 @@ Runs in its own process. Reads `~/.litehorse/jobs.json`, fires jobs on
 schedule, POSTs the result to the webapp with an HMAC-SHA256 signature:
 
 ```bash
-uv run python -c \
-  "from lite_horse.cron.scheduler import run_scheduler_blocking; \
-   run_scheduler_blocking()"
+litehorse cron scheduler
 ```
 
 Webhook body + signature format:
@@ -85,7 +122,6 @@ documented in [`docs/EVOLVE.md`](docs/EVOLVE.md).
 
 ## Dev surface
 
-- `uv run pytest -q` — 245+ tests, hermetic.
+- `uv run pytest -q` — hermetic test suite.
 - `uv run ruff check src tests` — lint.
 - `uv run mypy src` — strict typing.
-- `uv run litehorse-debug` — local debug REPL. Not a product surface.

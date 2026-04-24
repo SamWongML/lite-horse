@@ -95,7 +95,34 @@ def _attach_typer_commands() -> None:
         cli.add_command(typer.main.get_command(app), name)
 
 
+def _is_help_invocation(argv: list[str]) -> bool:
+    """True iff argv looks like a pure ``--help`` request.
+
+    We bypass logging bootstrap in that case so ``rich`` stays unloaded
+    and the fast-path test stays green. Anything else pays the bootstrap
+    cost exactly once.
+    """
+    if "--help" in argv or "-h" in argv:
+        return True
+    return False
+
+
+def _bootstrap_logging(argv: list[str]) -> None:
+    """Install CLI log handlers unless this is a fast-path ``--help`` run."""
+    if _is_help_invocation(argv):
+        return
+    from lite_horse.cli._logging import configure
+    from lite_horse.cli._settings import load
+
+    settings = load()
+    json_mode = "--json" in argv or settings.json_output
+    configure(json_mode=json_mode, debug=settings.debug)
+
+
 def main() -> None:
+    import sys
+
+    _bootstrap_logging(sys.argv[1:])
     _attach_typer_commands()
     cli()
 

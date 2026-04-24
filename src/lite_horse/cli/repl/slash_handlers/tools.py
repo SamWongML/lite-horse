@@ -63,11 +63,54 @@ async def _abort(args: list[str], state: Any) -> SlashOutcome:
     return SlashOutcome.CONTINUE
 
 
+_DEFAULT_LOG_TAIL = 50
+
+
 async def _logs(args: list[str], state: Any) -> SlashOutcome:
+    """Tail the stderr log file into a pager overlay (Phase 30).
+
+    ``/logs`` tails the default 50 lines; ``/logs N`` tails ``N`` (1-5000).
+    Output is piped through ``rich.Console.pager`` when stdout is a TTY
+    (Esc / ``q`` to close, matching ``less``), and falls back to plain
+    lines otherwise.
+    """
+    from lite_horse.cli.commands.logs import log_path, tail_lines
+
     printer = getattr(state, "print_line", print)
-    printer("[logs] in-REPL tail arrives in Phase 30; "
-            "use `litehorse logs tail` for now.")
+
+    n = _DEFAULT_LOG_TAIL
+    if args:
+        try:
+            n = int(args[0])
+        except ValueError:
+            printer(f"[logs] not a number: {args[0]!r}")
+            return SlashOutcome.CONTINUE
+    n = min(max(1, n), 5_000)
+
+    lines = tail_lines(n=n)
+    if not lines:
+        printer(f"[logs] no lines yet — log file: {log_path()}")
+        return SlashOutcome.CONTINUE
+
+    _display_in_pager(lines)
     return SlashOutcome.CONTINUE
+
+
+def _display_in_pager(lines: list[str]) -> None:
+    """Page the given lines via rich; fall back to plain print on non-TTY."""
+    import sys
+
+    if not sys.stdout.isatty():
+        for line in lines:
+            print(line)
+        return
+
+    from rich.console import Console
+
+    console = Console()
+    with console.pager(styles=False):
+        for line in lines:
+            console.print(line, soft_wrap=True, highlight=False)
 
 
 async def _editor(args: list[str], state: Any) -> SlashOutcome:
@@ -127,7 +170,7 @@ def register(reg: SlashRegistry) -> None:
     ))
     reg.register(SlashCommand(
         name="logs",
-        summary="tail stderr log (Phase 30)",
+        summary="tail stderr log (pager; `/logs N` for N lines)",
         handler=_logs,
     ))
     reg.register(SlashCommand(
