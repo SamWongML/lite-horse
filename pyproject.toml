@@ -15,6 +15,8 @@ dependencies = [
     "typer>=0.12,<1.0",
     "click-default-group>=1.2.2,<2",
     "pydantic-settings>=2.2,<3",
+    "prompt_toolkit>=3.0.47,<4",
+    "rich>=13.7,<15",
 ]
 
 [project.optional-dependencies]

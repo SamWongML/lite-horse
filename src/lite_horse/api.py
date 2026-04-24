@@ -64,12 +64,20 @@ def _retry_delay(attempt: int) -> float:
 
 @dataclass
 class RunResult:
-    """The webapp-facing summary of one completed turn."""
+    """The webapp-facing summary of one completed turn.
+
+    ``input_tokens`` / ``output_tokens`` / ``total_tokens`` are populated by
+    the streaming path (Phase 27). The scripted ``run_turn`` keeps them at
+    ``None`` until a follow-up phase wires the same extraction over there.
+    """
 
     final_output: str
     session_key: str
     turn_count: int
     tool_calls: int
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
 
 
 @dataclass
@@ -222,6 +230,26 @@ async def run_turn(
     )
 
 
+@dataclass
+class _StreamCounters:
+    tool_calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    saw_usage: bool = False
+
+
+def _accumulate_usage(counters: _StreamCounters, data: Any) -> None:
+    """Pull token totals out of a ``response.completed`` raw event, if any."""
+    usage = getattr(getattr(data, "response", None), "usage", None)
+    if usage is None:
+        return
+    counters.saw_usage = True
+    counters.input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
+    counters.output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
+    counters.total_tokens += int(getattr(usage, "total_tokens", 0) or 0)
+
+
 def _tool_call_descriptor(raw_item: Any) -> tuple[str, str]:
     """Best-effort ``(name, arguments_json_or_str)`` from a raw tool-call item.
 
@@ -282,25 +310,11 @@ async def run_turn_streaming(
                         classified.kind, classified.summary)
             raise
 
-        tool_calls = 0
+        counters = _StreamCounters()
         try:
             async for event in streaming.stream_events():
-                if event.type == "raw_response_event":
-                    data = event.data
-                    if getattr(data, "type", None) == "response.output_text.delta":
-                        delta = getattr(data, "delta", "")
-                        if delta:
-                            yield StreamDelta(text=delta)
-                elif event.type == "run_item_stream_event":
-                    item = event.item
-                    if isinstance(item, ToolCallItem):
-                        tool_calls += 1
-                        name, args = _tool_call_descriptor(item.raw_item)
-                        yield StreamToolCall(name=name, arguments=args)
-                    elif isinstance(item, ToolCallOutputItem):
-                        name, _ = _tool_call_descriptor(item.raw_item)
-                        yield StreamToolOutput(name=name, output=str(item.output))
-                # AgentUpdatedStreamEvent: ignore for now (single-agent setup)
+                async for emitted in _process_stream_event(event, counters):
+                    yield emitted
         except Exception as exc:
             classified = classify(exc)
             if classified.kind is ErrorKind.UNKNOWN:
@@ -319,9 +333,41 @@ async def run_turn_streaming(
             final_output=final_text,
             session_key=session_key,
             turn_count=len(streaming.raw_responses) if hasattr(streaming, "raw_responses") else 0,
-            tool_calls=tool_calls,
+            tool_calls=counters.tool_calls,
+            input_tokens=counters.input_tokens if counters.saw_usage else None,
+            output_tokens=counters.output_tokens if counters.saw_usage else None,
+            total_tokens=counters.total_tokens if counters.saw_usage else None,
         )
         yield StreamDone(result=result)
+
+
+async def _process_stream_event(
+    event: Any, counters: _StreamCounters
+) -> AsyncIterator[StreamEvent]:
+    """Translate one SDK stream event into zero-or-more public StreamEvents.
+
+    Mutates ``counters`` for tool-call totals and token usage.
+    """
+    if event.type == "raw_response_event":
+        data = event.data
+        data_type = getattr(data, "type", None)
+        if data_type == "response.output_text.delta":
+            delta = getattr(data, "delta", "")
+            if delta:
+                yield StreamDelta(text=delta)
+        elif data_type == "response.completed":
+            _accumulate_usage(counters, data)
+        return
+    if event.type == "run_item_stream_event":
+        item = event.item
+        if isinstance(item, ToolCallItem):
+            counters.tool_calls += 1
+            name, args = _tool_call_descriptor(item.raw_item)
+            yield StreamToolCall(name=name, arguments=args)
+        elif isinstance(item, ToolCallOutputItem):
+            name, _ = _tool_call_descriptor(item.raw_item)
+            yield StreamToolOutput(name=name, output=str(item.output))
+    # AgentUpdatedStreamEvent: ignore for now (single-agent setup)
 
 
 async def end_session(session_key: str, *, reason: str = "user_exit") -> None:

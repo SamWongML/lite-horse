@@ -5,6 +5,7 @@ Heavy imports (``prompt_toolkit``, ``rich``) live inside the function body so
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -16,8 +17,12 @@ def _history_path() -> Path:
     return state_dir() / "history"
 
 
-def build_prompt_session(registry: SlashRegistry) -> Any:
-    """Construct a ``PromptSession`` wired with our slash completions.
+def build_prompt_session(
+    registry: SlashRegistry,
+    *,
+    bottom_toolbar: Callable[[], Any] | None = None,
+) -> Any:
+    """Construct a ``PromptSession`` wired with completions, keybinds, toolbar.
 
     Returns ``Any`` so this module's signature stays prompt_toolkit-free
     on import (callers that want concrete types import locally).
@@ -26,13 +31,15 @@ def build_prompt_session(registry: SlashRegistry) -> Any:
     from prompt_toolkit.completion import Completer, WordCompleter
     from prompt_toolkit.history import FileHistory
 
+    from lite_horse.cli.repl.keybinds import make_prompt_keybindings
+
     inner = WordCompleter(
         ["/" + w for w in registry.names()],
         ignore_case=True,
         sentence=True,
     )
 
-    class _SlashCompleter(Completer):  # type: ignore[misc]
+    class _SlashCompleter(Completer):
         """Slash-only completer — fires only when buffer starts with ``/``."""
 
         def get_completions(self, document: Any, complete_event: Any) -> Any:
@@ -50,26 +57,6 @@ def build_prompt_session(registry: SlashRegistry) -> Any:
         enable_open_in_editor=True,
         complete_while_typing=True,
         completer=_SlashCompleter(),
+        key_bindings=make_prompt_keybindings(),
+        bottom_toolbar=bottom_toolbar,
     )
-
-
-def submit_keybindings() -> Any:
-    """KeyBindings: bare Enter inserts newline; Meta-Enter / Esc-Enter submits.
-
-    prompt_toolkit's ``multiline=True`` defaults already do this, but we install
-    explicit bindings so the behaviour is documented and stable across versions.
-    """
-    from prompt_toolkit.key_binding import KeyBindings
-
-    kb = KeyBindings()
-
-    @kb.add("escape", "enter")  # type: ignore[untyped-decorator]
-    def _submit(event: Any) -> None:
-        event.current_buffer.validate_and_handle()
-
-    @kb.add("c-d")  # type: ignore[untyped-decorator]
-    def _ctrl_d(event: Any) -> None:
-        if not event.current_buffer.text:
-            event.app.exit(exception=EOFError())
-
-    return kb
