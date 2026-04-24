@@ -67,9 +67,11 @@ async def test_one_shot_streams_and_returns_zero(
     assert rc == 0
     captured = capsys.readouterr()
     assert "Hello, world!" in captured.out
-    # tool messages go to stderr only
-    assert "[tool: memory]" in captured.err
-    assert "[tool: memory]" not in captured.out
+    # tool announce/output go to stderr only (Phase 28 ToolCallPanel)
+    assert "→ memory" in captured.err
+    assert "↩ memory" in captured.err
+    assert "→ memory" not in captured.out
+    assert "↩ memory" not in captured.out
 
 
 @pytest.mark.asyncio

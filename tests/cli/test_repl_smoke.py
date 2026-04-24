@@ -52,7 +52,35 @@ def test_litehorse_boots_help_and_exits(tmp_path: Path) -> None:
         # Esc-Enter submits in multiline mode; plain \n would only
         # insert a newline into the buffer.
         child.send("/help\x1b\r")
+        # The registry sorts commands alphabetically, so assert in that order.
+        child.expect_exact("/attach")
         child.expect_exact("/exit")
+        child.expect_exact("/permission")
+        child.sendcontrol("d")
+        child.expect(pexpect.EOF)  # type: ignore[attr-defined]
+        child.close()
+        assert child.exitstatus == 0
+    finally:
+        if child.isalive():
+            child.terminate(force=True)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not _have_pty(), reason="no pty available")
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv not on PATH")
+def test_litehorse_permission_mode_round_trip(tmp_path: Path) -> None:
+    """Setting permission mode through the REPL updates the toolbar."""
+    env = os.environ.copy()
+    env["LITEHORSE_HOME"] = str(tmp_path)
+    env.setdefault("OPENAI_API_KEY", "sk-pexpect-fake")
+
+    child = pexpect.spawn(  # type: ignore[attr-defined]
+        "uv", ["run", "litehorse"], env=env, timeout=20, encoding="utf-8"
+    )
+    try:
+        child.expect_exact(">>>")
+        child.send("/permission ro\x1b\r")
+        child.expect_exact("ro — write tools")
         child.sendcontrol("d")
         child.expect(pexpect.EOF)  # type: ignore[attr-defined]
         child.close()

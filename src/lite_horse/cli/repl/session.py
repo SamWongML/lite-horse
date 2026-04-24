@@ -21,6 +21,7 @@ def build_prompt_session(
     registry: SlashRegistry,
     *,
     bottom_toolbar: Callable[[], Any] | None = None,
+    state: Any | None = None,
 ) -> Any:
     """Construct a ``PromptSession`` wired with completions, keybinds, toolbar.
 
@@ -57,6 +58,6 @@ def build_prompt_session(
         enable_open_in_editor=True,
         complete_while_typing=True,
         completer=_SlashCompleter(),
-        key_bindings=make_prompt_keybindings(),
+        key_bindings=make_prompt_keybindings(state),
         bottom_toolbar=bottom_toolbar,
     )

@@ -27,6 +27,7 @@ from agents.mcp import MCPServer
 from lite_horse.agent.errors import ErrorKind, classify
 from lite_horse.agent.factory import build_agent, build_mcp_servers
 from lite_horse.config import Config, load_config
+from lite_horse.core.permission import get_policy
 from lite_horse.core.session_lock import SessionLockRegistry
 from lite_horse.sessions.db import SearchHit, SessionDB
 from lite_horse.sessions.sdk_session import SDKSession
@@ -297,9 +298,17 @@ async def run_turn_streaming(
             session_key, db, source=source, user_id=user_id, model=cfg.model
         )
         turns = max_turns or cfg.agent.max_turns
+        effective_agent = agent
+        policy = get_policy(session_key)
+        if policy is not None and policy.mode == "ro":
+            # ``ro`` filters write tools — rebuild a per-turn agent so the
+            # model never sees them. Other modes reuse the cached agent.
+            effective_agent = build_agent(
+                config=cfg, mcp_servers=_MCP_SERVERS, permission_policy=policy
+            )
         try:
             streaming = Runner.run_streamed(
-                agent,
+                effective_agent,
                 user_text,
                 session=session,  # type: ignore[arg-type]
                 max_turns=turns,

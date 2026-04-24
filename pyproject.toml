@@ -56,6 +56,9 @@ ignore = ["PLR0913", "PLR2004"]
 # contract (see docs/plans/v0.3-cli-entrypoint.md). PLC0415 forbids
 # function-level imports; waive it only inside the cli/ tree.
 "src/lite_horse/cli/**/*.py" = ["PLC0415"]
+# Tests frequently stub classes inline and use lazy imports so that a
+# skipped test doesn't import heavy modules.
+"tests/**/*.py" = ["PLC0415", "RUF012"]
 
 [tool.mypy]
 python_version = "3.11"

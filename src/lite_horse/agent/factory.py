@@ -24,6 +24,7 @@ from lite_horse.agent.consolidator import Consolidator
 from lite_horse.agent.evolution import EvolutionHook
 from lite_horse.agent.instructions import make_instructions
 from lite_horse.config import Config, load_config
+from lite_horse.core.permission import PermissionPolicy, filter_tools
 from lite_horse.cron.manage_tool import cron_manage
 from lite_horse.memory.tool import memory_tool
 from lite_horse.sessions.search_tool import session_search
@@ -87,12 +88,16 @@ def build_agent(
     name: str = "lite-horse",
     config: Config | None = None,
     mcp_servers: list[MCPServer] | None = None,
+    permission_policy: PermissionPolicy | None = None,
 ) -> Agent[Any]:
     """Construct the main user-facing agent.
 
     ``config`` can be passed in by tests to skip the on-disk load.
     ``mcp_servers`` is an already-constructed list whose lifecycle the caller
     manages; when omitted, none are attached.
+    ``permission_policy`` (when provided) filters the tool bundle at build
+    time: under ``ro`` mode write tools are removed so the model cannot
+    invoke them at all.
     """
     cfg = config or load_config()
     tools: list[Tool] = [
@@ -104,6 +109,8 @@ def build_agent(
     ]
     if cfg.tools.web_search:
         tools.append(WebSearchTool())
+    if permission_policy is not None:
+        tools = filter_tools(tools, permission_policy)
     return Agent(
         name=name,
         model=cfg.model,
