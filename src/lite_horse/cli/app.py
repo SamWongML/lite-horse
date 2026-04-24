@@ -29,12 +29,36 @@ def cli() -> None:
 
 @cli.command(context_settings={"ignore_unknown_options": True})  # type: ignore[untyped-decorator]
 @click.argument("prompt", nargs=-1)
-def repl(prompt: tuple[str, ...]) -> None:
-    """Open the interactive REPL (or one-shot if a prompt is given)."""
-    from lite_horse.cli.repl.loop import run_stub
+@click.option("--session", "session_key", default=None,
+              help="Bind the REPL / one-shot to this existing session key.")
+def repl(prompt: tuple[str, ...], session_key: str | None) -> None:
+    """Open the interactive REPL (or one-shot if a prompt is given).
+
+    - ``litehorse``                 → REPL on a fresh session
+    - ``litehorse "write a haiku"`` → one-shot, prints the answer, exits
+    - ``echo hi | litehorse``       → one-shot from piped stdin
+    - ``litehorse --session <key>`` → REPL bound to an existing session
+    """
+    import asyncio
+    import sys
+
+    from lite_horse.cli._tty import detect
+    from lite_horse.cli.repl.loop import main_loop
 
     joined = " ".join(prompt) if prompt else None
-    raise SystemExit(run_stub(joined))
+    tty = detect()
+    stdin_text: str | None = None
+    if joined is None and not tty.stdin_tty:
+        piped = sys.stdin.read().strip()
+        if piped:
+            stdin_text = piped
+
+    rc = asyncio.run(main_loop(
+        prompt=joined,
+        stdin_text=stdin_text,
+        session_key=session_key,
+    ))
+    raise SystemExit(rc)
 
 
 def _attach_typer_commands() -> None:
