@@ -273,6 +273,7 @@ def build_default_registry() -> SlashRegistry:
     _register_model_handlers(reg)
     _register_tool_handlers(reg)
     _register_attachment_handlers(reg)
+    _register_scripted_parity_handlers(reg)
     return reg
 
 
@@ -306,3 +307,18 @@ def _register_attachment_handlers(reg: SlashRegistry) -> None:
         summary="attach an image from the system clipboard",
         handler=paste_image_handler,
     ))
+
+
+def _register_scripted_parity_handlers(reg: SlashRegistry) -> None:
+    """Register Phase-29 slash handlers that mirror the scripted subtrees.
+
+    Each helper imports its ``commands/*`` counterpart lazily so ``--help``
+    on the root CLI never transitively loads them.
+    """
+    from lite_horse.cli.repl.slash_handlers import cron as cron_module
+    from lite_horse.cli.repl.slash_handlers import memory as memory_module
+    from lite_horse.cli.repl.slash_handlers import skills as skills_module
+
+    cron_module.register(reg)
+    memory_module.register(reg)
+    skills_module.register(reg)

@@ -71,8 +71,13 @@ def _attach_typer_commands() -> None:
 
     from lite_horse.cli.commands import completion as completion_cmd
     from lite_horse.cli.commands import config as config_cmd
+    from lite_horse.cli.commands import cron as cron_cmd
     from lite_horse.cli.commands import debug as debug_cmd
     from lite_horse.cli.commands import doctor as doctor_cmd
+    from lite_horse.cli.commands import logs as logs_cmd
+    from lite_horse.cli.commands import memory as memory_cmd
+    from lite_horse.cli.commands import sessions as sessions_cmd
+    from lite_horse.cli.commands import skills as skills_cmd
     from lite_horse.cli.commands import version as version_cmd
 
     for name, app in (
@@ -81,6 +86,11 @@ def _attach_typer_commands() -> None:
         ("config", config_cmd.app),
         ("completion", completion_cmd.app),
         ("debug", debug_cmd.app),
+        ("sessions", sessions_cmd.app),
+        ("skills", skills_cmd.app),
+        ("cron", cron_cmd.app),
+        ("memory", memory_cmd.app),
+        ("logs", logs_cmd.app),
     ):
         cli.add_command(typer.main.get_command(app), name)
 

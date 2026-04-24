@@ -68,7 +68,7 @@ the secondary surface. Stack: prompt_toolkit + rich + click-default-group
 | 26 | CLI foundation + scripted skeleton (doctor/version/config)       | ✅ |
 | 27 | Interactive REPL core (streaming, toolbar, Ctrl-C, /help/exit)   | ✅ |
 | 28 | Slash commands + session mgmt + tool approval + attachments     | ✅ |
-| 29 | Scripted subcommand parity (sessions/skills/cron/memory/logs)    | ☐ |
+| 29 | Scripted subcommand parity (sessions/skills/cron/memory/logs)    | ✅ |
 | 30 | Structured logs, `/logs`, `debug share`, delete litehorse-debug  | ☐ |
 
 ### Blocked / in progress

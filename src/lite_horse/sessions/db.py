@@ -320,6 +320,35 @@ class SessionDB:
             for r in rows
         ]
 
+    def delete_sessions_ended_before(self, cutoff_ts: float) -> int:
+        """Delete every session (and its messages) that ended before ``cutoff_ts``.
+
+        Returns the number of sessions deleted. Unfinished sessions
+        (``ended_at IS NULL``) are never touched — cleanup only reclaims
+        terminal state. FTS5 triggers handle the messages_fts mirror.
+        """
+        with self._writer() as c:
+            ids = [
+                str(r["id"])
+                for r in c.execute(
+                    "SELECT id FROM sessions WHERE ended_at IS NOT NULL AND ended_at < ?",
+                    (float(cutoff_ts),),
+                ).fetchall()
+            ]
+            if not ids:
+                return 0
+            placeholders = ",".join("?" for _ in ids)
+            c.execute(
+                f"DELETE FROM messages WHERE session_id IN ({placeholders})",
+                ids,
+            )
+            c.execute(
+                f"DELETE FROM sessions WHERE id IN ({placeholders})",
+                ids,
+            )
+        self._maybe_checkpoint()
+        return len(ids)
+
     def find_session_by_prefix(self, prefix: str) -> str | None:
         """Resolve a user-typed session-key prefix to a unique session id.
 
