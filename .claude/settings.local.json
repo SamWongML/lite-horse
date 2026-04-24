@@ -24,7 +24,8 @@
       "Bash(mkdir lh-test *)",
       "Bash(LITEHORSE_HOME=/tmp/lh-test OPENAI_API_KEY=sk-x printf '/help\\\\n')",
       "Bash(gtimeout 5 uv --project /Users/demon/codes/lite-horse run litehorse)",
-      "Bash(echo \"---exit=$?---\")"
+      "Bash(echo \"---exit=$?---\")",
+      "Bash(LITEHORSE_HOME=/tmp/lh-phase30-manual LITEHORSE_STRUCTURED_LOGS=1 uv run litehorse sessions list)"
     ]
   }
 }

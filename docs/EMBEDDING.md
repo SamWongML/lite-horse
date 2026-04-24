@@ -2,8 +2,15 @@
 
 `lite-horse` is an embeddable Python package. The consuming webapp imports
 `lite_horse.api`, calls `run_turn()` on each user message, and lets the cron
-worker deliver scheduled output back via a signed webhook. There is **no**
-standalone CLI, server, or chat-platform adapter.
+worker deliver scheduled output back via a signed webhook.
+
+> **CLI is a second surface, not a replacement.** As of v0.3 there is
+> also a `litehorse` CLI ([`docs/CLI.md`](CLI.md)) — interactive REPL
+> plus a scripted subcommand tree. It is equally first-class but
+> independent of the embedded path: webapps should continue to import
+> `lite_horse.api` directly. The CLI never runs inside the webapp
+> process; the two surfaces share only the on-disk state in
+> `~/.litehorse/`.
 
 This document is the integration contract: env vars, `config.yaml` shape,
 MCP-server expectations, cron-delivery protocol. The surface is versioned by

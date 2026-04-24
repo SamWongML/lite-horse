@@ -53,15 +53,16 @@ out-of-band in the PM webapp repo.
 | 24 | offline `lite_horse.evolve` pipeline               | ✅ |
 | 25 | final hardening & docs                             | ✅ |
 
-## v0.3 — interactive-first `litehorse` CLI — ACTIVE (started 2026-04-23)
+## v0.3 — interactive-first `litehorse` CLI — ✅ SHIPPED (2026-04-25)
 
-Detail: [plans/v0.3-cli-entrypoint.md](plans/v0.3-cli-entrypoint.md).
+476 tests green. Detail:
+[plans/v0.3-cli-entrypoint.md](plans/v0.3-cli-entrypoint.md).
 Reverses v0.2's no-CLI stance. Bare `litehorse` drops into a persistent
 REPL with streaming markdown, slash commands, tool-call approval,
 session resume, and cost meter — same class of interaction as the
 webapp. Scripted subcommand tree (`sessions`, `skills`, `cron`, …) is
 the secondary surface. Stack: prompt_toolkit + rich + click-default-group
-+ Typer. `litehorse-debug` is deleted in Phase 30.
++ Typer. `litehorse-debug` deleted in Phase 30.
 
 | # | Subject | Status |
 |---|---|---|
@@ -69,7 +70,7 @@ the secondary surface. Stack: prompt_toolkit + rich + click-default-group
 | 27 | Interactive REPL core (streaming, toolbar, Ctrl-C, /help/exit)   | ✅ |
 | 28 | Slash commands + session mgmt + tool approval + attachments     | ✅ |
 | 29 | Scripted subcommand parity (sessions/skills/cron/memory/logs)    | ✅ |
-| 30 | Structured logs, `/logs`, `debug share`, delete litehorse-debug  | ☐ |
+| 30 | Structured logs, `/logs`, `debug share`, delete litehorse-debug  | ✅ |
 
 ### Blocked / in progress
 (none yet)
