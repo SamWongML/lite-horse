@@ -15,11 +15,13 @@ Invariants
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
-from agents import Agent, Runner, ToolCallItem
+from agents import Agent, Runner, ToolCallItem, ToolCallOutputItem
 from agents.mcp import MCPServer
 
 from lite_horse.agent.errors import ErrorKind, classify
@@ -34,8 +36,14 @@ from lite_horse.skills.source import sync_bundled_skills
 __all__ = [
     "RunResult",
     "SearchHit",
+    "StreamDelta",
+    "StreamDone",
+    "StreamEvent",
+    "StreamToolCall",
+    "StreamToolOutput",
     "end_session",
     "run_turn",
+    "run_turn_streaming",
     "search_sessions",
 ]
 
@@ -62,6 +70,39 @@ class RunResult:
     session_key: str
     turn_count: int
     tool_calls: int
+
+
+@dataclass
+class StreamDelta:
+    """Incremental text chunk from the model."""
+
+    text: str
+
+
+@dataclass
+class StreamToolCall:
+    """A tool was invoked (announce-time event, no output yet)."""
+
+    name: str
+    arguments: str
+
+
+@dataclass
+class StreamToolOutput:
+    """Output of a previously-announced tool call."""
+
+    name: str
+    output: str
+
+
+@dataclass
+class StreamDone:
+    """Terminal event carrying the same summary as :func:`run_turn`."""
+
+    result: RunResult
+
+
+StreamEvent = StreamDelta | StreamToolCall | StreamToolOutput | StreamDone
 
 
 _DB: SessionDB | None = None
@@ -179,6 +220,108 @@ async def run_turn(
         turn_count=len(result.raw_responses),
         tool_calls=tool_calls,
     )
+
+
+def _tool_call_descriptor(raw_item: Any) -> tuple[str, str]:
+    """Best-effort ``(name, arguments_json_or_str)`` from a raw tool-call item.
+
+    The SDK's ``raw_item`` is provider-shaped (Responses API tool calls). We
+    duck-type rather than import every concrete model, so unknown shapes fall
+    back to ``("tool", "")`` instead of crashing the stream.
+    """
+    name = getattr(raw_item, "name", None) or getattr(raw_item, "type", None) or "tool"
+    args = getattr(raw_item, "arguments", None)
+    if args is None:
+        args = getattr(raw_item, "input", None)
+    if args is None:
+        args = ""
+    if not isinstance(args, str):
+        try:
+            args = json.dumps(args, default=str)
+        except Exception:
+            args = str(args)
+    return str(name), args
+
+
+async def run_turn_streaming(
+    *,
+    session_key: str,
+    user_text: str,
+    source: str = "web",
+    user_id: str | None = None,
+    max_turns: int | None = None,
+) -> AsyncIterator[StreamEvent]:
+    """Run one turn, yielding incremental events.
+
+    Emits :class:`StreamDelta` for each text chunk, :class:`StreamToolCall` /
+    :class:`StreamToolOutput` around tool invocations, and one terminal
+    :class:`StreamDone` carrying the same summary as :func:`run_turn`.
+
+    Unlike :func:`run_turn`, this path does **not** auto-retry transient
+    failures: once we have started streaming bytes to a renderer we cannot
+    rewind, so errors propagate to the caller. The caller is expected to be
+    interactive (REPL) and can re-issue the turn.
+    """
+    db, agent, cfg = await _ensure_ready()
+    lock = _LOCKS.get(session_key)
+    async with lock:
+        session = SDKSession(
+            session_key, db, source=source, user_id=user_id, model=cfg.model
+        )
+        turns = max_turns or cfg.agent.max_turns
+        try:
+            streaming = Runner.run_streamed(
+                agent,
+                user_text,
+                session=session,  # type: ignore[arg-type]
+                max_turns=turns,
+            )
+        except Exception as exc:
+            classified = classify(exc)
+            log.warning("run_turn_streaming setup failed (%s): %s",
+                        classified.kind, classified.summary)
+            raise
+
+        tool_calls = 0
+        try:
+            async for event in streaming.stream_events():
+                if event.type == "raw_response_event":
+                    data = event.data
+                    if getattr(data, "type", None) == "response.output_text.delta":
+                        delta = getattr(data, "delta", "")
+                        if delta:
+                            yield StreamDelta(text=delta)
+                elif event.type == "run_item_stream_event":
+                    item = event.item
+                    if isinstance(item, ToolCallItem):
+                        tool_calls += 1
+                        name, args = _tool_call_descriptor(item.raw_item)
+                        yield StreamToolCall(name=name, arguments=args)
+                    elif isinstance(item, ToolCallOutputItem):
+                        name, _ = _tool_call_descriptor(item.raw_item)
+                        yield StreamToolOutput(name=name, output=str(item.output))
+                # AgentUpdatedStreamEvent: ignore for now (single-agent setup)
+        except Exception as exc:
+            classified = classify(exc)
+            if classified.kind is ErrorKind.UNKNOWN:
+                log.exception("run_turn_streaming unknown failure on %s", session_key)
+            else:
+                log.warning("run_turn_streaming %s on %s: %s",
+                            classified.kind, session_key, classified.summary)
+            raise
+
+        final_text = ""
+        try:
+            final_text = str(streaming.final_output)
+        except Exception:
+            log.exception("run_turn_streaming: failed to read final_output")
+        result = RunResult(
+            final_output=final_text,
+            session_key=session_key,
+            turn_count=len(streaming.raw_responses) if hasattr(streaming, "raw_responses") else 0,
+            tool_calls=tool_calls,
+        )
+        yield StreamDone(result=result)
 
 
 async def end_session(session_key: str, *, reason: str = "user_exit") -> None:
