@@ -67,3 +67,6 @@ packages = ["lite_horse"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "slow: tests that spawn subprocesses or otherwise take noticeably longer; opt in with -m slow",
+]
