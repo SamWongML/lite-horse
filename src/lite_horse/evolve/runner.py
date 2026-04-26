@@ -16,7 +16,7 @@ from typing import Any
 import yaml
 
 from lite_horse.evolve import constraints, fitness, reflector, trace_miner
-from lite_horse.sessions.db import SessionDB
+from lite_horse.sessions.local import LocalSessionRepo
 from lite_horse.skills.source import skills_root
 
 _PROPOSALS_DIRNAME = ".proposals"
@@ -36,7 +36,7 @@ class EvolveResult:
 def evolve(
     skill_name: str,
     *,
-    db: SessionDB | None = None,
+    db: LocalSessionRepo | None = None,
     reflector_fn: reflector.Reflector | None = None,
     judge: fitness.Judge | None = None,
     embedder: fitness.Embedder | None = None,
@@ -57,7 +57,7 @@ def evolve(
         baseline_fm.get("version"), int
     ) else None
 
-    db = db or SessionDB()
+    db = db or LocalSessionRepo()
     trajectories = trace_miner.mine_failures(skill_name, db=db, days=days)
 
     reflect = reflector_fn or reflector.default_reflector

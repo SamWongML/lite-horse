@@ -1,4 +1,4 @@
-"""Mine failure trajectories for a skill from SessionDB + stats sidecar.
+"""Mine failure trajectories for a skill from the local session store + stats sidecar.
 
 The plan would like ``ErrorKind``-labeled traces, but v0.2 does not persist
 classifier kinds per message. We approximate: a session is a *candidate* if its
@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from lite_horse.sessions.db import SessionDB
+from lite_horse.sessions.local import LocalSessionRepo
 from lite_horse.skills import stats as skill_stats
 
 _ERROR_END_REASONS: frozenset[str] = frozenset(
@@ -34,7 +34,7 @@ class Trajectory:
 def mine_failures(
     skill_name: str,
     *,
-    db: SessionDB,
+    db: LocalSessionRepo,
     days: int = 14,
     limit: int = 5,
 ) -> list[Trajectory]:
@@ -54,13 +54,10 @@ def mine_failures(
         if hit.timestamp < cutoff or hit.session_id in seen:
             continue
         seen.add(hit.session_id)
-        row = db._conn().execute(
-            "SELECT end_reason, started_at FROM sessions WHERE id=?",
-            (hit.session_id,),
-        ).fetchone()
-        if row is None:
+        meta = db.get_session_meta(hit.session_id)
+        if meta is None:
             continue
-        end_reason = (row["end_reason"] or "").lower()
+        end_reason = (meta.get("end_reason") or "").lower()
         if end_reason and end_reason not in _ERROR_END_REASONS:
             continue
         messages = db.get_messages(hit.session_id)

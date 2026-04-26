@@ -199,12 +199,10 @@ async def test_end_session_writes_ended_at(
     await end_session(key, reason="test_done")
 
     assert api_mod._DB is not None
-    row = api_mod._DB._conn().execute(
-        "SELECT ended_at, end_reason FROM sessions WHERE id=?", (key,)
-    ).fetchone()
-    assert row is not None
-    assert row["ended_at"] is not None
-    assert row["end_reason"] == "test_done"
+    meta = api_mod._DB.get_session_meta(key)
+    assert meta is not None
+    assert meta["ended_at"] is not None
+    assert meta["end_reason"] == "test_done"
 
 
 # ---------- search_sessions ----------

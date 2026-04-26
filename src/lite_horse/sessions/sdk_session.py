@@ -1,18 +1,24 @@
-"""Adapter exposing :class:`SessionDB` as an OpenAI Agents SDK ``Session``."""
+"""Adapter exposing :class:`LocalSessionRepo` as an OpenAI Agents SDK ``Session``.
+
+In v0.4 the cloud HTTP path uses request-scoped Postgres repos (see
+:mod:`lite_horse.repositories`); this adapter sits on top of the dev
+single-user :class:`LocalSessionRepo` and implements the SDK's async
+``Session`` protocol with sync calls underneath.
+"""
 from __future__ import annotations
 
 from typing import Any
 
-from lite_horse.sessions.db import SessionDB
+from lite_horse.sessions.local import LocalSessionRepo
 
 
 class SDKSession:
-    """Implements the SDK ``Session`` protocol on top of :class:`SessionDB`."""
+    """Implements the SDK ``Session`` protocol on top of :class:`LocalSessionRepo`."""
 
     def __init__(
         self,
         session_id: str,
-        db: SessionDB,
+        db: LocalSessionRepo,
         *,
         source: str = "cli",
         user_id: str | None = None,

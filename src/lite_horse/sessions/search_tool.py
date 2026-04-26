@@ -7,17 +7,17 @@ from typing import Any
 
 from agents import RunContextWrapper, function_tool
 
-from lite_horse.sessions.db import SessionDB
+from lite_horse.sessions.local import LocalSessionRepo
 
 # Module-level singleton; the CLI / gateway / cron entrypoints wire this up
 # once at startup via :func:`bind_db`. Tools are module-level callables so we
 # cannot capture per-instance state any other way without threading a context
 # through every tool invocation.
-_DB: SessionDB | None = None
+_DB: LocalSessionRepo | None = None
 
 
-def bind_db(db: SessionDB) -> None:
-    """Bind the :class:`SessionDB` the tool should query."""
+def bind_db(db: LocalSessionRepo) -> None:
+    """Bind the :class:`LocalSessionRepo` the tool should query."""
     global _DB  # noqa: PLW0603 — single-user app, intentional singleton
     _DB = db
 

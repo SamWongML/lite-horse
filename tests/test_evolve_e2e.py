@@ -1,4 +1,4 @@
-"""End-to-end evolve() with synthetic SessionDB + stubbed LLM/embedder."""
+"""End-to-end evolve() with synthetic LocalSessionRepo + stubbed LLM/embedder."""
 from __future__ import annotations
 
 import json
@@ -10,7 +10,7 @@ import pytest
 from lite_horse.evolve import cli, evolve
 from lite_horse.evolve import runner as runner_mod
 from lite_horse.evolve.trace_miner import Trajectory
-from lite_horse.sessions.db import SessionDB
+from lite_horse.sessions.local import LocalSessionRepo
 from lite_horse.skills.source import skills_root
 
 
@@ -27,7 +27,7 @@ def _seed_skill(name: str = "demo", version: int = 1) -> Path:
     return md
 
 
-def _seed_failure_session(db: SessionDB, *, skill_name: str) -> None:
+def _seed_failure_session(db: LocalSessionRepo, *, skill_name: str) -> None:
     db.create_session(session_id="sess-a", source="test")
     db.append_message(session_id="sess-a", role="user", content=f"please use {skill_name}")
     db.append_message(
@@ -58,7 +58,7 @@ def _stub_embedder(text: str) -> list[float]:
 
 def test_evolve_happy_path_writes_proposal(litehorse_home: Path) -> None:
     _seed_skill()
-    db = SessionDB()
+    db = LocalSessionRepo()
     _seed_failure_session(db, skill_name="demo")
 
     result = evolve(
@@ -93,7 +93,7 @@ def test_evolve_rejects_unbumped_version(litehorse_home: Path) -> None:
 
     result = evolve(
         "demo",
-        db=SessionDB(),
+        db=LocalSessionRepo(),
         reflector_fn=bad_candidate,
         judge=_stub_judge,
         embedder=_stub_embedder,
@@ -115,7 +115,7 @@ def test_evolve_rejects_injection(litehorse_home: Path) -> None:
 
     result = evolve(
         "demo",
-        db=SessionDB(),
+        db=LocalSessionRepo(),
         reflector_fn=injected,
         judge=_stub_judge,
         embedder=_stub_embedder,
@@ -129,7 +129,7 @@ def test_evolve_rejects_failing_pytest(litehorse_home: Path) -> None:
     _seed_skill()
     result = evolve(
         "demo",
-        db=SessionDB(),
+        db=LocalSessionRepo(),
         reflector_fn=_good_candidate,
         judge=_stub_judge,
         embedder=_stub_embedder,
@@ -148,7 +148,7 @@ def test_evolve_rejects_low_cosine(litehorse_home: Path) -> None:
 
     result = evolve(
         "demo",
-        db=SessionDB(),
+        db=LocalSessionRepo(),
         reflector_fn=_good_candidate,
         judge=_stub_judge,
         embedder=orthogonal_embedder,
@@ -161,7 +161,7 @@ def test_evolve_rejects_low_cosine(litehorse_home: Path) -> None:
 def test_evolve_missing_skill_returns_error(litehorse_home: Path) -> None:
     result = evolve(
         "nope",
-        db=SessionDB(),
+        db=LocalSessionRepo(),
         reflector_fn=_good_candidate,
         judge=_stub_judge,
         embedder=_stub_embedder,

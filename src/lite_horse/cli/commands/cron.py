@@ -69,7 +69,7 @@ async def run_once(job_id: str) -> dict[str, Any]:
     from lite_horse.config import load_config
     from lite_horse.cron.jobs import JobStore
     from lite_horse.cron.scheduler import make_fire
-    from lite_horse.sessions.db import SessionDB
+    from lite_horse.sessions.local import LocalSessionRepo
     from lite_horse.sessions.search_tool import bind_db
 
     store = JobStore()
@@ -77,7 +77,7 @@ async def run_once(job_id: str) -> dict[str, Any]:
     if job is None:
         return {"success": False, "error": f"no such job: {job_id}"}
     cfg = load_config()
-    db = SessionDB()
+    db = LocalSessionRepo()
     bind_db(db)
     fire = make_fire(db=db, cfg=cfg, store=store)
     await fire(job)

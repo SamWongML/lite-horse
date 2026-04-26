@@ -19,7 +19,7 @@ from lite_horse.cron.scheduler import (
     parse_schedule,
     run_scheduler,
 )
-from lite_horse.sessions.db import SessionDB
+from lite_horse.sessions.local import LocalSessionRepo
 
 
 class _StubResult:
@@ -77,7 +77,7 @@ async def test_fire_runs_agent_and_delivers(
     monkeypatch.setattr(sched_mod.Runner, "run", fake_run)
     monkeypatch.setattr(sched_mod, "deliver", fake_deliver)
 
-    db = SessionDB()
+    db = LocalSessionRepo()
     fire = make_fire(db=db, cfg=_cfg())
     job = Job(
         id="smoke",
@@ -111,7 +111,7 @@ async def test_fire_delivers_error_when_runner_raises(
     monkeypatch.setattr(sched_mod.Runner, "run", boom)
     monkeypatch.setattr(sched_mod, "deliver", fake_deliver)
 
-    db = SessionDB()
+    db = LocalSessionRepo()
     fire = make_fire(db=db, cfg=_cfg())
     job = Job(
         id="bad",
@@ -144,7 +144,7 @@ async def test_fire_ends_session_after_run(
     monkeypatch.setattr(sched_mod.Runner, "run", fake_run)
     monkeypatch.setattr(sched_mod, "deliver", fake_deliver)
 
-    db = SessionDB()
+    db = LocalSessionRepo()
     ended: list[tuple[str, str]] = []
     original_end = db.end_session
 
@@ -193,7 +193,7 @@ async def test_fire_classifies_rate_limit_and_does_not_strike(
 
     store = JobStore()
     job = store.add(schedule="@hourly", prompt="p", delivery={"platform": "log"})
-    fire = make_fire(db=SessionDB(), cfg=_cfg(), store=store)
+    fire = make_fire(db=LocalSessionRepo(), cfg=_cfg(), store=store)
 
     for _ in range(5):
         await fire(job)
@@ -228,7 +228,7 @@ async def test_fire_disables_job_after_three_model_refusals(
 
     store = JobStore()
     job = store.add(schedule="@hourly", prompt="p", delivery={"platform": "log"})
-    fire = make_fire(db=SessionDB(), cfg=_cfg(), store=store)
+    fire = make_fire(db=LocalSessionRepo(), cfg=_cfg(), store=store)
 
     # First two firings: still enabled, strike counter building up.
     await fire(job)
@@ -279,7 +279,7 @@ async def test_fire_strike_counter_resets_on_success(
 
     store = JobStore()
     job = store.add(schedule="@hourly", prompt="p", delivery={"platform": "log"})
-    fire = make_fire(db=SessionDB(), cfg=_cfg(), store=store)
+    fire = make_fire(db=LocalSessionRepo(), cfg=_cfg(), store=store)
 
     for _ in range(5):
         await fire(job)

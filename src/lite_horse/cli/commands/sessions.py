@@ -1,7 +1,7 @@
 """`litehorse sessions {list, show, search, end, cleanup}`.
 
-Thin Typer wrappers over :class:`lite_horse.sessions.db.SessionDB`. The
-slash-command handlers in :mod:`lite_horse.cli.repl.slash_handlers.session`
+Thin Typer wrappers over :class:`lite_horse.sessions.local.LocalSessionRepo`.
+The slash-command handlers in :mod:`lite_horse.cli.repl.slash_handlers.session`
 (resume picker) and the upcoming REPL `/sessions` mirror import the same
 helpers below — single source of truth, no duplicate SQL.
 """
@@ -27,17 +27,17 @@ def _root() -> None:
 # ---------- pure helpers (shared with slash handlers) ----------
 
 def list_sessions(*, limit: int = 20) -> list[dict[str, Any]]:
-    from lite_horse.sessions.db import SessionDB
+    from lite_horse.sessions.local import LocalSessionRepo
 
-    db = SessionDB()
+    db = LocalSessionRepo()
     return db.list_recent_sessions(limit=limit)
 
 
 def show_session(session_id: str) -> dict[str, Any] | None:
     """Return the session row + every message. ``None`` if unknown id."""
-    from lite_horse.sessions.db import SessionDB
+    from lite_horse.sessions.local import LocalSessionRepo
 
-    db = SessionDB()
+    db = LocalSessionRepo()
     rows = db.list_recent_sessions(limit=10000)
     match = next((r for r in rows if r["id"] == session_id), None)
     if match is None:
@@ -47,9 +47,9 @@ def show_session(session_id: str) -> dict[str, Any] | None:
 
 
 def search(query: str, *, limit: int = 20, source: str | None = None) -> list[dict[str, Any]]:
-    from lite_horse.sessions.db import SessionDB
+    from lite_horse.sessions.local import LocalSessionRepo
 
-    db = SessionDB()
+    db = LocalSessionRepo()
     hits = db.search_messages(
         query,
         limit=min(max(1, int(limit)), 50),
@@ -60,9 +60,9 @@ def search(query: str, *, limit: int = 20, source: str | None = None) -> list[di
 
 def end(session_id: str, *, reason: str = "user_exit") -> bool:
     """Stamp ``ended_at`` on one session. Returns True if the row existed."""
-    from lite_horse.sessions.db import SessionDB
+    from lite_horse.sessions.local import LocalSessionRepo
 
-    db = SessionDB()
+    db = LocalSessionRepo()
     existing = db.list_recent_sessions(limit=10000)
     if not any(r["id"] == session_id for r in existing):
         return False
@@ -72,10 +72,10 @@ def end(session_id: str, *, reason: str = "user_exit") -> bool:
 
 def cleanup(*, days: int) -> int:
     """Delete sessions that ended more than ``days`` ago. Returns count deleted."""
-    from lite_horse.sessions.db import SessionDB
+    from lite_horse.sessions.local import LocalSessionRepo
 
     cutoff = time.time() - max(0, int(days)) * 86400.0
-    db = SessionDB()
+    db = LocalSessionRepo()
     return db.delete_sessions_ended_before(cutoff)
 
 

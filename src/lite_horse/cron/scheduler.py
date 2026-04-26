@@ -25,7 +25,7 @@ from lite_horse.config import Config, load_config
 from lite_horse.constants import litehorse_home
 from lite_horse.cron.delivery import deliver_webhook
 from lite_horse.cron.jobs import Job, JobStore
-from lite_horse.sessions.db import SessionDB
+from lite_horse.sessions.local import LocalSessionRepo
 from lite_horse.sessions.sdk_session import SDKSession
 from lite_horse.sessions.search_tool import bind_db
 
@@ -83,7 +83,7 @@ async def deliver(spec: dict[str, Any], text: str, session_key: str) -> None:
 
 
 def make_fire(
-    *, db: SessionDB, cfg: Config, store: JobStore | None = None
+    *, db: LocalSessionRepo, cfg: Config, store: JobStore | None = None
 ) -> Fire:
     """Build the closure APScheduler calls when a job is due.
 
@@ -169,7 +169,7 @@ def _schedule_jobs(
 async def run_scheduler() -> None:
     """Async entrypoint: load jobs, start the scheduler, wait for SIGINT/SIGTERM."""
     cfg = load_config()
-    db = SessionDB()
+    db = LocalSessionRepo()
     bind_db(db)
     store = JobStore()
     sched = AsyncIOScheduler()

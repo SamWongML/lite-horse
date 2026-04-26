@@ -10,12 +10,12 @@ from typer.testing import CliRunner
 
 from lite_horse.cli.commands.sessions import app
 from lite_horse.cli.exit_codes import ExitCode
-from lite_horse.sessions.db import SessionDB
+from lite_horse.sessions.local import LocalSessionRepo
 
 
-def _seed_db(litehorse_home: Path, *, include_ended: bool = True) -> SessionDB:
+def _seed_db(litehorse_home: Path, *, include_ended: bool = True) -> LocalSessionRepo:
     """Two sessions, one ended, one live, each with two messages."""
-    db = SessionDB()
+    db = LocalSessionRepo()
     db.create_session(session_id="sess-live", source="cli", model="gpt-5.0")
     db.append_message(session_id="sess-live", role="user", content="hello world")
     db.append_message(session_id="sess-live", role="assistant", content="hi friend")
@@ -80,7 +80,7 @@ def test_end_stamps_end_reason(litehorse_home: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["end", "sess-live", "--reason", "cli_test"])
     assert result.exit_code == 0
-    db = SessionDB()
+    db = LocalSessionRepo()
     rows = db.list_recent_sessions(limit=5)
     live_row = next(r for r in rows if r["id"] == "sess-live")
     assert live_row["end_reason"] == "cli_test"
@@ -100,15 +100,15 @@ def test_cleanup_removes_old_sessions(
     db = _seed_db(litehorse_home)
     # Backdate the ended session to 40 days ago so --days 30 sweeps it.
     long_ago = time.time() - 40 * 86400
-    with db._writer() as conn:
-        conn.execute(
-            "UPDATE sessions SET ended_at = ? WHERE id = ?", (long_ago, "sess-old")
-        )
+    db._conn.execute(
+        "UPDATE sessions SET ended_at = ? WHERE id = ?", (long_ago, "sess-old")
+    )
+    db._conn.commit()
     runner = CliRunner()
     result = runner.invoke(app, ["cleanup", "--days", "30", "--yes"])
     assert result.exit_code == 0
     assert "deleted 1" in result.stdout.lower()
-    rows = SessionDB().list_recent_sessions(limit=10)
+    rows = LocalSessionRepo().list_recent_sessions(limit=10)
     assert {r["id"] for r in rows} == {"sess-live"}
 
 

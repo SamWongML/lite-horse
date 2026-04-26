@@ -86,7 +86,7 @@ as a thin client. Predecessor: v0.3.
 | #  | Subject | Status |
 |----|---|---|
 | 31 | Foundations: storage layer + ORM + Alembic + FastAPI skeleton    | ✅ |
-| 32 | SessionDB port to Postgres                                       | ☐ |
+| 32 | SessionDB port to Postgres                                       | ✅ |
 | 33 | Layered config: user-scope CRUD + effective-config resolver      | ☐ |
 | 34 | Admin layer: official-scope CRUD, versioning, audit, cache inval | ☐ |
 | 35 | Streaming + permissions + idempotency                            | ☐ |
@@ -99,8 +99,11 @@ as a thin client. Predecessor: v0.3.
 Phase 31 shipped 2026-04-26 in three atomic commits (31a infra +
 storage protocols + local impls; 31b ORM models + Alembic initial
 migration + RLS; 31c FastAPI skeleton + JWT/JWKS auth + cloud
-storage impls + CI boundary lint). Phase 32 (SessionDB → Postgres)
-is next.
+storage impls + CI boundary lint). Phase 32 shipped 2026-04-26:
+v0.3 `SessionDB` replaced by tenant-scoped async Postgres
+`SessionRepo` / `MessageRepo` (with tsvector FTS) for the cloud
+path, plus a sync `LocalSessionRepo` for the dev REPL / single-user
+CLI. Phase 33 (layered config) is next.
 
 ---
 

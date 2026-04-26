@@ -7,7 +7,7 @@ Everything else in ``lite_horse`` is internal. The webapp imports from here:
 
 Invariants
 ----------
-- One process-wide :class:`SessionDB`, bound once to the ``session_search`` tool.
+- One process-wide :class:`LocalSessionRepo`, bound once to the ``session_search`` tool.
 - One cached :class:`Agent`; tests monkeypatch ``_AGENT`` to override.
 - Runs with the same ``session_key`` serialize on a per-key ``asyncio.Lock``;
   runs on distinct keys proceed in parallel.
@@ -29,9 +29,10 @@ from lite_horse.agent.factory import build_agent, build_mcp_servers
 from lite_horse.config import Config, load_config
 from lite_horse.core.permission import get_policy
 from lite_horse.core.session_lock import SessionLockRegistry
-from lite_horse.sessions.db import SearchHit, SessionDB
+from lite_horse.sessions.local import LocalSessionRepo
 from lite_horse.sessions.sdk_session import SDKSession
 from lite_horse.sessions.search_tool import bind_db
+from lite_horse.sessions.types import SearchHit
 from lite_horse.skills.source import sync_bundled_skills
 
 __all__ = [
@@ -114,7 +115,7 @@ class StreamDone:
 StreamEvent = StreamDelta | StreamToolCall | StreamToolOutput | StreamDone
 
 
-_DB: SessionDB | None = None
+_DB: LocalSessionRepo | None = None
 _AGENT: Agent[Any] | None = None
 _CFG: Config | None = None
 _MCP_SERVERS: list[MCPServer] = []
@@ -122,7 +123,7 @@ _LOCKS = SessionLockRegistry()
 _INIT_LOCK = asyncio.Lock()
 
 
-async def _ensure_ready() -> tuple[SessionDB, Agent[Any], Config]:
+async def _ensure_ready() -> tuple[LocalSessionRepo, Agent[Any], Config]:
     """Materialize the process-wide singletons on first call. Idempotent.
 
     MCP servers declared in ``config.mcp_servers`` are connected once here and
@@ -136,7 +137,7 @@ async def _ensure_ready() -> tuple[SessionDB, Agent[Any], Config]:
         if _DB is None or _AGENT is None or _CFG is None:
             sync_bundled_skills()
             cfg = load_config()
-            db = SessionDB()
+            db = LocalSessionRepo()
             bind_db(db)
             mcp_servers = build_mcp_servers(cfg)
             for server in mcp_servers:
@@ -173,7 +174,7 @@ async def run_turn(
 
     Same-``session_key`` calls serialize; distinct keys run in parallel. The
     underlying ``SDKSession`` is created on demand and persisted to the
-    process-wide ``SessionDB``.
+    process-wide ``LocalSessionRepo``.
     """
     db, agent, cfg = await _ensure_ready()
     lock = _LOCKS.get(session_key)
