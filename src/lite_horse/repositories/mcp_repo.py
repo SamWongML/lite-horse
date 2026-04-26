@@ -3,17 +3,19 @@
 User-scope writes route the plaintext auth value through ``Kms.encrypt``
 with ``EncryptionContext={"user_id": ...}``; only the ciphertext lands
 on disk. The agent factory decrypts on demand when building per-user
-MCP servers (Phase 33b's resolver). HTTP GET handlers surface metadata
-only — never the plaintext auth value.
+MCP servers. HTTP GET handlers surface metadata only — never the
+plaintext auth value.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import and_, delete, select, update
 
+from lite_horse.effective import ResolvedMcpServer
 from lite_horse.models.mcp_server import McpServer
 from lite_horse.repositories.base import BaseRepo
 from lite_horse.storage.kms import Kms
@@ -186,6 +188,58 @@ class McpRepo(BaseRepo):
         )
         result = (await self.session.execute(stmt)).first()
         return result is not None
+
+    # ---------- layered resolution ----------
+
+    async def list_effective(
+        self, opt_out_slugs: Iterable[str] = ()
+    ) -> list[ResolvedMcpServer]:
+        """Return official + user MCP servers, enabled-only, resolved.
+
+        MCP has no bundled tier — there's no MCP server we ship with the
+        image. Disabled rows are dropped (the agent factory wouldn't
+        connect to them anyway).
+        """
+        opt_outs = set(opt_out_slugs)
+        officials = await self.list_official()
+        users = await self.list_user()
+
+        mandatory_official_slugs = {o.slug for o in officials if o.mandatory}
+
+        merged: dict[str, ResolvedMcpServer] = {}
+        for o in officials:
+            if not o.enabled:
+                continue
+            if not o.mandatory and o.slug in opt_outs:
+                continue
+            merged[o.slug] = ResolvedMcpServer(
+                slug=o.slug,
+                scope="official",
+                url=o.url,
+                auth_header=o.auth_header,
+                auth_value_ct=bytes(o.auth_value_ct) if o.auth_value_ct else None,
+                cache_tools_list=o.cache_tools_list,
+                enabled=o.enabled,
+                mandatory=o.mandatory,
+                user_id=None,
+            )
+        for u in users:
+            if not u.enabled:
+                continue
+            if u.slug in mandatory_official_slugs:
+                continue
+            merged[u.slug] = ResolvedMcpServer(
+                slug=u.slug,
+                scope="user",
+                url=u.url,
+                auth_header=u.auth_header,
+                auth_value_ct=bytes(u.auth_value_ct) if u.auth_value_ct else None,
+                cache_tools_list=u.cache_tools_list,
+                enabled=u.enabled,
+                mandatory=False,
+                user_id=str(u.user_id) if u.user_id is not None else None,
+            )
+        return sorted(merged.values(), key=lambda m: m.slug)
 
     async def record_probe(
         self, slug: str, *, ok: bool, when: datetime

@@ -16,11 +16,21 @@ Heuristic (no embeddings — per-turn latency matters):
 
 Top-K by score; ties broken by name. Zero-score, non-always-on skills drop
 out. Callers pass ``user_text=None`` to bypass filtering (fallback path).
+
+Two entry points:
+
+- :func:`filter_for_turn` — v0.3 path, scans ``skills_dir`` on disk. Used
+  by the local CLI / REPL.
+- :func:`filter_resolved_for_turn` — v0.4 cloud path, takes the already
+  resolved :class:`ResolvedSkill` list from
+  :mod:`lite_horse.web.effective_config`. The cloud agent factory uses
+  this so it never touches the filesystem at request time.
 """
 from __future__ import annotations
 
 import fnmatch
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -28,6 +38,7 @@ from typing import Any
 import yaml
 
 from lite_horse.constants import ACTIVATION_TOP_K, litehorse_home
+from lite_horse.effective import ResolvedSkill
 
 _ALWAYS_ON_SCORE = 0.5
 _KEYWORD_IN_TEXT_SCORE = 2.0
@@ -183,3 +194,53 @@ def _read_user_profile_text() -> str:
         return path.read_text(encoding="utf-8")
     except OSError:
         return ""
+
+
+# ---------- cloud path: input is already-resolved skills ----------
+
+
+def filter_resolved_for_turn(
+    skills: Iterable[ResolvedSkill],
+    *,
+    user_text: str | None,
+    user_profile_text: str = "",
+    top_k: int = ACTIVATION_TOP_K,
+) -> list[ResolvedSkill]:
+    """Same scoring as :func:`filter_for_turn`, but over resolved rows.
+
+    ``user_profile_text`` replaces the on-disk ``USER.md`` read; the
+    cloud caller passes the user's ``user.md`` body fetched from the
+    repository so this function is pure (no side-effecting reads).
+    """
+    materialised = list(skills)
+    if not materialised:
+        return []
+    if user_text is None:
+        return sorted(materialised, key=lambda s: s.slug)
+
+    text_lower = user_text.lower()
+    profile_lower = user_profile_text.lower()
+
+    scored: list[tuple[float, ResolvedSkill]] = []
+    for skill in materialised:
+        entry = _resolved_to_entry(skill)
+        score = _score_entry(entry, user_text, text_lower, profile_lower)
+        if score > 0:
+            scored.append((score, skill))
+    scored.sort(key=lambda t: (-t[0], t[1].slug))
+    return [s for _, s in scored[:top_k]]
+
+
+def _resolved_to_entry(skill: ResolvedSkill) -> SkillEntry:
+    fm = skill.frontmatter
+    activate_when = _coerce_rules(fm.get("activate_when"))
+    category_raw = fm.get("category")
+    category = (
+        str(category_raw).strip() if isinstance(category_raw, str) else None
+    )
+    return SkillEntry(
+        name=skill.slug,
+        description=skill.description,
+        category=category,
+        activate_when=activate_when,
+    )

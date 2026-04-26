@@ -1,8 +1,4 @@
-"""Layered skills repository — user-scope CRUD + scope-agnostic read.
-
-Per Phase 33a scope: this lands the storage primitives. The layered
-``list_effective(user_id)`` loader (which folds bundled+official+user
-per the resolution rules) is built on top of these reads in Phase 33b.
+"""Layered skills repository — user-scope CRUD + ``list_effective`` resolver.
 
 User-scope rows are mutable in place — no version bump on edit. Official
 rows are versioned, but only Phase 34's admin layer writes them; here we
@@ -10,11 +6,14 @@ expose them read-only so the resolver can see what's there.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import and_, delete, select, update
 
+from lite_horse.bundled.loaders import BundledSkill, load_bundled_skills
+from lite_horse.effective import ResolvedSkill
 from lite_horse.models.skill import Skill
 from lite_horse.repositories.base import BaseRepo
 
@@ -145,3 +144,74 @@ class SkillRepo(BaseRepo):
         )
         result = (await self.session.execute(stmt)).first()
         return result is not None
+
+    # ---------- layered resolution ----------
+
+    async def list_effective(
+        self, opt_out_slugs: Iterable[str] = ()
+    ) -> list[ResolvedSkill]:
+        """Return bundled + official + user skills under resolution rules.
+
+        - Bundled rows are always included.
+        - Mandatory officials always included; non-mandatory officials are
+          dropped when their slug appears in ``opt_out_slugs``.
+        - User-scope rows shadow officials only when the official is
+          non-mandatory; mandatory officials cannot be shadowed.
+        - Bundled rows are shadowed by either official or user with the
+          same slug (same precedence: bundled < official < user).
+        """
+        opt_outs = set(opt_out_slugs)
+        officials = await self.list_official()
+        users = await self.list_user()
+        bundled = load_bundled_skills()
+
+        mandatory_official_slugs = {
+            o.slug for o in officials if o.mandatory
+        }
+
+        merged: dict[str, ResolvedSkill] = {}
+        for b in bundled:
+            merged[b.slug] = _bundled_to_resolved(b)
+
+        for o in officials:
+            if not o.mandatory and o.slug in opt_outs:
+                continue
+            merged[o.slug] = ResolvedSkill(
+                slug=o.slug,
+                scope="official",
+                description=str(o.frontmatter.get("description") or "").strip(),
+                body=o.body,
+                frontmatter=dict(o.frontmatter),
+                enabled_default=o.enabled_default,
+                mandatory=o.mandatory,
+            )
+
+        for u in users:
+            if u.slug in mandatory_official_slugs:
+                # User-scope shadow of a mandatory official is silently
+                # ignored — the mandatory rule is the whole point of
+                # marking it mandatory.
+                continue
+            merged[u.slug] = ResolvedSkill(
+                slug=u.slug,
+                scope="user",
+                description=str(u.frontmatter.get("description") or "").strip(),
+                body=u.body,
+                frontmatter=dict(u.frontmatter),
+                enabled_default=u.enabled_default,
+                mandatory=False,
+            )
+
+        return sorted(merged.values(), key=lambda s: s.slug)
+
+
+def _bundled_to_resolved(b: BundledSkill) -> ResolvedSkill:
+    return ResolvedSkill(
+        slug=b.slug,
+        scope="bundled",
+        description=b.description,
+        body=b.body,
+        frontmatter=dict(b.frontmatter),
+        enabled_default=True,
+        mandatory=False,
+    )

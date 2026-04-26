@@ -1,17 +1,20 @@
-"""Layered instructions repository — user-scope CRUD + scope-agnostic read.
+"""Layered instructions repository — user-scope CRUD + ``list_effective``.
 
-Same shape as ``skill_repo``: user rows mutable in place, official rows
-read-only here (Phase 34 admin layer is the writer). Lists are ordered
-by ``(priority ASC, scope DESC)`` so officials sort before user shadows
-when priorities tie — this is the order the resolver consumes.
+User rows mutable in place, official rows read-only here (Phase 34 admin
+layer is the writer). ``list_effective`` returns the resolved list,
+ordered by ``(priority ASC, slug ASC)`` for stable system-prompt
+composition.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import and_, delete, select, update
 
+from lite_horse.bundled.loaders import load_bundled_instructions
+from lite_horse.effective import ResolvedInstruction
 from lite_horse.models.instruction import Instruction
 from lite_horse.repositories.base import BaseRepo
 
@@ -142,3 +145,51 @@ class InstructionRepo(BaseRepo):
         )
         result = (await self.session.execute(stmt)).first()
         return result is not None
+
+    # ---------- layered resolution ----------
+
+    async def list_effective(
+        self, opt_out_slugs: Iterable[str] = ()
+    ) -> list[ResolvedInstruction]:
+        """Return bundled + official + user instructions, resolved.
+
+        Output is sorted by ``(priority, slug)`` so the prompt composer
+        can append in order without re-sorting.
+        """
+        opt_outs = set(opt_out_slugs)
+        officials = await self.list_official()
+        users = await self.list_user()
+        bundled = load_bundled_instructions()
+
+        mandatory_official_slugs = {o.slug for o in officials if o.mandatory}
+
+        merged: dict[str, ResolvedInstruction] = {}
+        for b in bundled:
+            merged[b.slug] = ResolvedInstruction(
+                slug=b.slug,
+                scope="bundled",
+                body=b.body,
+                priority=b.priority,
+                mandatory=b.mandatory,
+            )
+        for o in officials:
+            if not o.mandatory and o.slug in opt_outs:
+                continue
+            merged[o.slug] = ResolvedInstruction(
+                slug=o.slug,
+                scope="official",
+                body=o.body,
+                priority=o.priority,
+                mandatory=o.mandatory,
+            )
+        for u in users:
+            if u.slug in mandatory_official_slugs:
+                continue
+            merged[u.slug] = ResolvedInstruction(
+                slug=u.slug,
+                scope="user",
+                body=u.body,
+                priority=u.priority,
+                mandatory=False,
+            )
+        return sorted(merged.values(), key=lambda i: (i.priority, i.slug))

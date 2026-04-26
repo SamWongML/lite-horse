@@ -10,6 +10,13 @@ RLS backs up).
 without reaching across packages.
 """
 
+from lite_horse.effective import (
+    EffectiveConfig,
+    ResolvedCommand,
+    ResolvedInstruction,
+    ResolvedMcpServer,
+    ResolvedSkill,
+)
 from lite_horse.repositories.base import BaseRepo, audited
 from lite_horse.repositories.command_repo import CommandRepo
 from lite_horse.repositories.cron_repo import CronRepo
@@ -35,12 +42,17 @@ __all__ = [
     "BaseRepo",
     "CommandRepo",
     "CronRepo",
+    "EffectiveConfig",
     "InstructionRepo",
     "McpRepo",
     "MemoryFull",
     "MemoryRepo",
     "MessageRepo",
     "OptOutRepo",
+    "ResolvedCommand",
+    "ResolvedInstruction",
+    "ResolvedMcpServer",
+    "ResolvedSkill",
     "SearchHit",
     "SessionRepo",
     "SkillRepo",

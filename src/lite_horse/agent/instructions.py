@@ -22,9 +22,10 @@ from typing import Any
 from agents import Agent, RunContextWrapper
 
 from lite_horse.constants import litehorse_home
+from lite_horse.effective import EffectiveConfig
 from lite_horse.memory.store import MemoryStore
 from lite_horse.skills import stats as skill_stats
-from lite_horse.skills.activation import filter_for_turn
+from lite_horse.skills.activation import filter_for_turn, filter_resolved_for_turn
 
 _SKILLS_INDEX_HEADER = "AVAILABLE SKILLS (load with skill_view)"
 _FRAGILE_MIN_ERRORS = 3
@@ -154,3 +155,85 @@ def make_instructions() -> InstructionsFn:
         return "\n\n".join(parts)
 
     return _instructions
+
+
+# ---------- v0.4 cloud path ----------
+
+
+def make_instructions_for_user(
+    eff: EffectiveConfig,
+    *,
+    memory_text: str,
+    user_md_text: str,
+) -> InstructionsFn:
+    """Build the per-turn system prompt from a resolved EffectiveConfig.
+
+    Block order (cache-stable prefix, volatile suffix):
+
+    1. Bundled+official instructions, in (priority, slug) order.
+    2. ``user.md`` profile block.
+    3. ``memory.md`` snapshot.
+    4. Skills index (activated subset).
+    5. Tool guidance.
+    6. Current time (last so cache-prefix bytes don't change per turn).
+
+    The skills index is the only block that varies with ``ctx`` (it
+    re-scores against the latest user message); everything else is
+    fixed at agent-build time so the OpenAI prompt cache hits cleanly
+    on subsequent turns of the same session.
+    """
+
+    instruction_blocks = [
+        i.body.strip() for i in eff.instructions if i.body.strip()
+    ]
+    profile_block = _render_block("USER PROFILE", user_md_text)
+    memory_block = _render_block("MEMORY", memory_text)
+
+    async def _instructions(
+        ctx: RunContextWrapper[Any], agent: Agent[Any]
+    ) -> str:
+        del agent
+        user_text = _extract_user_request(ctx)
+        skills_index = _resolved_skills_index(
+            eff, user_text=user_text, user_profile_text=user_md_text
+        )
+        now = datetime.now().astimezone().isoformat(timespec="seconds")
+
+        parts: list[str] = []
+        parts.extend(instruction_blocks)
+        if profile_block:
+            parts.append(profile_block)
+        if memory_block:
+            parts.append(memory_block)
+        if skills_index:
+            parts.append(skills_index)
+        parts.append(_TOOL_GUIDANCE)
+        parts.append(f"Current time: {now}")
+        return "\n\n".join(parts)
+
+    return _instructions
+
+
+def _render_block(header: str, body: str) -> str:
+    body = body.strip()
+    if not body:
+        return ""
+    return f"{header}:\n{body}"
+
+
+def _resolved_skills_index(
+    eff: EffectiveConfig,
+    *,
+    user_text: str | None,
+    user_profile_text: str,
+) -> str:
+    selected = filter_resolved_for_turn(
+        eff.skills, user_text=user_text, user_profile_text=user_profile_text
+    )
+    if not selected:
+        return ""
+    lines = []
+    for skill in sorted(selected, key=lambda s: s.slug):
+        desc = skill.description or "(no description)"
+        lines.append(f"- **{skill.slug}**: {desc}")
+    return f"{_SKILLS_INDEX_HEADER}\n" + "\n".join(lines)

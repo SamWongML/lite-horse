@@ -8,6 +8,7 @@ so a malicious template body or arg cannot escape the prompt.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -15,6 +16,8 @@ from jinja2 import StrictUndefined
 from jinja2.sandbox import SandboxedEnvironment
 from sqlalchemy import and_, delete, select, update
 
+from lite_horse.bundled.loaders import load_bundled_commands
+from lite_horse.effective import ResolvedCommand
 from lite_horse.models.command import Command
 from lite_horse.repositories.base import BaseRepo
 
@@ -166,6 +169,57 @@ class CommandRepo(BaseRepo):
         if row is None:
             row = await self.get_official(slug)
         if row is None:
+            # Fall back to bundled.
+            for bundled in load_bundled_commands():
+                if bundled.slug == slug:
+                    return _ENV.from_string(bundled.prompt_tpl).render(**args)
             raise KeyError(f"unknown command slug: {slug!r}")
         template = _ENV.from_string(row.prompt_tpl)
         return template.render(**args)
+
+    # ---------- layered resolution ----------
+
+    async def list_effective(
+        self, opt_out_slugs: Iterable[str] = ()
+    ) -> list[ResolvedCommand]:
+        """Return bundled + official + user commands, resolved."""
+        opt_outs = set(opt_out_slugs)
+        officials = await self.list_official()
+        users = await self.list_user()
+        bundled = load_bundled_commands()
+
+        mandatory_official_slugs = {o.slug for o in officials if o.mandatory}
+
+        merged: dict[str, ResolvedCommand] = {}
+        for b in bundled:
+            merged[b.slug] = ResolvedCommand(
+                slug=b.slug,
+                scope="bundled",
+                prompt_tpl=b.prompt_tpl,
+                description=b.description,
+                arg_schema=b.arg_schema,
+                bind_skills=list(b.bind_skills),
+            )
+        for o in officials:
+            if not o.mandatory and o.slug in opt_outs:
+                continue
+            merged[o.slug] = ResolvedCommand(
+                slug=o.slug,
+                scope="official",
+                prompt_tpl=o.prompt_tpl,
+                description=o.description,
+                arg_schema=o.arg_schema,
+                bind_skills=list(o.bind_skills or []),
+            )
+        for u in users:
+            if u.slug in mandatory_official_slugs:
+                continue
+            merged[u.slug] = ResolvedCommand(
+                slug=u.slug,
+                scope="user",
+                prompt_tpl=u.prompt_tpl,
+                description=u.description,
+                arg_schema=u.arg_schema,
+                bind_skills=list(u.bind_skills or []),
+            )
+        return sorted(merged.values(), key=lambda c: c.slug)
