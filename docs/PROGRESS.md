@@ -85,7 +85,7 @@ as a thin client. Predecessor: v0.3.
 
 | #  | Subject | Status |
 |----|---|---|
-| 31 | Foundations: storage layer + ORM + Alembic + FastAPI skeleton    | ☐ |
+| 31 | Foundations: storage layer + ORM + Alembic + FastAPI skeleton    | ✅ |
 | 32 | SessionDB port to Postgres                                       | ☐ |
 | 33 | Layered config: user-scope CRUD + effective-config resolver      | ☐ |
 | 34 | Admin layer: official-scope CRUD, versioning, audit, cache inval | ☐ |
@@ -96,8 +96,11 @@ as a thin client. Predecessor: v0.3.
 | 39 | Hardening: RLS, secret rotation, MCP pool, evolve, load + leak   | ☐ |
 
 ### Blocked / in progress
-Phase 31 in progress (started 2026-04-26). All five open questions
-resolved (see plan §"Open questions").
+Phase 31 shipped 2026-04-26 in three atomic commits (31a infra +
+storage protocols + local impls; 31b ORM models + Alembic initial
+migration + RLS; 31c FastAPI skeleton + JWT/JWKS auth + cloud
+storage impls + CI boundary lint). Phase 32 (SessionDB → Postgres)
+is next.
 
 ---
 

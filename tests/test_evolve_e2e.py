@@ -1,7 +1,6 @@
 """End-to-end evolve() with synthetic SessionDB + stubbed LLM/embedder."""
 from __future__ import annotations
 
-import importlib
 import json
 import sys
 from pathlib import Path
@@ -173,14 +172,27 @@ def test_evolve_missing_skill_returns_error(litehorse_home: Path) -> None:
 
 
 def test_api_does_not_transitively_import_evolve() -> None:
-    """The webapp runtime must stay free of the reflection + embedding surface."""
-    for mod in list(sys.modules):
-        if mod.startswith("lite_horse"):
-            sys.modules.pop(mod, None)
-    importlib.import_module("lite_horse.api")
+    """The webapp runtime must stay free of the reflection + embedding surface.
 
-    leaked = [m for m in sys.modules if m.startswith("lite_horse.evolve")]
-    assert not leaked, f"lite_horse.api pulled in: {leaked}"
+    Run in a subprocess so the parent test interpreter's `sys.modules` is
+    untouched (popping `lite_horse.*` here would invalidate other tests'
+    stale module references).
+    """
+    import subprocess
+
+    code = (
+        "import sys, json\n"
+        "import lite_horse.api  # noqa: F401\n"
+        "leaked = sorted(\n"
+        "    m for m in sys.modules if m.startswith('lite_horse.evolve')\n"
+        ")\n"
+        "print(json.dumps(leaked))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    leaked = result.stdout.strip().splitlines()[-1]
+    assert leaked == "[]", f"lite_horse.api pulled in evolve modules: {leaked}"
 
 
 def test_cli_smoke(

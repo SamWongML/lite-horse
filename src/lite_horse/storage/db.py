@@ -99,3 +99,21 @@ async def db_session(user_id: str | None) -> AsyncIterator[AsyncSession]:
                     {"uid": str(user_id)},
                 )
             yield session
+
+
+async def ping_db() -> None:
+    """Tiny readiness probe — opens a connection from the pool, runs SELECT 1."""
+    sessionmaker = get_sessionmaker()
+    async with sessionmaker() as session:
+        await session.execute(text("SELECT 1"))
+
+
+async def get_session_user_id(session: AsyncSession) -> str | None:
+    """Read the `app.user_id` GUC from the current transaction (or None)."""
+    result = await session.execute(
+        text("SELECT current_setting('app.user_id', true)")
+    )
+    raw = result.scalar_one()
+    if raw is None or raw == "":
+        return None
+    return str(raw)

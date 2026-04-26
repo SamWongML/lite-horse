@@ -1,0 +1,47 @@
+"""FastAPI dependencies: request context, DB session, admin gate.
+
+Every protected route declares `Depends(get_request_context)` (cheap;
+re-uses the already-authenticated context for the request) or
+`Depends(get_db_session)` (which itself depends on the context, opening a
+tenant-scoped transaction with the `app.user_id` GUC pre-set).
+"""
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from typing import Annotated
+
+from fastapi import Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from lite_horse.storage.db import db_session
+from lite_horse.web.auth import authenticate_request
+from lite_horse.web.context import (
+    RequestContext,
+    reset_current_context,
+    set_current_context,
+)
+from lite_horse.web.errors import ErrorKind, http_error
+
+
+async def get_request_context(request: Request) -> AsyncIterator[RequestContext]:
+    ctx = await authenticate_request(request)
+    token = set_current_context(ctx)
+    try:
+        yield ctx
+    finally:
+        reset_current_context(token)
+
+
+async def get_db_session(
+    ctx: Annotated[RequestContext, Depends(get_request_context)],
+) -> AsyncIterator[AsyncSession]:
+    async with db_session(ctx.user_id) as session:
+        yield session
+
+
+async def require_admin(
+    ctx: Annotated[RequestContext, Depends(get_request_context)],
+) -> RequestContext:
+    if ctx.role != "admin":
+        raise http_error(ErrorKind.FORBIDDEN, "admin role required")
+    return ctx
