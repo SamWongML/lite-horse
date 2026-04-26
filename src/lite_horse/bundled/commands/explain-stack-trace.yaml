@@ -1,0 +1,29 @@
+slug: explain-stack-trace
+description: Walk through a stack trace, identify the root cause, and propose a fix.
+prompt_tpl: |
+  The user wants help diagnosing this stack trace. Walk through it
+  frame by frame, name the root cause in one sentence, then propose
+  a concrete fix.
+
+  Stack trace:
+
+  ```
+  {{ trace }}
+  ```
+
+  {% if context %}
+  Additional context:
+
+  {{ context }}
+  {% endif %}
+arg_schema:
+  type: object
+  required: [trace]
+  properties:
+    trace:
+      type: string
+      description: The stack trace, exactly as the runtime printed it.
+    context:
+      type: string
+      description: Optional surrounding context — what the user was doing when it fired.
+bind_skills: []

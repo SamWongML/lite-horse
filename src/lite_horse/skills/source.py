@@ -11,7 +11,7 @@ from pathlib import Path
 
 from lite_horse.constants import litehorse_home
 
-_BUNDLED_DIR = Path(__file__).parent / "bundled"
+_BUNDLED_DIR = Path(__file__).parent.parent / "bundled" / "skills"
 
 
 def skills_root() -> Path:
