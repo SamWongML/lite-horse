@@ -1,6 +1,6 @@
 # lite-horse — phase status
 
-**Active plan:** [plans/v0.3-cli-entrypoint.md](plans/v0.3-cli-entrypoint.md)
+**Active plan:** [plans/v0.4-cloud-multi-tenant.md](plans/v0.4-cloud-multi-tenant.md)
 
 One row per phase. Flip ☐ → ✅ only when every acceptance checkbox in the
 plan file for that phase is green. Do not put plan detail here — it belongs
@@ -72,8 +72,32 @@ the secondary surface. Stack: prompt_toolkit + rich + click-default-group
 | 29 | Scripted subcommand parity (sessions/skills/cron/memory/logs)    | ✅ |
 | 30 | Structured logs, `/logs`, `debug share`, delete litehorse-debug  | ✅ |
 
+## v0.4 — cloud multi-tenant service — ☐ ACTIVE (started 2026-04-26)
+
+Detail: [plans/v0.4-cloud-multi-tenant.md](plans/v0.4-cloud-multi-tenant.md).
+Re-platforms the in-process Python library into a horizontally-scalable
+cloud service: Postgres + RLS for sessions/skills/memory/cron, layered
+config (official → org → user), admin/audit surface, streaming HTTP API
+with idempotency + permission-prompt round-trip, scheduler/worker split,
+KMS-encrypted BYO provider keys, cost meter, observability, and IaC.
+Targets v0.2 webapp surface as the public contract; CLI from v0.3 stays
+as a thin client. Predecessor: v0.3.
+
+| #  | Subject | Status |
+|----|---|---|
+| 31 | Foundations: storage layer + ORM + Alembic + FastAPI skeleton    | ☐ |
+| 32 | SessionDB port to Postgres                                       | ☐ |
+| 33 | Layered config: user-scope CRUD + effective-config resolver      | ☐ |
+| 34 | Admin layer: official-scope CRUD, versioning, audit, cache inval | ☐ |
+| 35 | Streaming + permissions + idempotency                            | ☐ |
+| 36 | Scheduler + worker services, org-wide cron                       | ☐ |
+| 37 | Multi-provider, KMS-encrypted BYO keys, cost meter, GitHub tools | ☐ |
+| 38 | Observability, IaC, deploy pipeline                              | ☐ |
+| 39 | Hardening: RLS, secret rotation, MCP pool, evolve, load + leak   | ☐ |
+
 ### Blocked / in progress
-(none yet)
+Phase 31 not started. Open questions in plan §"Open questions" must be
+resolved before kickoff.
 
 ---
 
