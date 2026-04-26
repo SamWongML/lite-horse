@@ -95,4 +95,5 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "slow: tests that spawn subprocesses or otherwise take noticeably longer; opt in with -m slow",
+    "integration: tests that need a real Postgres / Redis / S3 (via testcontainers or docker compose); skip if unavailable",
 ]
