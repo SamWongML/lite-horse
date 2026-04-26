@@ -1,12 +1,23 @@
 """Configuration loading for lite-horse.
 
-`load_config()` reads `~/.litehorse/config.yaml` (creating it on first run from
-`DEFAULT_CONFIG_YAML`) and loads `~/.litehorse/.env` into the process
-environment. The location of the state dir is controlled by
-`LITEHORSE_HOME`; see `constants.litehorse_home`.
+Two surfaces:
+
+* `Config` (YAML) — agent-runtime tuning loaded from
+  `~/.litehorse/config.yaml` for the v0.3 CLI / embedded library. Used by
+  `agent.factory`, `cli/*`, `cron/scheduler`, `api`. `load_config()`
+  materialises defaults on first run.
+
+* `Settings` (pydantic-settings, env-prefix `LITEHORSE_`) — cloud
+  deployment knobs (DATABASE_URL, REDIS_URL, S3 buckets, JWT, KMS).
+  Read by `web/`, `storage/`, `scheduler/`, `worker/`. `get_settings()`
+  is a cached singleton.
+
+The `sandbox.*` and `gateway.telegram.*` subtrees from v0.2 / v0.3 are
+removed in v0.4 (no readers; see plan §"What deletes from v0.3 code").
 """
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
@@ -14,10 +25,12 @@ from urllib.parse import urlparse
 import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from lite_horse.constants import DEFAULT_MAX_TURNS, litehorse_home
 
 ReasoningEffort = Literal["none", "low", "medium", "high"]
+LiteHorseEnv = Literal["local", "dev", "prod"]
 
 DEFAULT_CONFIG_YAML = """# lite-horse config (edit to taste)
 model: gpt-5.4
@@ -29,14 +42,8 @@ agent:
 memory:
   enabled: true
   user_profile_enabled: true
-gateway:
-  telegram:
-    enabled: false
-    allowed_user_ids: []        # int Telegram user IDs
 tools:
   web_search: false             # WebSearchTool — billed per call by OpenAI
-sandbox:
-  enabled: false
 mcp_servers: []                 # list of {name, url, cache_tools_list}
 """
 
@@ -53,19 +60,6 @@ class AgentSettings(BaseModel):
 class MemorySettings(BaseModel):
     enabled: bool = True
     user_profile_enabled: bool = True
-
-
-class TelegramSettings(BaseModel):
-    enabled: bool = False
-    allowed_user_ids: list[int] = Field(default_factory=list)
-
-
-class GatewaySettings(BaseModel):
-    telegram: TelegramSettings = Field(default_factory=TelegramSettings)
-
-
-class SandboxSettings(BaseModel):
-    enabled: bool = False
 
 
 class ToolsSettings(BaseModel):
@@ -93,9 +87,7 @@ class Config(BaseModel):
     model_settings: ModelSettings = Field(default_factory=ModelSettings)
     agent: AgentSettings = Field(default_factory=AgentSettings)
     memory: MemorySettings = Field(default_factory=MemorySettings)
-    gateway: GatewaySettings = Field(default_factory=GatewaySettings)
     tools: ToolsSettings = Field(default_factory=ToolsSettings)
-    sandbox: SandboxSettings = Field(default_factory=SandboxSettings)
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
 
 
@@ -119,9 +111,66 @@ def _load_env(home: Path) -> None:
 
 
 def load_config() -> Config:
-    """Load config from disk, materializing defaults on first run."""
+    """Load YAML config from disk, materializing defaults on first run."""
     home = _ensure_state_dir()
     _load_env(home)
     config_path = _ensure_config_file(home)
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    # Silently drop legacy keys removed in v0.4.
+    for legacy in ("sandbox", "gateway"):
+        raw.pop(legacy, None)
     return Config.model_validate(raw)
+
+
+# ---------------------------------------------------------------------------
+# v0.4 cloud deployment settings (env-driven via pydantic-settings).
+# ---------------------------------------------------------------------------
+
+
+class Settings(BaseSettings):
+    """Cloud-deployment settings, read from env (prefix `LITEHORSE_`).
+
+    Loaded from `.env` at repo root by default. Used by `storage/`, `web/`,
+    `scheduler/`, `worker/`. Not consumed by the v0.3 CLI / agent runtime
+    (those use `Config`).
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="LITEHORSE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    env: LiteHorseEnv = "local"
+
+    database_url: str = (
+        "postgresql+asyncpg://litehorse:litehorse@localhost:5432/litehorse"
+    )
+    redis_url: str = "redis://localhost:6379/0"
+
+    # S3 / MinIO
+    s3_endpoint: str | None = None  # None → real AWS S3
+    s3_region: str = "us-east-1"
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
+    s3_bucket_attachments: str = "litehorse-local-attachments"
+    s3_bucket_evolve: str = "litehorse-local-evolve"
+    s3_bucket_exports: str = "litehorse-local-exports"
+    s3_bucket_audit: str = "litehorse-local-audit-archive"
+
+    # KMS — local impl uses Fernet; prod impl uses AWS KMS
+    local_kms_key: str | None = None  # base64-urlsafe Fernet key
+    aws_kms_key_id: str | None = None  # alias/litehorse-prod or key ARN
+
+    # JWT (JWKS verification — webapp issues JWTs verifiable via JWKS)
+    jwt_jwks_url: str = "http://localhost:9999/.well-known/jwks.json"
+    jwt_issuer: str = "http://localhost:9999"
+    jwt_audience: str = "lite-horse"
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the process-wide cloud Settings singleton."""
+    return Settings()

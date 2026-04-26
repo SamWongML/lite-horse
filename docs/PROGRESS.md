@@ -96,8 +96,8 @@ as a thin client. Predecessor: v0.3.
 | 39 | Hardening: RLS, secret rotation, MCP pool, evolve, load + leak   | ☐ |
 
 ### Blocked / in progress
-Phase 31 not started. Open questions in plan §"Open questions" must be
-resolved before kickoff.
+Phase 31 in progress (started 2026-04-26). All five open questions
+resolved (see plan §"Open questions").
 
 ---
 

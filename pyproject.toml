@@ -17,6 +17,26 @@ dependencies = [
     "pydantic-settings>=2.2,<3",
     "prompt_toolkit>=3.0.47,<4",
     "rich>=13.7,<15",
+    # v0.4 cloud backend
+    "fastapi>=0.115,<1.0",
+    "uvicorn[standard]>=0.30,<1.0",
+    "sqlalchemy[asyncio]>=2.0.30,<3",
+    "asyncpg>=0.29,<1.0",
+    "alembic>=1.13,<2",
+    "aiobotocore>=2.13,<3",
+    "aioboto3>=13,<15",
+    "redis[hiredis]>=5.0,<6",
+    "aws-secretsmanager-caching>=1.1,<2",
+    "aws-encryption-sdk>=4.0,<5",
+    "cryptography>=42,<46",
+    "python-jose[cryptography]>=3.3,<4",
+    "structlog>=24,<26",
+    "opentelemetry-distro>=0.46,<1",
+    "opentelemetry-instrumentation-fastapi",
+    "opentelemetry-instrumentation-sqlalchemy",
+    "opentelemetry-instrumentation-httpx",
+    "opentelemetry-exporter-otlp>=1.25,<2",
+    "anthropic>=0.30,<1.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +49,10 @@ dev = [
     "freezegun>=1.4",
     "types-pyyaml>=6.0",
     "pexpect>=4.9,<5",
+    # v0.4 integration testing
+    "moto[s3,secretsmanager,kms,sqs]>=5,<6",
+    "respx>=0.21",
+    "testcontainers>=4,<5",
 ]
 
 [project.scripts]
