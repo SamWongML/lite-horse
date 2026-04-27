@@ -34,6 +34,7 @@ from lite_horse.repositories.message_repo import MessageRepo
 from lite_horse.repositories.opt_out_repo import VALID_ENTITIES, OptOutRepo
 from lite_horse.repositories.session_repo import SessionRepo
 from lite_horse.repositories.skill_repo import SkillRepo
+from lite_horse.repositories.user_repo import UserRepo
 from lite_horse.repositories.user_settings_repo import (
     VALID_PERMISSION_MODES,
     UserSettings,
@@ -65,6 +66,7 @@ __all__ = [
     "SessionRepo",
     "SkillRepo",
     "UnsafeMemoryContent",
+    "UserRepo",
     "UserSettings",
     "UserSettingsRepo",
     "audited",

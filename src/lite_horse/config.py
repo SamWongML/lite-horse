@@ -169,6 +169,16 @@ class Settings(BaseSettings):
     jwt_issuer: str = "http://localhost:9999"
     jwt_audience: str = "lite-horse"
 
+    # SQS — Phase 36 scheduler/worker fan-out queue.
+    # `LITEHORSE_ENV=local` defaults to the in-memory queue regardless of
+    # this setting. Anything else uses SQS and requires sqs_queue_url.
+    sqs_queue_url: str | None = None
+    sqs_endpoint: str | None = None  # e.g. http://localhost:4566 for LocalStack
+
+    # Webhook delivery — HMAC signing key. Read from SecretsProvider in
+    # cloud envs; falls back to LITEHORSE_WEBHOOK_SECRET for local.
+    webhook_secret_name: str = "litehorse/webhook-secret"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

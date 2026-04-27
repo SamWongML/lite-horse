@@ -229,3 +229,37 @@ class CronRepo(BaseRepo):
             .values(**values)
         )
         await self.session.execute(stmt)
+
+    # ---------- admin-bypass (cross-tenant; scheduler service only) ----------
+
+    async def list_enabled_admin(self) -> list[CronJob]:
+        """Return every enabled job across both scopes — admin-bypass.
+
+        For use only by ``scheduler/__main__.py``, which runs without a
+        tenant GUC and needs to scan the whole table on each tick.
+        ``list_user`` / ``list_official`` remain the per-tenant /
+        admin-CRUD entry points.
+        """
+        stmt = (
+            select(CronJob)
+            .where(CronJob.enabled.is_(True))
+            .order_by(CronJob.scope, CronJob.slug)
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def mark_fired_admin(
+        self, cron_job_id: UUID, *, when: datetime
+    ) -> None:
+        """Stamp ``last_fired_at`` by primary key — admin-bypass.
+
+        Resets ``strikes`` to 0 on the assumption the fan-out succeeded.
+        Failure paths handled per-message by the worker; if delivery
+        fails the strike count is bumped on the user-scope job by a
+        targeted call (Phase 39 wires this).
+        """
+        stmt = (
+            update(CronJob)
+            .where(CronJob.id == cron_job_id)
+            .values(last_fired_at=when, strikes=0)
+        )
+        await self.session.execute(stmt)

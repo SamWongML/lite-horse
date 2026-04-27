@@ -55,7 +55,7 @@ services:
       minio:
         condition: service_healthy
     ports: ["8080:8080"]
-    command: uvicorn lite_horse.web.app:app --host 0.0.0.0 --port 8080 --reload
+    command: uvicorn lite_horse.web.app:create_app --factory --host 0.0.0.0 --port 8080 --reload
 
   scheduler:
     build: .
@@ -64,6 +64,16 @@ services:
       postgres:
         condition: service_healthy
     command: python -m lite_horse.scheduler
+
+  worker:
+    build: .
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m lite_horse.worker
 
 volumes:
   pg-data: {}

@@ -90,7 +90,7 @@ as a thin client. Predecessor: v0.3.
 | 33 | Layered config: user-scope CRUD + effective-config resolver      | ✅ |
 | 34 | Admin layer: official-scope CRUD, versioning, audit, cache inval | ✅ |
 | 35 | Streaming + permissions + idempotency                            | ✅ |
-| 36 | Scheduler + worker services, org-wide cron                       | ☐ |
+| 36 | Scheduler + worker services, org-wide cron                       | ✅ |
 | 37 | Multi-provider, KMS-encrypted BYO keys, cost meter, GitHub tools | ☐ |
 | 38 | Observability, IaC, deploy pipeline                              | ☐ |
 | 39 | Hardening: RLS, secret rotation, MCP pool, evolve, load + leak   | ☐ |
@@ -115,8 +115,17 @@ JSON for ``/v1/turns*``, ``Idempotency-Key`` 24 h Redis cache (replays
 both JSON bodies and raw SSE bytes), ask-mode permission round-trip
 via ``PermissionBroker`` (in-process futures with Redis pub/sub
 fallback for cross-task delivery), per-session distributed lock, and
-abort endpoint backed by ``TurnRegistry``. Phase 36 (scheduler +
-worker services, org-wide cron) is next.
+abort endpoint backed by ``TurnRegistry``. Phase 36 shipped 2026-04-28:
+``MessageQueue`` storage protocol with SQS (aioboto3) + in-memory impls;
+standalone ``scheduler`` service running an APScheduler 60 s tick that
+scans ``cron_jobs`` cross-tenant, expands official-scope jobs to one
+``CronMessage`` per active user, and stamps ``last_fired_at`` for
+idempotency; standalone ``worker`` service long-polling SQS,
+dispatching turns and signing webhook deliveries; ``cron/delivery``
+HMAC key now resolves through ``SecretsProvider`` in cloud envs with
+a 5-min TTL cache; Dockerfile + docker-compose updates so api /
+scheduler / worker share one image. Phase 37 (multi-provider,
+KMS-encrypted BYO keys, cost meter, GitHub bundled tools) is next.
 
 ---
 
