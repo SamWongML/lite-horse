@@ -5,15 +5,23 @@ fresh agent + session (source ``"cron"``) and hands the final output to a
 delivery handler. Phase 15 dropped Telegram delivery; Phase 17 wires the
 webhook handler so cron output reaches the embedding webapp. Shutdown is
 signal-driven — SIGINT / SIGTERM stop the scheduler and remove ``cron.pid``.
+
+Phase 36 adds the fan-out shape (:class:`CronMessage` +
+:func:`expand_official_to_user_messages`) consumed by the cloud
+``scheduler/`` and ``worker/`` services. The legacy in-process path
+above stays for the v0.3 single-user CLI; the cloud path enqueues
+:class:`CronMessage` JSON onto SQS and drains it from the worker.
 """
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import signal
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from agents import Runner
@@ -204,3 +212,114 @@ async def run_scheduler() -> None:
 def run_scheduler_blocking() -> None:
     """CLI entrypoint: block the current thread until a shutdown signal."""
     asyncio.run(run_scheduler())
+
+
+# ---------------------------------------------------------------------------
+# Phase 36 cloud fan-out
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CronMessage:
+    """One queue message produced by a scheduler tick.
+
+    The body of an SQS message is ``CronMessage.to_json()``. The worker
+    parses with :meth:`from_json` and dispatches the turn under the
+    target user's tenant. ``scheduled_for`` is the wall-clock the
+    scheduler decided this fire should represent (ISO-8601 UTC) — not
+    when SQS or the worker actually got the message.
+
+    ``cron_job_id`` is the row id in ``cron_jobs``. For official-scope
+    jobs the same id appears on every fan-out message; the ``user_id``
+    differs per recipient. ``scope`` is mirrored from the row so the
+    worker doesn't need to round-trip the DB to learn it.
+    """
+
+    cron_job_id: str
+    scope: str
+    slug: str
+    user_id: str
+    prompt: str
+    webhook_url: str | None
+    scheduled_for: str
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), separators=(",", ":"))
+
+    @classmethod
+    def from_json(cls, raw: str) -> CronMessage:
+        data = json.loads(raw)
+        return cls(
+            cron_job_id=str(data["cron_job_id"]),
+            scope=str(data["scope"]),
+            slug=str(data["slug"]),
+            user_id=str(data["user_id"]),
+            prompt=str(data["prompt"]),
+            webhook_url=data.get("webhook_url"),
+            scheduled_for=str(data["scheduled_for"]),
+        )
+
+
+def expand_official_to_user_messages(
+    *,
+    cron_job_id: str,
+    slug: str,
+    prompt: str,
+    webhook_url: str | None,
+    active_user_ids: list[str],
+    scheduled_for: str,
+) -> list[CronMessage]:
+    """Fan one official-scope job out to one message per active user.
+
+    Returns an empty list if there are no active users — the scheduler
+    still marks the job as fired so it won't try again until the next
+    cron expression boundary.
+    """
+    return [
+        CronMessage(
+            cron_job_id=cron_job_id,
+            scope="official",
+            slug=slug,
+            user_id=user_id,
+            prompt=prompt,
+            webhook_url=webhook_url,
+            scheduled_for=scheduled_for,
+        )
+        for user_id in active_user_ids
+    ]
+
+
+def build_user_message(
+    *,
+    cron_job_id: str,
+    slug: str,
+    user_id: str,
+    prompt: str,
+    webhook_url: str | None,
+    scheduled_for: str,
+) -> CronMessage:
+    """Build the single message a user-scope job produces per fire."""
+    return CronMessage(
+        cron_job_id=cron_job_id,
+        scope="user",
+        slug=slug,
+        user_id=user_id,
+        prompt=prompt,
+        webhook_url=webhook_url,
+        scheduled_for=scheduled_for,
+    )
+
+
+def is_due(*, cron_expr: str, last_fired_at: Any, now: Any) -> bool:
+    """Return True if a cron row's next-fire from ``last_fired_at`` is ≤ ``now``.
+
+    ``last_fired_at`` may be ``None`` (never fired) — in which case any
+    fire boundary on or before ``now`` qualifies as due. Rejects
+    schedules with no next fire from the reference point (raises so the
+    caller can disable the job).
+    """
+    trigger = parse_schedule(cron_expr)
+    next_fire = trigger.get_next_fire_time(last_fired_at, now)
+    if next_fire is None:
+        raise ValueError(f"cron expression {cron_expr!r} produced no next fire")
+    return next_fire <= now
