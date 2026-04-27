@@ -156,6 +156,130 @@ class CommandRepo(BaseRepo):
         result = (await self.session.execute(stmt)).first()
         return result is not None
 
+    # ---------- write (official scope) ----------
+
+    async def create_official(
+        self,
+        *,
+        slug: str,
+        prompt_tpl: str,
+        description: str | None = None,
+        arg_schema: dict[str, Any] | None = None,
+        bind_skills: list[str] | None = None,
+        mandatory: bool = False,
+        created_by: UUID | None = None,
+    ) -> Command:
+        row = Command(
+            id=uuid4(),
+            scope="official",
+            user_id=None,
+            slug=slug,
+            version=1,
+            is_current=True,
+            mandatory=mandatory,
+            description=description,
+            prompt_tpl=prompt_tpl,
+            arg_schema=arg_schema,
+            bind_skills=bind_skills,
+            created_by=created_by,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def update_official(
+        self,
+        slug: str,
+        *,
+        prompt_tpl: str | None = None,
+        description: str | None = None,
+        arg_schema: dict[str, Any] | None = None,
+        bind_skills: list[str] | None = None,
+        mandatory: bool | None = None,
+        created_by: UUID | None = None,
+    ) -> Command | None:
+        current = await self.get_official(slug)
+        if current is None:
+            return None
+        await self.session.execute(
+            update(Command).where(Command.id == current.id).values(is_current=False)
+        )
+        new_row = Command(
+            id=uuid4(),
+            scope="official",
+            user_id=None,
+            slug=slug,
+            version=current.version + 1,
+            is_current=True,
+            mandatory=current.mandatory if mandatory is None else mandatory,
+            description=current.description if description is None else description,
+            prompt_tpl=current.prompt_tpl if prompt_tpl is None else prompt_tpl,
+            arg_schema=(
+                dict(current.arg_schema)
+                if arg_schema is None and current.arg_schema is not None
+                else arg_schema
+            ),
+            bind_skills=(
+                list(current.bind_skills) if current.bind_skills else None
+            )
+            if bind_skills is None
+            else bind_skills,
+            created_by=created_by,
+        )
+        self.session.add(new_row)
+        await self.session.flush()
+        return new_row
+
+    async def delete_official(self, slug: str) -> bool:
+        current = await self.get_official(slug)
+        if current is None:
+            return False
+        await self.session.execute(
+            update(Command).where(Command.id == current.id).values(is_current=False)
+        )
+        await self.session.flush()
+        return True
+
+    async def list_versions_official(self, slug: str) -> list[Command]:
+        stmt = (
+            select(Command)
+            .where(and_(Command.scope == "official", Command.slug == slug))
+            .order_by(Command.version.desc())
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def rollback_official(self, slug: str, version: int) -> Command | None:
+        target = (
+            await self.session.execute(
+                select(Command).where(
+                    and_(
+                        Command.scope == "official",
+                        Command.slug == slug,
+                        Command.version == version,
+                    )
+                )
+            )
+        ).scalar_one_or_none()
+        if target is None:
+            return None
+        await self.session.execute(
+            update(Command)
+            .where(
+                and_(
+                    Command.scope == "official",
+                    Command.slug == slug,
+                    Command.is_current.is_(True),
+                )
+            )
+            .values(is_current=False)
+        )
+        await self.session.execute(
+            update(Command).where(Command.id == target.id).values(is_current=True)
+        )
+        await self.session.flush()
+        await self.session.refresh(target)
+        return target
+
     # ---------- expand ----------
 
     async def expand(self, slug: str, args: dict[str, Any]) -> str:

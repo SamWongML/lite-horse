@@ -139,6 +139,76 @@ class CronRepo(BaseRepo):
         result = (await self.session.execute(stmt)).first()
         return result is not None
 
+    # ---------- write (official scope, mutable in place) ----------
+
+    async def create_official(
+        self,
+        *,
+        slug: str,
+        cron_expr: str,
+        prompt: str,
+        webhook_url: str | None = None,
+        enabled: bool = True,
+        mandatory: bool = False,
+    ) -> CronJob:
+        row = CronJob(
+            id=uuid4(),
+            scope="official",
+            user_id=None,
+            slug=slug,
+            cron_expr=cron_expr,
+            prompt=prompt,
+            webhook_url=webhook_url,
+            enabled=enabled,
+            mandatory=mandatory,
+            strikes=0,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def update_official(
+        self,
+        slug: str,
+        *,
+        cron_expr: str | None = None,
+        prompt: str | None = None,
+        webhook_url: str | None = None,
+        clear_webhook_url: bool = False,
+        enabled: bool | None = None,
+        mandatory: bool | None = None,
+    ) -> CronJob | None:
+        values: dict[str, Any] = {}
+        if cron_expr is not None:
+            values["cron_expr"] = cron_expr
+        if prompt is not None:
+            values["prompt"] = prompt
+        if webhook_url is not None:
+            values["webhook_url"] = webhook_url
+        elif clear_webhook_url:
+            values["webhook_url"] = None
+        if enabled is not None:
+            values["enabled"] = enabled
+        if mandatory is not None:
+            values["mandatory"] = mandatory
+        if not values:
+            return await self.get_official(slug)
+        stmt = (
+            update(CronJob)
+            .where(and_(CronJob.scope == "official", CronJob.slug == slug))
+            .values(**values)
+            .returning(CronJob)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def delete_official(self, slug: str) -> bool:
+        stmt = (
+            delete(CronJob)
+            .where(and_(CronJob.scope == "official", CronJob.slug == slug))
+            .returning(CronJob.id)
+        )
+        return (await self.session.execute(stmt)).first() is not None
+
     async def mark_fired(
         self, slug: str, *, when: datetime, reset_strikes: bool = True
     ) -> None:

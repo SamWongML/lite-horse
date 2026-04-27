@@ -189,6 +189,152 @@ class McpRepo(BaseRepo):
         result = (await self.session.execute(stmt)).first()
         return result is not None
 
+    # ---------- write (official scope) ----------
+
+    async def create_official(
+        self,
+        *,
+        slug: str,
+        url: str,
+        kms: Kms,
+        auth_header: str | None = None,
+        auth_value: str | None = None,
+        cache_tools_list: bool = True,
+        enabled: bool = True,
+        mandatory: bool = False,
+    ) -> McpServer:
+        ct: bytes | None = None
+        if auth_value is not None:
+            ct = await kms.encrypt(
+                auth_value.encode("utf-8"), {"user_id": "official"}
+            )
+        row = McpServer(
+            id=uuid4(),
+            scope="official",
+            user_id=None,
+            slug=slug,
+            url=url,
+            auth_header=auth_header,
+            auth_value_ct=ct,
+            auth_value_dk=None,
+            cache_tools_list=cache_tools_list,
+            enabled=enabled,
+            mandatory=mandatory,
+            version=1,
+            is_current=True,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def update_official(
+        self,
+        slug: str,
+        *,
+        kms: Kms,
+        url: str | None = None,
+        auth_header: str | None = None,
+        auth_value: str | None = None,
+        clear_auth_value: bool = False,
+        cache_tools_list: bool | None = None,
+        enabled: bool | None = None,
+        mandatory: bool | None = None,
+    ) -> McpServer | None:
+        current = await self.get_official(slug)
+        if current is None:
+            return None
+        new_ct: bytes | None
+        if auth_value is not None:
+            new_ct = await kms.encrypt(
+                auth_value.encode("utf-8"), {"user_id": "official"}
+            )
+        elif clear_auth_value:
+            new_ct = None
+        else:
+            new_ct = bytes(current.auth_value_ct) if current.auth_value_ct else None
+
+        await self.session.execute(
+            update(McpServer)
+            .where(McpServer.id == current.id)
+            .values(is_current=False)
+        )
+        new_row = McpServer(
+            id=uuid4(),
+            scope="official",
+            user_id=None,
+            slug=slug,
+            url=current.url if url is None else url,
+            auth_header=(
+                current.auth_header if auth_header is None else auth_header
+            ),
+            auth_value_ct=new_ct,
+            auth_value_dk=None,
+            cache_tools_list=(
+                current.cache_tools_list
+                if cache_tools_list is None
+                else cache_tools_list
+            ),
+            enabled=current.enabled if enabled is None else enabled,
+            mandatory=current.mandatory if mandatory is None else mandatory,
+            version=current.version + 1,
+            is_current=True,
+        )
+        self.session.add(new_row)
+        await self.session.flush()
+        return new_row
+
+    async def delete_official(self, slug: str) -> bool:
+        current = await self.get_official(slug)
+        if current is None:
+            return False
+        await self.session.execute(
+            update(McpServer)
+            .where(McpServer.id == current.id)
+            .values(is_current=False)
+        )
+        await self.session.flush()
+        return True
+
+    async def list_versions_official(self, slug: str) -> list[McpServer]:
+        stmt = (
+            select(McpServer)
+            .where(and_(McpServer.scope == "official", McpServer.slug == slug))
+            .order_by(McpServer.version.desc())
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def rollback_official(self, slug: str, version: int) -> McpServer | None:
+        target = (
+            await self.session.execute(
+                select(McpServer).where(
+                    and_(
+                        McpServer.scope == "official",
+                        McpServer.slug == slug,
+                        McpServer.version == version,
+                    )
+                )
+            )
+        ).scalar_one_or_none()
+        if target is None:
+            return None
+        await self.session.execute(
+            update(McpServer)
+            .where(
+                and_(
+                    McpServer.scope == "official",
+                    McpServer.slug == slug,
+                    McpServer.is_current.is_(True),
+                )
+            )
+            .values(is_current=False)
+        )
+        await self.session.execute(
+            update(McpServer).where(McpServer.id == target.id).values(is_current=True)
+        )
+        await self.session.flush()
+        await self.session.refresh(target)
+        return target
+
     # ---------- layered resolution ----------
 
     async def list_effective(

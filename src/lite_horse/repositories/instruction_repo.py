@@ -146,6 +146,122 @@ class InstructionRepo(BaseRepo):
         result = (await self.session.execute(stmt)).first()
         return result is not None
 
+    # ---------- write (official scope) ----------
+
+    async def create_official(
+        self,
+        *,
+        slug: str,
+        body: str,
+        priority: int = 100,
+        mandatory: bool = False,
+        created_by: UUID | None = None,
+    ) -> Instruction:
+        row = Instruction(
+            id=uuid4(),
+            scope="official",
+            user_id=None,
+            slug=slug,
+            version=1,
+            is_current=True,
+            mandatory=mandatory,
+            priority=priority,
+            body=body,
+            created_by=created_by,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def update_official(
+        self,
+        slug: str,
+        *,
+        body: str | None = None,
+        priority: int | None = None,
+        mandatory: bool | None = None,
+        created_by: UUID | None = None,
+    ) -> Instruction | None:
+        current = await self.get_official(slug)
+        if current is None:
+            return None
+        await self.session.execute(
+            update(Instruction)
+            .where(Instruction.id == current.id)
+            .values(is_current=False)
+        )
+        new_row = Instruction(
+            id=uuid4(),
+            scope="official",
+            user_id=None,
+            slug=slug,
+            version=current.version + 1,
+            is_current=True,
+            mandatory=current.mandatory if mandatory is None else mandatory,
+            priority=current.priority if priority is None else priority,
+            body=current.body if body is None else body,
+            created_by=created_by,
+        )
+        self.session.add(new_row)
+        await self.session.flush()
+        return new_row
+
+    async def delete_official(self, slug: str) -> bool:
+        current = await self.get_official(slug)
+        if current is None:
+            return False
+        await self.session.execute(
+            update(Instruction)
+            .where(Instruction.id == current.id)
+            .values(is_current=False)
+        )
+        await self.session.flush()
+        return True
+
+    async def list_versions_official(self, slug: str) -> list[Instruction]:
+        stmt = (
+            select(Instruction)
+            .where(and_(Instruction.scope == "official", Instruction.slug == slug))
+            .order_by(Instruction.version.desc())
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def rollback_official(
+        self, slug: str, version: int
+    ) -> Instruction | None:
+        target = (
+            await self.session.execute(
+                select(Instruction).where(
+                    and_(
+                        Instruction.scope == "official",
+                        Instruction.slug == slug,
+                        Instruction.version == version,
+                    )
+                )
+            )
+        ).scalar_one_or_none()
+        if target is None:
+            return None
+        await self.session.execute(
+            update(Instruction)
+            .where(
+                and_(
+                    Instruction.scope == "official",
+                    Instruction.slug == slug,
+                    Instruction.is_current.is_(True),
+                )
+            )
+            .values(is_current=False)
+        )
+        await self.session.execute(
+            update(Instruction)
+            .where(Instruction.id == target.id)
+            .values(is_current=True)
+        )
+        await self.session.flush()
+        await self.session.refresh(target)
+        return target
+
     # ---------- layered resolution ----------
 
     async def list_effective(

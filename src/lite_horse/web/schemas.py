@@ -248,3 +248,200 @@ class EffectiveConfigView(BaseModel):
     commands: list[ResolvedCommandView]
     mcp_servers: list[ResolvedMcpServerView]
     etag: str
+
+
+# ---------- admin / official-scope ----------
+
+
+class AdminSkillOut(BaseModel):
+    slug: str
+    version: int
+    is_current: bool
+    mandatory: bool
+    enabled_default: bool
+    frontmatter: dict[str, Any]
+    body: str
+    created_at: datetime | None = None
+
+
+class AdminSkillCreateIn(BaseModel):
+    slug: str
+    frontmatter: dict[str, Any] = Field(default_factory=dict)
+    body: str
+    mandatory: bool = False
+    enabled_default: bool = True
+
+
+class AdminSkillUpdateIn(BaseModel):
+    frontmatter: dict[str, Any] | None = None
+    body: str | None = None
+    mandatory: bool | None = None
+    enabled_default: bool | None = None
+
+
+class AdminInstructionOut(BaseModel):
+    slug: str
+    version: int
+    is_current: bool
+    mandatory: bool
+    priority: int
+    body: str
+    created_at: datetime | None = None
+
+
+class AdminInstructionCreateIn(BaseModel):
+    slug: str
+    body: str
+    priority: int = 100
+    mandatory: bool = False
+
+
+class AdminInstructionUpdateIn(BaseModel):
+    body: str | None = None
+    priority: int | None = None
+    mandatory: bool | None = None
+
+
+class AdminCommandOut(BaseModel):
+    slug: str
+    version: int
+    is_current: bool
+    mandatory: bool
+    description: str | None
+    prompt_tpl: str
+    arg_schema: dict[str, Any] | None
+    bind_skills: list[str] | None
+    created_at: datetime | None = None
+
+
+class AdminCommandCreateIn(BaseModel):
+    slug: str
+    prompt_tpl: str
+    description: str | None = None
+    arg_schema: dict[str, Any] | None = None
+    bind_skills: list[str] | None = None
+    mandatory: bool = False
+
+
+class AdminCommandUpdateIn(BaseModel):
+    prompt_tpl: str | None = None
+    description: str | None = None
+    arg_schema: dict[str, Any] | None = None
+    bind_skills: list[str] | None = None
+    mandatory: bool | None = None
+
+
+class AdminMcpServerOut(BaseModel):
+    slug: str
+    version: int
+    is_current: bool
+    url: str
+    auth_header: str | None
+    has_auth_value: bool
+    cache_tools_list: bool
+    enabled: bool
+    mandatory: bool
+
+
+class AdminMcpServerCreateIn(BaseModel):
+    slug: str
+    url: str
+    auth_header: str | None = None
+    auth_value: str | None = None
+    cache_tools_list: bool = True
+    enabled: bool = True
+    mandatory: bool = False
+
+
+class AdminMcpServerUpdateIn(BaseModel):
+    url: str | None = None
+    auth_header: str | None = None
+    auth_value: str | None = None
+    clear_auth_value: bool = False
+    cache_tools_list: bool | None = None
+    enabled: bool | None = None
+    mandatory: bool | None = None
+
+
+class AdminCronJobOut(BaseModel):
+    slug: str
+    cron_expr: str
+    prompt: str
+    webhook_url: str | None
+    enabled: bool
+    mandatory: bool
+
+
+class AdminCronJobCreateIn(BaseModel):
+    slug: str
+    cron_expr: str
+    prompt: str
+    webhook_url: str | None = None
+    enabled: bool = True
+    mandatory: bool = False
+
+
+class AdminCronJobUpdateIn(BaseModel):
+    cron_expr: str | None = None
+    prompt: str | None = None
+    webhook_url: str | None = None
+    clear_webhook_url: bool = False
+    enabled: bool | None = None
+    mandatory: bool | None = None
+
+
+class VersionView(BaseModel):
+    """One row in the version-history listing for an official entity."""
+
+    version: int
+    is_current: bool
+    mandatory: bool
+    created_at: datetime | None = None
+
+
+class RollbackIn(BaseModel):
+    version: int
+
+
+class AdminUserOut(BaseModel):
+    id: str
+    external_id: str
+    role: str
+    created_at: datetime | None = None
+
+
+class UsageRow(BaseModel):
+    """One ``(day, model)`` slice of a user's usage aggregation."""
+
+    day: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    cost_usd_micro: int
+
+
+class AdminUsageOut(BaseModel):
+    user_id: str
+    rows: list[UsageRow]
+
+
+class AuditLogOut(BaseModel):
+    id: int
+    ts: datetime
+    actor_id: str
+    actor_role: str
+    action: str
+    target: dict[str, Any]
+    diff: dict[str, Any] | None
+    request_id: str | None
+
+
+class McpHealthRow(BaseModel):
+    slug: str
+    url: str
+    ok: bool
+    detail: str | None = None
+
+
+class McpHealthOut(BaseModel):
+    rows: list[McpHealthRow]

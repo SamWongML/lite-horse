@@ -76,6 +76,7 @@ async def run_migrations_online() -> None:
     )
     async with connectable.connect() as conn:
         await conn.run_sync(_do_run_migrations)
+        await conn.commit()
     await connectable.dispose()
 
 

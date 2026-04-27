@@ -555,6 +555,25 @@ async def list_opt_outs(session: DbSession) -> list[OptOutOut]:
     return [OptOutOut(entity=e, slug=s) for e, s in rows]
 
 
+_MANDATORY_LOOKUP: dict[str, type] = {
+    "skill": SkillRepo,
+    "instruction": InstructionRepo,
+    "command": CommandRepo,
+    "mcp_server": McpRepo,
+    "cron_job": CronRepo,
+}
+
+
+async def _is_mandatory_official(
+    session: AsyncSession, entity: str, slug: str
+) -> bool:
+    repo_cls = _MANDATORY_LOOKUP.get(entity)
+    if repo_cls is None:
+        return False
+    row = await repo_cls(session).get_official(slug)
+    return bool(row is not None and getattr(row, "mandatory", False))
+
+
 @router.post(
     "/opt-outs",
     response_model=OptOutOut,
@@ -564,6 +583,11 @@ async def add_opt_out(body: OptOutIn, session: DbSession) -> OptOutOut:
     if body.entity not in VALID_ENTITIES:
         raise http_error(
             ErrorKind.CONFLICT, f"invalid opt-out entity: {body.entity!r}"
+        )
+    if await _is_mandatory_official(session, body.entity, body.slug):
+        raise http_error(
+            ErrorKind.UNPROCESSABLE,
+            f"{body.entity}:{body.slug!r} is mandatory and cannot be opted out",
         )
     await OptOutRepo(session).add(body.entity, body.slug)
     return OptOutOut(entity=body.entity, slug=body.slug)

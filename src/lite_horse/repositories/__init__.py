@@ -17,6 +17,7 @@ from lite_horse.effective import (
     ResolvedMcpServer,
     ResolvedSkill,
 )
+from lite_horse.repositories.audit_repo import AuditRepo
 from lite_horse.repositories.base import BaseRepo, audited
 from lite_horse.repositories.command_repo import CommandRepo
 from lite_horse.repositories.cron_repo import CronRepo
@@ -45,6 +46,7 @@ __all__ = [
     "USER_MD_CHAR_LIMIT",
     "VALID_ENTITIES",
     "VALID_PERMISSION_MODES",
+    "AuditRepo",
     "BaseRepo",
     "CommandRepo",
     "CronRepo",

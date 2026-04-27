@@ -16,6 +16,7 @@ class ErrorKind(StrEnum):
     FORBIDDEN = "FORBIDDEN"
     NOT_FOUND = "NOT_FOUND"
     CONFLICT = "CONFLICT"
+    UNPROCESSABLE = "UNPROCESSABLE"
     RATE_LIMIT = "RATE_LIMIT"
     TOOL_DENIED = "TOOL_DENIED"
     UNAVAILABLE = "UNAVAILABLE"
@@ -27,6 +28,7 @@ _KIND_TO_STATUS: dict[ErrorKind, int] = {
     ErrorKind.FORBIDDEN: 403,
     ErrorKind.NOT_FOUND: 404,
     ErrorKind.CONFLICT: 409,
+    ErrorKind.UNPROCESSABLE: 422,
     ErrorKind.RATE_LIMIT: 429,
     ErrorKind.TOOL_DENIED: 403,
     ErrorKind.UNAVAILABLE: 503,

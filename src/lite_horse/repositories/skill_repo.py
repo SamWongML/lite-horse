@@ -145,6 +145,126 @@ class SkillRepo(BaseRepo):
         result = (await self.session.execute(stmt)).first()
         return result is not None
 
+    # ---------- write (official scope) ----------
+
+    async def create_official(
+        self,
+        *,
+        slug: str,
+        frontmatter: dict[str, Any],
+        body: str,
+        mandatory: bool = False,
+        enabled_default: bool = True,
+        created_by: UUID | None = None,
+    ) -> Skill:
+        row = Skill(
+            id=uuid4(),
+            scope="official",
+            user_id=None,
+            slug=slug,
+            version=1,
+            is_current=True,
+            mandatory=mandatory,
+            enabled_default=enabled_default,
+            frontmatter=frontmatter,
+            body=body,
+            created_by=created_by,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def update_official(
+        self,
+        slug: str,
+        *,
+        frontmatter: dict[str, Any] | None = None,
+        body: str | None = None,
+        mandatory: bool | None = None,
+        enabled_default: bool | None = None,
+        created_by: UUID | None = None,
+    ) -> Skill | None:
+        """Bump version: flip current row, insert new row with version+1."""
+        current = await self.get_official(slug)
+        if current is None:
+            return None
+        await self.session.execute(
+            update(Skill).where(Skill.id == current.id).values(is_current=False)
+        )
+        new_row = Skill(
+            id=uuid4(),
+            scope="official",
+            user_id=None,
+            slug=slug,
+            version=current.version + 1,
+            is_current=True,
+            mandatory=current.mandatory if mandatory is None else mandatory,
+            enabled_default=(
+                current.enabled_default
+                if enabled_default is None
+                else enabled_default
+            ),
+            frontmatter=(
+                dict(current.frontmatter) if frontmatter is None else frontmatter
+            ),
+            body=current.body if body is None else body,
+            created_by=created_by,
+        )
+        self.session.add(new_row)
+        await self.session.flush()
+        return new_row
+
+    async def delete_official(self, slug: str) -> bool:
+        """Soft delete: flip is_current=false on the current row."""
+        current = await self.get_official(slug)
+        if current is None:
+            return False
+        await self.session.execute(
+            update(Skill).where(Skill.id == current.id).values(is_current=False)
+        )
+        await self.session.flush()
+        return True
+
+    async def list_versions_official(self, slug: str) -> list[Skill]:
+        stmt = (
+            select(Skill)
+            .where(and_(Skill.scope == "official", Skill.slug == slug))
+            .order_by(Skill.version.desc())
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def rollback_official(self, slug: str, version: int) -> Skill | None:
+        target = (
+            await self.session.execute(
+                select(Skill).where(
+                    and_(
+                        Skill.scope == "official",
+                        Skill.slug == slug,
+                        Skill.version == version,
+                    )
+                )
+            )
+        ).scalar_one_or_none()
+        if target is None:
+            return None
+        await self.session.execute(
+            update(Skill)
+            .where(
+                and_(
+                    Skill.scope == "official",
+                    Skill.slug == slug,
+                    Skill.is_current.is_(True),
+                )
+            )
+            .values(is_current=False)
+        )
+        await self.session.execute(
+            update(Skill).where(Skill.id == target.id).values(is_current=True)
+        )
+        await self.session.flush()
+        await self.session.refresh(target)
+        return target
+
     # ---------- layered resolution ----------
 
     async def list_effective(

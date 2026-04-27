@@ -88,7 +88,7 @@ as a thin client. Predecessor: v0.3.
 | 31 | Foundations: storage layer + ORM + Alembic + FastAPI skeleton    | ✅ |
 | 32 | SessionDB port to Postgres                                       | ✅ |
 | 33 | Layered config: user-scope CRUD + effective-config resolver      | ✅ |
-| 34 | Admin layer: official-scope CRUD, versioning, audit, cache inval | ☐ |
+| 34 | Admin layer: official-scope CRUD, versioning, audit, cache inval | ✅ |
 | 35 | Streaming + permissions + idempotency                            | ☐ |
 | 36 | Scheduler + worker services, org-wide cron                       | ☐ |
 | 37 | Multi-provider, KMS-encrypted BYO keys, cost meter, GitHub tools | ☐ |
@@ -105,8 +105,12 @@ v0.3 `SessionDB` replaced by tenant-scoped async Postgres
 path, plus a sync `LocalSessionRepo` for the dev REPL / single-user
 CLI. Phase 33 shipped 2026-04-27 in three atomic commits (33a
 repos + bundled config; 33b effective-config resolver + agent
-rewire; 33c HTTP route surface + Redis cache). Phase 34 (admin
-layer + cache invalidation) is next.
+rewire; 33c HTTP route surface + Redis cache). Phase 34 shipped
+2026-04-27: ``/v1/admin/*`` CRUD with versioning + rollback for
+every official entity, audit-log writes on every admin action,
+mandatory-enforced opt-out gating (422), and Redis pub/sub
+``effective-config-invalidate`` so admin writes evict caches across
+ECS tasks. Phase 35 (streaming + permissions + idempotency) is next.
 
 ---
 
