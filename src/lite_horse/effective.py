@@ -11,6 +11,7 @@ imports the repos).
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from dataclasses import dataclass, field
@@ -102,6 +103,134 @@ class EffectiveConfig:
             mcp_servers=mcp_servers,
             etag=_compute_etag(skills, instructions, commands, mcp_servers),
         )
+
+    def to_json(self) -> str:
+        """Return a Redis-cacheable JSON string of the resolved config.
+
+        ``ResolvedMcpServer.auth_value_ct`` is base64-encoded so the round-trip
+        is byte-exact; everything else is plain JSON. Use ``from_json`` to
+        rebuild the dataclass tree.
+        """
+        return json.dumps(
+            {
+                "skills": [_skill_to_dict(s) for s in self.skills],
+                "instructions": [_instruction_to_dict(i) for i in self.instructions],
+                "commands": [_command_to_dict(c) for c in self.commands],
+                "mcp_servers": [_mcp_to_dict(m) for m in self.mcp_servers],
+                "etag": self.etag,
+            },
+            sort_keys=True,
+        )
+
+    @classmethod
+    def from_json(cls, blob: str) -> EffectiveConfig:
+        data = json.loads(blob)
+        return cls(
+            skills=[_skill_from_dict(s) for s in data["skills"]],
+            instructions=[_instruction_from_dict(i) for i in data["instructions"]],
+            commands=[_command_from_dict(c) for c in data["commands"]],
+            mcp_servers=[_mcp_from_dict(m) for m in data["mcp_servers"]],
+            etag=data["etag"],
+        )
+
+
+def _skill_to_dict(s: ResolvedSkill) -> dict[str, Any]:
+    return {
+        "slug": s.slug,
+        "scope": s.scope,
+        "description": s.description,
+        "body": s.body,
+        "frontmatter": s.frontmatter,
+        "enabled_default": s.enabled_default,
+        "mandatory": s.mandatory,
+    }
+
+
+def _skill_from_dict(d: dict[str, Any]) -> ResolvedSkill:
+    return ResolvedSkill(
+        slug=d["slug"],
+        scope=d["scope"],
+        description=d["description"],
+        body=d["body"],
+        frontmatter=d["frontmatter"],
+        enabled_default=d["enabled_default"],
+        mandatory=d["mandatory"],
+    )
+
+
+def _instruction_to_dict(i: ResolvedInstruction) -> dict[str, Any]:
+    return {
+        "slug": i.slug,
+        "scope": i.scope,
+        "body": i.body,
+        "priority": i.priority,
+        "mandatory": i.mandatory,
+    }
+
+
+def _instruction_from_dict(d: dict[str, Any]) -> ResolvedInstruction:
+    return ResolvedInstruction(
+        slug=d["slug"],
+        scope=d["scope"],
+        body=d["body"],
+        priority=d["priority"],
+        mandatory=d["mandatory"],
+    )
+
+
+def _command_to_dict(c: ResolvedCommand) -> dict[str, Any]:
+    return {
+        "slug": c.slug,
+        "scope": c.scope,
+        "prompt_tpl": c.prompt_tpl,
+        "description": c.description,
+        "arg_schema": c.arg_schema,
+        "bind_skills": list(c.bind_skills),
+    }
+
+
+def _command_from_dict(d: dict[str, Any]) -> ResolvedCommand:
+    return ResolvedCommand(
+        slug=d["slug"],
+        scope=d["scope"],
+        prompt_tpl=d["prompt_tpl"],
+        description=d.get("description"),
+        arg_schema=d.get("arg_schema"),
+        bind_skills=list(d.get("bind_skills") or []),
+    )
+
+
+def _mcp_to_dict(m: ResolvedMcpServer) -> dict[str, Any]:
+    return {
+        "slug": m.slug,
+        "scope": m.scope,
+        "url": m.url,
+        "auth_header": m.auth_header,
+        "auth_value_ct_b64": (
+            base64.b64encode(m.auth_value_ct).decode("ascii")
+            if m.auth_value_ct is not None
+            else None
+        ),
+        "cache_tools_list": m.cache_tools_list,
+        "enabled": m.enabled,
+        "mandatory": m.mandatory,
+        "user_id": m.user_id,
+    }
+
+
+def _mcp_from_dict(d: dict[str, Any]) -> ResolvedMcpServer:
+    raw = d.get("auth_value_ct_b64")
+    return ResolvedMcpServer(
+        slug=d["slug"],
+        scope=d["scope"],
+        url=d["url"],
+        auth_header=d.get("auth_header"),
+        auth_value_ct=base64.b64decode(raw) if raw else None,
+        cache_tools_list=d["cache_tools_list"],
+        enabled=d["enabled"],
+        mandatory=d["mandatory"],
+        user_id=d.get("user_id"),
+    )
 
 
 def _compute_etag(

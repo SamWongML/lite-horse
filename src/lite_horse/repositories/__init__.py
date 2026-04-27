@@ -33,12 +33,18 @@ from lite_horse.repositories.message_repo import MessageRepo
 from lite_horse.repositories.opt_out_repo import VALID_ENTITIES, OptOutRepo
 from lite_horse.repositories.session_repo import SessionRepo
 from lite_horse.repositories.skill_repo import SkillRepo
+from lite_horse.repositories.user_settings_repo import (
+    VALID_PERMISSION_MODES,
+    UserSettings,
+    UserSettingsRepo,
+)
 from lite_horse.sessions.types import SearchHit
 
 __all__ = [
     "MEMORY_MD_CHAR_LIMIT",
     "USER_MD_CHAR_LIMIT",
     "VALID_ENTITIES",
+    "VALID_PERMISSION_MODES",
     "BaseRepo",
     "CommandRepo",
     "CronRepo",
@@ -57,5 +63,7 @@ __all__ = [
     "SessionRepo",
     "SkillRepo",
     "UnsafeMemoryContent",
+    "UserSettings",
+    "UserSettingsRepo",
     "audited",
 ]

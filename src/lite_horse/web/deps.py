@@ -13,7 +13,10 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from lite_horse.storage import make_kms
 from lite_horse.storage.db import db_session
+from lite_horse.storage.kms import Kms
+from lite_horse.storage.redis_client import Redis
 from lite_horse.web.auth import authenticate_request
 from lite_horse.web.context import (
     RequestContext,
@@ -45,3 +48,25 @@ async def require_admin(
     if ctx.role != "admin":
         raise http_error(ErrorKind.FORBIDDEN, "admin role required")
     return ctx
+
+
+def get_redis(request: Request) -> Redis | None:
+    """Return the app-scoped Redis client, or ``None`` if disabled.
+
+    The app lifespan attaches the client to ``app.state.redis``. Tests can
+    override this dep to swap in a fake or short-circuit caching.
+    """
+    return getattr(request.app.state, "redis", None)
+
+
+def get_kms(request: Request) -> Kms:
+    """Return the app-scoped Kms instance, materialising on first call.
+
+    Stored on ``app.state.kms`` so the AWS Encryption SDK's data-key cache
+    is shared across requests in the same process.
+    """
+    state = request.app.state
+    if not hasattr(state, "kms"):
+        state.kms = make_kms()
+    kms: Kms = state.kms
+    return kms
