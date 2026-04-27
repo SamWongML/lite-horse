@@ -23,10 +23,13 @@ from lite_horse.config import get_settings
 from lite_horse.storage.db import dispose_engine, get_engine
 from lite_horse.storage.redis_client import make_redis_client
 from lite_horse.web.effective_invalidate import run_invalidation_subscriber
+from lite_horse.web.permissions import PermissionBroker
 from lite_horse.web.routes.admin import router as admin_router
 from lite_horse.web.routes.debug import router as debug_router
 from lite_horse.web.routes.ops import router as ops_router
+from lite_horse.web.routes.turns import router as turns_router
 from lite_horse.web.routes.user_config import router as user_config_router
+from lite_horse.web.turns import TurnRegistry
 
 
 @asynccontextmanager
@@ -36,9 +39,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.invalidation_task = asyncio.create_task(
         run_invalidation_subscriber(app.state.redis)
     )
+    app.state.turn_registry = TurnRegistry()
+    app.state.permission_broker = PermissionBroker(redis=app.state.redis)
+    await app.state.permission_broker.start()
     try:
         yield
     finally:
+        await app.state.permission_broker.stop()
         app.state.invalidation_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await app.state.invalidation_task
@@ -54,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(ops_router)
     app.include_router(user_config_router)
     app.include_router(admin_router)
+    app.include_router(turns_router)
     if settings.env == "local":
         app.include_router(debug_router)
     return app

@@ -89,7 +89,7 @@ as a thin client. Predecessor: v0.3.
 | 32 | SessionDB port to Postgres                                       | ✅ |
 | 33 | Layered config: user-scope CRUD + effective-config resolver      | ✅ |
 | 34 | Admin layer: official-scope CRUD, versioning, audit, cache inval | ✅ |
-| 35 | Streaming + permissions + idempotency                            | ☐ |
+| 35 | Streaming + permissions + idempotency                            | ✅ |
 | 36 | Scheduler + worker services, org-wide cron                       | ☐ |
 | 37 | Multi-provider, KMS-encrypted BYO keys, cost meter, GitHub tools | ☐ |
 | 38 | Observability, IaC, deploy pipeline                              | ☐ |
@@ -110,7 +110,13 @@ rewire; 33c HTTP route surface + Redis cache). Phase 34 shipped
 every official entity, audit-log writes on every admin action,
 mandatory-enforced opt-out gating (422), and Redis pub/sub
 ``effective-config-invalidate`` so admin writes evict caches across
-ECS tasks. Phase 35 (streaming + permissions + idempotency) is next.
+ECS tasks. Phase 35 shipped 2026-04-27: SSE streaming + non-streaming
+JSON for ``/v1/turns*``, ``Idempotency-Key`` 24 h Redis cache (replays
+both JSON bodies and raw SSE bytes), ask-mode permission round-trip
+via ``PermissionBroker`` (in-process futures with Redis pub/sub
+fallback for cross-task delivery), per-session distributed lock, and
+abort endpoint backed by ``TurnRegistry``. Phase 36 (scheduler +
+worker services, org-wide cron) is next.
 
 ---
 
