@@ -91,7 +91,7 @@ as a thin client. Predecessor: v0.3.
 | 34 | Admin layer: official-scope CRUD, versioning, audit, cache inval | ✅ |
 | 35 | Streaming + permissions + idempotency                            | ✅ |
 | 36 | Scheduler + worker services, org-wide cron                       | ✅ |
-| 37 | Multi-provider, KMS-encrypted BYO keys, cost meter, GitHub tools | ☐ |
+| 37 | Multi-provider, KMS-encrypted BYO keys, cost meter, GitHub tools | ✅ |
 | 38 | Observability, IaC, deploy pipeline                              | ☐ |
 | 39 | Hardening: RLS, secret rotation, MCP pool, evolve, load + leak   | ☐ |
 
@@ -124,8 +124,20 @@ idempotency; standalone ``worker`` service long-polling SQS,
 dispatching turns and signing webhook deliveries; ``cron/delivery``
 HMAC key now resolves through ``SecretsProvider`` in cloud envs with
 a 5-min TTL cache; Dockerfile + docker-compose updates so api /
-scheduler / worker share one image. Phase 37 (multi-provider,
-KMS-encrypted BYO keys, cost meter, GitHub bundled tools) is next.
+scheduler / worker share one image. Phase 37 shipped 2026-04-28:
+``ModelProvider`` Protocol + ``OpenAIProvider`` / ``AnthropicProvider``
+(via Anthropic's OpenAI-compat endpoint) registry, ``data/pricing.yaml``
+table for input/cached/output rates, ``compute_cost_usd_micro`` cost
+math (micro-USD ints, no float drift), ``UsageRepo.record_turn``
+writing one ``usage_events`` row per turn from a fresh tenant
+transaction off the SSE critical path, ``ByoKeyStore`` JSON document
+KMS-encrypted under ``EncryptionContext={"user_id": ...}`` with
+narrow ``get_key`` accessor (plaintext leak point is one call
+site), ``build_agent_for_user`` rewired to resolve provider →
+build SDK ``Model`` from BYO API key + attach the bundled
+``gh_*`` tool surface (issue list/create, PR view/comment/diff,
+code search) when ``users.byo_provider_key_ct.github`` is present.
+Phase 38 (observability, IaC, deploy pipeline) is next.
 
 ---
 

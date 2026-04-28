@@ -24,6 +24,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from lite_horse.api import run_turn_streaming
+from lite_horse.repositories.usage_repo import UsageRepo
+from lite_horse.storage.db import db_session
 from lite_horse.storage.locks import LockTimeoutError, SessionLock
 from lite_horse.storage.redis_client import Redis
 from lite_horse.web.context import RequestContext
@@ -41,6 +43,7 @@ from lite_horse.web.turns import (
     TurnRegistry,
     TurnRequest,
     TurnRunner,
+    TurnUsage,
     collect_sse,
     stream_turn_to_sse,
 )
@@ -57,6 +60,7 @@ class TurnIn(BaseModel):
     permission_mode: Literal["auto", "ask", "ro"] | None = None
     attachments: list[dict[str, Any]] | None = None
     command: str | None = None
+    model: str | None = None
 
 
 class TurnOut(BaseModel):
@@ -154,6 +158,28 @@ def _session_lock_key(user_id: str, session_key: str) -> str:
     return f"{user_id}:{session_key}"
 
 
+async def _record_usage(
+    *, user_id: str, session_key: str, usage: TurnUsage
+) -> None:
+    """Persist a ``usage_events`` row in a fresh tenant transaction.
+
+    The streaming SSE response holds the request-scoped session open until
+    the generator drains, which in turn holds a connection from the pool.
+    Writing usage in a *new* short-lived transaction keeps the metering
+    write off that critical path.
+    """
+    if not usage.model or (usage.input_tokens == 0 and usage.output_tokens == 0):
+        return
+    async with db_session(user_id) as session:
+        await UsageRepo(session).record_turn(
+            session_id=session_key,
+            model=usage.model,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            cached_input_tokens=usage.cached_input_tokens,
+        )
+
+
 # ---------- routes ----------
 
 
@@ -194,6 +220,7 @@ async def post_turn(
                 permission_mode=body.permission_mode or "auto",
                 attachments=body.attachments,
                 command=body.command,
+                model=body.model,
             )
             handle = registry.new()
             try:
@@ -209,6 +236,12 @@ async def post_turn(
                 registry.remove(handle.turn_id)
     except LockTimeoutError as exc:
         raise http_error(ErrorKind.UNAVAILABLE, str(exc)) from exc
+
+    await _record_usage(
+        user_id=ctx.user_id,
+        session_key=body.session_key,
+        usage=handle.usage,
+    )
 
     final_text = ""
     parsed_events: list[dict[str, str]] = []
@@ -259,6 +292,7 @@ async def post_turn_stream(
         permission_mode=body.permission_mode or "auto",
         attachments=body.attachments,
         command=body.command,
+        model=body.model,
     )
 
     async def _outer() -> AsyncIterator[bytes]:
@@ -289,6 +323,11 @@ async def post_turn_stream(
                 user_id=ctx.user_id,
                 idem_key=idempotency_key or "",
                 sse_bytes=b"".join(buffer),
+            )
+            await _record_usage(
+                user_id=ctx.user_id,
+                session_key=body.session_key,
+                usage=handle.usage,
             )
 
     headers = {
