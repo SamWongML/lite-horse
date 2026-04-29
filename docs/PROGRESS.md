@@ -92,7 +92,7 @@ as a thin client. Predecessor: v0.3.
 | 35 | Streaming + permissions + idempotency                            | ✅ |
 | 36 | Scheduler + worker services, org-wide cron                       | ✅ |
 | 37 | Multi-provider, KMS-encrypted BYO keys, cost meter, GitHub tools | ✅ |
-| 38 | Observability, IaC, deploy pipeline                              | ☐ |
+| 38 | Observability, IaC, deploy pipeline                              | ✅ |
 | 39 | Hardening: RLS, secret rotation, MCP pool, evolve, load + leak   | ☐ |
 
 ### Blocked / in progress
@@ -137,7 +137,38 @@ site), ``build_agent_for_user`` rewired to resolve provider →
 build SDK ``Model`` from BYO API key + attach the bundled
 ``gh_*`` tool surface (issue list/create, PR view/comment/diff,
 code search) when ``users.byo_provider_key_ct.github`` is present.
-Phase 38 (observability, IaC, deploy pipeline) is next.
+Phase 38 shipped 2026-04-29: ``src/lite_horse/observability/``
+(``logs.py`` structlog JSON renderer + contextvars merge for
+``request_id``/``user_id``/``session_key``/``turn_id``,
+``tracing.py`` OTel SDK + OTLP HTTP exporter +
+FastAPI/SQLAlchemy/httpx auto-instrumentation gated on
+``OTEL_EXPORTER_OTLP_ENDPOINT``, ``metrics.py`` EMF JSON-line
+helper); ``RequestIdMiddleware`` / ``LoggingMiddleware`` /
+``MetricsMiddleware`` chained into ``create_app``; turn driver
+emits ``turns_total`` / ``tokens_total`` / ``cost_usd_micro`` /
+``errors_total`` and binds ``turn_id`` + ``session_key`` onto the
+log context; scheduler tick emits ``cron_fires_total``;
+scheduler / worker / api ``main`` entry-points now call
+``configure_logging`` + ``configure_tracing``. ``infra/`` CDK
+Python stack provisions VPC + ECS cluster + 3 services with ADOT
+sidecar, RDS Postgres Multi-AZ, ElastiCache Redis, SQS, four S3
+buckets (KMS-encrypted, audit-archive versioned + Glacier
+lifecycle), Secrets Manager (DB / Redis / OpenAI / Anthropic /
+JWKS / webhook HMAC), KMS CMK alias ``litehorse-{env}``, VPC
+endpoints (S3 / Secrets Manager / KMS / SQS), CloudWatch
+dashboard (turns/min, tokens/hr, cost/hr, ALB p95) + alarms
+(ALB 5xx, DB connections, queue depth, EMF ``errors_total``).
+``.github/workflows/{ci,deploy}.yml``: CI runs
+ruff + mypy + alembic + pytest against PG/Redis services; deploy
+builds + pushes ECR, runs ``alembic upgrade head`` as a one-shot
+``ecs run-task`` gated on exit code 0, then forces a new
+deployment per service with ``services-stable`` wait. 13 new
+observability tests (log JSON shape, contextvars merge, EMF line
+shape, OTel span via in-memory exporter, middleware behaviour
+incl. ``X-Request-Id`` echo + JSON access lines + EMF
+``http_requests_total`` / ``http_request_duration_ms``).
+Phase 39 (hardening: RLS, secret rotation, MCP pool, evolve,
+load + leak) is next.
 
 ---
 

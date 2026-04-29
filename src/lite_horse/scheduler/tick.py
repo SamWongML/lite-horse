@@ -19,6 +19,7 @@ from lite_horse.cron.scheduler import (
     expand_official_to_user_messages,
     is_due,
 )
+from lite_horse.observability import emit_metric
 from lite_horse.repositories.cron_repo import CronRepo
 from lite_horse.repositories.user_repo import UserRepo
 from lite_horse.storage.db import db_session
@@ -91,6 +92,11 @@ async def tick(
                 await queue.send(msg.to_json())
                 enqueued += 1
             await cron_repo.mark_fired_admin(row.id, when=moment)
+            emit_metric(
+                "cron_fires_total",
+                len(messages),
+                dimensions={"scope": row.scope},
+            )
     if enqueued:
         log.info("scheduler tick enqueued %d messages", enqueued)
     return enqueued

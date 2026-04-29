@@ -24,6 +24,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from lite_horse.observability import bind_log_context, emit_metric, get_logger
 from lite_horse.providers.pricing import compute_cost_usd_micro
 from lite_horse.web.permissions import PermissionBroker, PermissionRequest
 from lite_horse.web.sse import (
@@ -38,6 +39,7 @@ from lite_horse.web.sse import (
 )
 
 _log = logging.getLogger(__name__)
+_slog = get_logger("lite_horse.turns")
 
 
 @dataclass
@@ -165,6 +167,12 @@ async def stream_turn_to_sse(  # noqa: PLR0915  -- multiplex state stays in one 
     broker_task = asyncio.create_task(_drain_broker())
     handle.task = runner_task
 
+    bind_log_context(turn_id=handle.turn_id, session_key=request.session_key)
+    emit_metric(
+        "turns_total",
+        1,
+        dimensions={"model": request.model or "default"},
+    )
     final_text = ""
     try:
         while True:
@@ -201,6 +209,24 @@ async def stream_turn_to_sse(  # noqa: PLR0915  -- multiplex state stays in one 
                         output_tokens=out_tok,
                         cost_usd_micro=cost_micro,
                     )
+                    emit_metric(
+                        "tokens_total",
+                        in_tok + out_tok,
+                        dimensions={"model": model_name or "default"},
+                    )
+                    emit_metric(
+                        "cost_usd_micro",
+                        cost_micro,
+                        unit="None",
+                        dimensions={"model": model_name or "default"},
+                    )
+                    _slog.info(
+                        "turn_complete",
+                        model=model_name or None,
+                        tokens_in=in_tok,
+                        tokens_out=out_tok,
+                        cost_usd_micro=cost_micro,
+                    )
             elif kind == "permission":
                 req: PermissionRequest = payload
                 yield event_permission_request(
@@ -210,9 +236,16 @@ async def stream_turn_to_sse(  # noqa: PLR0915  -- multiplex state stays in one 
                 )
             elif kind == "error":
                 msg = str(payload) or payload.__class__.__name__
+                emit_metric(
+                    "errors_total", 1, dimensions={"error_kind": "INTERNAL"}
+                )
+                _slog.error("turn_error", error_kind="INTERNAL", message=msg)
                 yield event_error(kind="INTERNAL", message=msg)
                 break
             elif kind == "aborted":
+                emit_metric(
+                    "errors_total", 1, dimensions={"error_kind": "UNAVAILABLE"}
+                )
                 yield event_error(kind="UNAVAILABLE", message="turn aborted")
                 break
     finally:

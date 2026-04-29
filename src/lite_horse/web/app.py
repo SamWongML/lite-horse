@@ -7,8 +7,8 @@ so connection pooling is hot from the first request. Phase 34 also
 spawns the effective-config invalidation subscriber so admin writes in
 another ECS task evict this task's cache within ~1 s.
 
-OTel bootstrap is intentionally a no-op here; full observability lands in
-Phase 38.
+Phase 38 bootstraps structured logs + OTel tracing here and installs
+the request-id / logging / metrics middleware on every app instance.
 """
 from __future__ import annotations
 
@@ -20,6 +20,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from lite_horse.config import get_settings
+from lite_horse.observability import (
+    configure_logging,
+    configure_tracing,
+    install_middleware,
+)
 from lite_horse.storage.db import dispose_engine, get_engine
 from lite_horse.storage.redis_client import make_redis_client
 from lite_horse.web.effective_invalidate import run_invalidation_subscriber
@@ -57,7 +62,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging(env=settings.env)
+    configure_tracing(env=settings.env, service_name="lite-horse-api")
     app = FastAPI(title="lite-horse", lifespan=_lifespan)
+    install_middleware(app)
     app.include_router(ops_router)
     app.include_router(user_config_router)
     app.include_router(admin_router)

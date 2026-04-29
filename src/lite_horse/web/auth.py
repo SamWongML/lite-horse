@@ -27,6 +27,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from lite_horse.config import get_settings
 from lite_horse.models.user import User
+from lite_horse.observability import bind_log_context
 from lite_horse.storage.db import db_session
 from lite_horse.web.context import RequestContext
 from lite_horse.web.errors import ErrorKind, http_error
@@ -119,7 +120,12 @@ async def authenticate_request(request: Request) -> RequestContext:
     role_claim = claims.get("role", "user")
     role = role_claim if role_claim in ("user", "admin") else "user"
     user_id = await _lookup_or_create_user(sub, role)
-    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    request_id = (
+        getattr(request.state, "request_id", None)
+        or request.headers.get("x-request-id")
+        or str(uuid.uuid4())
+    )
+    bind_log_context(user_id=user_id, request_id=request_id)
     return RequestContext(
         user_id=user_id, external_id=sub, role=role, request_id=request_id
     )

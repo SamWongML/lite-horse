@@ -26,7 +26,8 @@
       "Bash(gtimeout 5 uv --project /Users/demon/codes/lite-horse run litehorse)",
       "Bash(echo \"---exit=$?---\")",
       "Bash(LITEHORSE_HOME=/tmp/lh-phase30-manual LITEHORSE_STRUCTURED_LOGS=1 uv run litehorse sessions list)",
-      "Bash(docker info *)"
+      "Bash(docker info *)",
+      "Bash(git stash *)"
     ]
   }
 }
