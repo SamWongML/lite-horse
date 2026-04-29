@@ -19,6 +19,7 @@ from lite_horse.effective import (
 )
 from lite_horse.repositories.audit_repo import AuditRepo
 from lite_horse.repositories.base import BaseRepo, audited
+from lite_horse.repositories.byo_repo import ByoKeyStore
 from lite_horse.repositories.command_repo import CommandRepo
 from lite_horse.repositories.cron_repo import CronRepo
 from lite_horse.repositories.instruction_repo import InstructionRepo
@@ -34,6 +35,7 @@ from lite_horse.repositories.message_repo import MessageRepo
 from lite_horse.repositories.opt_out_repo import VALID_ENTITIES, OptOutRepo
 from lite_horse.repositories.session_repo import SessionRepo
 from lite_horse.repositories.skill_repo import SkillRepo
+from lite_horse.repositories.usage_repo import UsageRepo
 from lite_horse.repositories.user_repo import UserRepo
 from lite_horse.repositories.user_settings_repo import (
     VALID_PERMISSION_MODES,
@@ -49,6 +51,7 @@ __all__ = [
     "VALID_PERMISSION_MODES",
     "AuditRepo",
     "BaseRepo",
+    "ByoKeyStore",
     "CommandRepo",
     "CronRepo",
     "EffectiveConfig",
@@ -66,6 +69,7 @@ __all__ = [
     "SessionRepo",
     "SkillRepo",
     "UnsafeMemoryContent",
+    "UsageRepo",
     "UserRepo",
     "UserSettings",
     "UserSettingsRepo",

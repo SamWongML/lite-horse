@@ -25,6 +25,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from lite_horse.config import get_settings
+from lite_horse.observability import configure_logging, configure_tracing
 from lite_horse.scheduler.tick import tick
 from lite_horse.storage import make_message_queue
 from lite_horse.storage.queue import MessageQueue
@@ -76,10 +77,9 @@ async def run_scheduler() -> None:
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    settings = get_settings()
+    configure_logging(env=settings.env)
+    configure_tracing(env=settings.env, service_name="lite-horse-scheduler")
     asyncio.run(run_scheduler())
 
 

@@ -1,0 +1,111 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "Dockerfile"
+      - "infra/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Target environment"
+        required: true
+        default: "dev"
+        type: choice
+        options: [dev, staging, prod]
+
+permissions:
+  id-token: write   # OIDC role assumption
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: litehorse-${{ inputs.env || 'dev' }}
+  ECS_CLUSTER: litehorse-${{ inputs.env || 'dev' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      image_uri: ${{ steps.meta.outputs.image_uri }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: |
+          echo "image_tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push image
+        run: |
+          IMAGE_URI="${{ steps.meta.outputs.image_uri }}"
+          IMAGE_TAG="${{ steps.meta.outputs.image_tag }}"
+          docker build -t "$IMAGE_URI:$IMAGE_TAG" -t "$IMAGE_URI:latest" .
+          docker push "$IMAGE_URI:$IMAGE_TAG"
+          docker push "$IMAGE_URI:latest"
+
+  migrate:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Run alembic upgrade head as one-shot ECS task
+        env:
+          IMAGE_URI: ${{ needs.build.outputs.image_uri }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+          TASK_FAMILY: litehorse-migrate-${{ inputs.env || 'dev' }}
+        run: |
+          set -euo pipefail
+          # Register a one-shot task definition that overrides the entrypoint
+          # to alembic upgrade head against the same image. The task definition
+          # is otherwise identical to the api service task.
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$ECS_CLUSTER" \
+            --launch-type FARGATE \
+            --network-configuration "$(cat infra/migrate-network.json)" \
+            --task-definition "$TASK_FAMILY" \
+            --overrides "{\"containerOverrides\":[{\"name\":\"app\",\"command\":[\"alembic\",\"-c\",\"src/lite_horse/alembic.ini\",\"upgrade\",\"head\"],\"image\":\"$IMAGE_URI:$IMAGE_TAG\"}]}" \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Migration failed (exit $EXIT_CODE) — aborting service rollout"
+            exit 1
+          fi
+
+  deploy:
+    needs: [build, migrate]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, scheduler, worker]
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Force new deployment
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "litehorse-${{ matrix.service }}-${{ inputs.env || 'dev' }}" \
+            --force-new-deployment
+      - name: Wait for service stable
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "litehorse-${{ matrix.service }}-${{ inputs.env || 'dev' }}"

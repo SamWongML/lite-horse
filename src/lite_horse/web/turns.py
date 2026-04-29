@@ -24,6 +24,8 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from lite_horse.observability import bind_log_context, emit_metric, get_logger
+from lite_horse.providers.pricing import compute_cost_usd_micro
 from lite_horse.web.permissions import PermissionBroker, PermissionRequest
 from lite_horse.web.sse import (
     encode_event,
@@ -37,6 +39,7 @@ from lite_horse.web.sse import (
 )
 
 _log = logging.getLogger(__name__)
+_slog = get_logger("lite_horse.turns")
 
 
 @dataclass
@@ -49,6 +52,23 @@ class TurnRequest:
     permission_mode: str = "auto"
     attachments: list[dict[str, Any]] | None = None
     command: str | None = None
+    model: str | None = None
+
+
+@dataclass
+class TurnUsage:
+    """Snapshot of one turn's token + cost totals.
+
+    Surfaced via :class:`_TurnHandle.usage` after :func:`stream_turn_to_sse`
+    yields its terminal ``done`` event so the route handler can persist
+    a ``usage_events`` row in a fresh transaction.
+    """
+
+    model: str | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_input_tokens: int = 0
+    cost_usd_micro: int = 0
 
 
 class StreamEventLike(Protocol):
@@ -71,6 +91,7 @@ class _TurnHandle:
     task: asyncio.Task[Any] | None = None
     aborted: bool = False
     queue: asyncio.Queue[bytes | None] = field(default_factory=asyncio.Queue)
+    usage: TurnUsage = field(default_factory=TurnUsage)
 
 
 class TurnRegistry:
@@ -146,6 +167,12 @@ async def stream_turn_to_sse(  # noqa: PLR0915  -- multiplex state stays in one 
     broker_task = asyncio.create_task(_drain_broker())
     handle.task = runner_task
 
+    bind_log_context(turn_id=handle.turn_id, session_key=request.session_key)
+    emit_metric(
+        "turns_total",
+        1,
+        dimensions={"model": request.model or "default"},
+    )
     final_text = ""
     try:
         while True:
@@ -158,9 +185,47 @@ async def stream_turn_to_sse(  # noqa: PLR0915  -- multiplex state stays in one 
                     yield chunk
                 if payload.__class__.__name__ == "StreamDone":
                     final_text = getattr(payload.result, "final_output", "") or ""
+                    in_tok = int(getattr(payload.result, "input_tokens", 0) or 0)
+                    out_tok = int(getattr(payload.result, "output_tokens", 0) or 0)
+                    cached_tok = int(
+                        getattr(payload.result, "cached_input_tokens", 0) or 0
+                    )
+                    model_name = request.model or ""
+                    cost_micro = compute_cost_usd_micro(
+                        model=model_name,
+                        input_tokens=in_tok,
+                        output_tokens=out_tok,
+                        cached_input_tokens=cached_tok,
+                    )
+                    handle.usage = TurnUsage(
+                        model=model_name or None,
+                        input_tokens=in_tok,
+                        output_tokens=out_tok,
+                        cached_input_tokens=cached_tok,
+                        cost_usd_micro=cost_micro,
+                    )
                     yield event_usage(
-                        input_tokens=int(getattr(payload.result, "input_tokens", 0) or 0),
-                        output_tokens=int(getattr(payload.result, "output_tokens", 0) or 0),
+                        input_tokens=in_tok,
+                        output_tokens=out_tok,
+                        cost_usd_micro=cost_micro,
+                    )
+                    emit_metric(
+                        "tokens_total",
+                        in_tok + out_tok,
+                        dimensions={"model": model_name or "default"},
+                    )
+                    emit_metric(
+                        "cost_usd_micro",
+                        cost_micro,
+                        unit="None",
+                        dimensions={"model": model_name or "default"},
+                    )
+                    _slog.info(
+                        "turn_complete",
+                        model=model_name or None,
+                        tokens_in=in_tok,
+                        tokens_out=out_tok,
+                        cost_usd_micro=cost_micro,
                     )
             elif kind == "permission":
                 req: PermissionRequest = payload
@@ -171,9 +236,16 @@ async def stream_turn_to_sse(  # noqa: PLR0915  -- multiplex state stays in one 
                 )
             elif kind == "error":
                 msg = str(payload) or payload.__class__.__name__
+                emit_metric(
+                    "errors_total", 1, dimensions={"error_kind": "INTERNAL"}
+                )
+                _slog.error("turn_error", error_kind="INTERNAL", message=msg)
                 yield event_error(kind="INTERNAL", message=msg)
                 break
             elif kind == "aborted":
+                emit_metric(
+                    "errors_total", 1, dimensions={"error_kind": "UNAVAILABLE"}
+                )
                 yield event_error(kind="UNAVAILABLE", message="turn aborted")
                 break
     finally:
@@ -267,6 +339,7 @@ __all__ = [
     "TurnRegistry",
     "TurnRequest",
     "TurnRunner",
+    "TurnUsage",
     "_TurnHandle",
     "collect_sse",
     "encode_event",

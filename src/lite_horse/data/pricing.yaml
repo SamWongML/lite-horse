@@ -1,0 +1,45 @@
+# lite-horse model pricing — USD per 1M tokens.
+#
+# Loaded once at app startup (see src/lite_horse/providers/pricing.py).
+# Costs persisted into ``usage_events.cost_usd_micro`` use the
+# ``cached_input`` rate when the provider reports cached_input_tokens
+# separately from input_tokens; otherwise we fall back to ``input``.
+#
+# Add new rows here as we onboard models. An unknown model is logged
+# at WARN and stored at zero cost so a missing entry never blocks a
+# turn.
+
+models:
+  # ---------- OpenAI ----------
+  - name: gpt-5.4
+    provider: openai
+    input_per_mtok: 2.50
+    cached_input_per_mtok: 1.25
+    output_per_mtok: 10.00
+  - name: gpt-5.4-mini
+    provider: openai
+    input_per_mtok: 0.50
+    cached_input_per_mtok: 0.25
+    output_per_mtok: 2.00
+  - name: gpt-4.1
+    provider: openai
+    input_per_mtok: 3.00
+    cached_input_per_mtok: 1.50
+    output_per_mtok: 12.00
+
+  # ---------- Anthropic ----------
+  - name: claude-opus-4-7
+    provider: anthropic
+    input_per_mtok: 15.00
+    cached_input_per_mtok: 1.50
+    output_per_mtok: 75.00
+  - name: claude-sonnet-4-6
+    provider: anthropic
+    input_per_mtok: 3.00
+    cached_input_per_mtok: 0.30
+    output_per_mtok: 15.00
+  - name: claude-haiku-4-5
+    provider: anthropic
+    input_per_mtok: 1.00
+    cached_input_per_mtok: 0.10
+    output_per_mtok: 5.00

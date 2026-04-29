@@ -16,6 +16,7 @@ import logging
 import signal
 
 from lite_horse.config import get_settings
+from lite_horse.observability import configure_logging, configure_tracing
 from lite_horse.storage import make_message_queue
 from lite_horse.storage.queue import MessageQueue, QueueMessage
 from lite_horse.worker.runner import dispatch_message
@@ -61,10 +62,9 @@ async def run_worker(*, stop: asyncio.Event) -> None:
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    settings = get_settings()
+    configure_logging(env=settings.env)
+    configure_tracing(env=settings.env, service_name="lite-horse-worker")
     stop = asyncio.Event()
 
     async def _runner() -> None:
