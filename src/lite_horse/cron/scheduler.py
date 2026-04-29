@@ -322,4 +322,4 @@ def is_due(*, cron_expr: str, last_fired_at: Any, now: Any) -> bool:
     next_fire = trigger.get_next_fire_time(last_fired_at, now)
     if next_fire is None:
         raise ValueError(f"cron expression {cron_expr!r} produced no next fire")
-    return next_fire <= now
+    return bool(next_fire <= now)
