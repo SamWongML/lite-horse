@@ -22,18 +22,28 @@ VALID_PERMISSION_MODES = ("auto", "ask", "ro")
 class UserSettings:
     default_model: str | None
     permission_mode: str
+    rate_limit_per_min: int | None = None
+    cost_budget_usd_micro: int | None = None
 
 
 class UserSettingsRepo(BaseRepo):
-    """users.default_model + users.permission_mode."""
+    """users.default_model + users.permission_mode + Phase 39 limits."""
 
     async def get(self) -> UserSettings:
         user_id = UUID(await self.current_user_id())
-        stmt = select(User.default_model, User.permission_mode).where(
-            User.id == user_id
-        )
+        stmt = select(
+            User.default_model,
+            User.permission_mode,
+            User.rate_limit_per_min,
+            User.cost_budget_usd_micro,
+        ).where(User.id == user_id)
         row = (await self.session.execute(stmt)).one()
-        return UserSettings(default_model=row[0], permission_mode=row[1])
+        return UserSettings(
+            default_model=row[0],
+            permission_mode=row[1],
+            rate_limit_per_min=row[2],
+            cost_budget_usd_micro=row[3],
+        )
 
     async def update(
         self,

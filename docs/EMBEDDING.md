@@ -1,16 +1,18 @@
-# Embedding `lite-horse`
+# Embedding `lite-horse` (deprecated)
+
+> **Deprecated as of v0.4.** The product surface is now the multi-tenant
+> HTTP API documented in [`HTTP-API.md`](HTTP-API.md). New integrations
+> must use HTTP. This document is retained because the same Python
+> entry-points (`run_turn`, `run_turn_streaming`, …) still back the
+> single-user developer REPL ([`CLI.md`](CLI.md)) and the in-process
+> agent loop that the cloud `api` task hosts. The `~/.litehorse/`
+> on-disk state model described below applies to the dev REPL only —
+> the cloud service stores everything in Postgres / Redis / S3 and is
+> not configured by `config.yaml`.
 
 `lite-horse` is an embeddable Python package. The consuming webapp imports
 `lite_horse.api`, calls `run_turn()` on each user message, and lets the cron
 worker deliver scheduled output back via a signed webhook.
-
-> **CLI is a second surface, not a replacement.** As of v0.3 there is
-> also a `litehorse` CLI ([`docs/CLI.md`](CLI.md)) — interactive REPL
-> plus a scripted subcommand tree. It is equally first-class but
-> independent of the embedded path: webapps should continue to import
-> `lite_horse.api` directly. The CLI never runs inside the webapp
-> process; the two surfaces share only the on-disk state in
-> `~/.litehorse/`.
 
 This document is the integration contract: env vars, `config.yaml` shape,
 MCP-server expectations, cron-delivery protocol. The surface is versioned by

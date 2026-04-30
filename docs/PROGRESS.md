@@ -72,7 +72,7 @@ the secondary surface. Stack: prompt_toolkit + rich + click-default-group
 | 29 | Scripted subcommand parity (sessions/skills/cron/memory/logs)    | ✅ |
 | 30 | Structured logs, `/logs`, `debug share`, delete litehorse-debug  | ✅ |
 
-## v0.4 — cloud multi-tenant service — ☐ ACTIVE (started 2026-04-26)
+## v0.4 — cloud multi-tenant service — ✅ SHIPPED (2026-04-30)
 
 Detail: [plans/v0.4-cloud-multi-tenant.md](plans/v0.4-cloud-multi-tenant.md).
 Re-platforms the in-process Python library into a horizontally-scalable
@@ -93,7 +93,7 @@ as a thin client. Predecessor: v0.3.
 | 36 | Scheduler + worker services, org-wide cron                       | ✅ |
 | 37 | Multi-provider, KMS-encrypted BYO keys, cost meter, GitHub tools | ✅ |
 | 38 | Observability, IaC, deploy pipeline                              | ✅ |
-| 39 | Hardening: RLS, secret rotation, MCP pool, evolve, load + leak   | ☐ |
+| 39 | Hardening: RLS, secret rotation, MCP pool, evolve, load + leak   | ✅ |
 
 ### Blocked / in progress
 Phase 31 shipped 2026-04-26 in three atomic commits (31a infra +
@@ -167,8 +167,33 @@ observability tests (log JSON shape, contextvars merge, EMF line
 shape, OTel span via in-memory exporter, middleware behaviour
 incl. ``X-Request-Id`` echo + JSON access lines + EMF
 ``http_requests_total`` / ``http_request_duration_ms``).
-Phase 39 (hardening: RLS, secret rotation, MCP pool, evolve,
-load + leak) is next.
+Phase 39 shipped 2026-04-30: ``alembic 0002_phase39_user_limits``
+adds ``users.rate_limit_per_min`` + ``users.cost_budget_usd_micro``
+columns and ``ALTER TABLE ... FORCE ROW LEVEL SECURITY`` on the
+four tenant-scoped tables; ``src/lite_horse/agent/mcp_pool.py``
+implements an asyncio-locked TTL+LRU cache keyed on
+``(user_id, slug, url)`` with ``MCPServerStreamableHttp.cleanup()``
+on eviction/shutdown; ``src/lite_horse/web/rate_limit.py``
+fixed-window Redis counter on ``rate:turn:{user_id}:{epoch_min}``
+(60/min default, per-user override); ``src/lite_horse/web/cost_budget.py``
+daily counter on ``cost:day:{user_id}:{YYYYMMDD}`` with NX-set
+80% alert and 100% block raising ``cost_budget_exceeded``; both
+preflight checks wired into ``POST /v1/turns`` + ``POST /v1/turns:stream``
+and post-turn ``record_cost`` after ``UsageRepo.record_turn``;
+``src/lite_horse/evolve/cloud.py`` ``EvolveMessage`` payload +
+``find_evolve_candidates`` + ``run_evolve`` worker entry-point;
+worker ``dispatch_message`` routes by ``is_evolve_payload``;
+``src/lite_horse/scheduler/evolve_tick.py`` daily 86400 s tick
+enqueues per (user x skill) candidates; ``docs/SECRET_ROTATION.md``
+runbook with RDS-managed Lambda rotation, manual put-secret-value
+flow, and emergency-revoke; ``tests/load/locustfile.py`` 100 users
+x 10 turns/min profile; ``tests/security/test_rls_leak.py``
+integration leak gate proving cross-tenant SELECT returns ``[]``
+under a non-superuser app role with ``app.user_id`` GUC + RLS
+``USING (user_id::text = current_setting(...))``. ``README.md``
+rewritten around the cloud surface; ``docs/CLI.md`` flagged
+dev-only; ``docs/EMBEDDING.md`` deprecated in favour of new
+``docs/HTTP-API.md``. v0.4 plan flipped to **SHIPPED**.
 
 ---
 

@@ -1,76 +1,76 @@
 # lite-horse
 
-> Embeddable OpenAI-only assistant runtime with persistent memory, conditional
-> skills, SQLite/FTS5 recall, and an offline self-evolution loop. Built on the
+> Multi-tenant cloud assistant service with persistent memory, layered
+> conditional skills, Postgres-backed cross-session recall, KMS-encrypted
+> BYO provider keys, and an offline self-evolution worker. Built on the
 > [OpenAI Agents SDK](https://github.com/openai/openai-agents-python).
 
 ![python](https://img.shields.io/badge/python-3.11%2B-3776ab?logo=python&logoColor=white)
 ![agents-sdk](https://img.shields.io/badge/openai--agents-0.14-412991?logo=openai&logoColor=white)
 ![lint](https://img.shields.io/badge/lint-ruff-D7FF64?logo=ruff&logoColor=black)
 ![typing](https://img.shields.io/badge/typing-mypy%20strict-2a6db2)
-![tests](https://img.shields.io/badge/tests-476%20passing-4c1)
-
-Two surfaces over one on-disk state dir (`~/.litehorse/`, overridable via
-`LITEHORSE_HOME`):
 
 | Surface | Use it when | Docs |
 |---|---|---|
-| **`litehorse` CLI** | Interactive REPL or scripted automation/CI | [docs/CLI.md](docs/CLI.md) |
-| **`lite_horse.api`** | Importing into a webapp | [docs/EMBEDDING.md](docs/EMBEDDING.md) |
+| **HTTP API** (FastAPI on AWS ECS) | The product surface for any webapp | [docs/HTTP-API.md](docs/HTTP-API.md) |
+| **`litehorse` CLI** | Local development against `~/.litehorse/`; not deployed in v0.4 | [docs/CLI.md](docs/CLI.md) |
+| **`lite_horse.api` Python** | Legacy embedded path, kept for the dev REPL only | [docs/EMBEDDING.md](docs/EMBEDDING.md) (deprecated) |
 
 ## Highlights
 
-- **Persistent memory** — layered `MEMORY.md` + `USER.md`, compression-as-consolidation, periodic nudge.
-- **Conditional skills** — markdown procedures the agent loads only when their triggers match; offline loop proposes revisions from recorded failures (human-approved merge only).
-- **Cross-session recall** — SQLite + FTS5 session store with a `session_search` tool.
-- **Robust runtime** — structured error classifier, iteration-budget pressure, prompt-cache-aware dynamic instructions.
-- **Scheduled work** — APScheduler cron, HMAC-SHA256 signed webhook delivery.
-- **Extensible** — external MCP servers via config; opt-in `WebSearchTool`.
-- **Interactive CLI** — streaming markdown, slash commands, tool-call approval, session resume, cost meter.
+- **Multi-tenant by design** — every Postgres table carries `user_id` with RLS; Redis keys, KMS encryption contexts, and the MCP connection pool all pivot on the same boundary.
+- **Layered config** — `bundled` → `official` → `user` precedence for skills, instructions, slash commands, MCP servers, and cron jobs. Admins push official content with mandatory / opt-out semantics.
+- **Persistent memory** — `MEMORY.md` + `USER.md` per user with compression-as-consolidation and periodic nudge.
+- **Conditional skills** — markdown procedures the agent loads only when their triggers match; offline evolve worker proposes revisions from recorded failures (human-approved merge only).
+- **Cross-session recall** — Postgres tsvector FTS over messages with a `session_search` tool.
+- **Streaming HTTP API** — SSE turn endpoint with `Idempotency-Key` replay, ask-mode permission round-trip, and per-session distributed locks.
+- **Multi-provider + cost meter** — OpenAI / Anthropic via a unified `ModelProvider`; per-turn `usage_events` rows in micro-USD; per-user daily cost budget enforced in Redis.
+- **Per-tenant rate limit** — Redis token bucket on `POST /v1/turns*` (60/min default).
+- **Scheduler + worker split** — APScheduler ticks every 60 s; standalone SQS worker runs turns + signed HMAC-SHA256 webhook delivery and the daily evolve queue.
+- **Observability** — structlog JSON logs, OTel traces, EMF metrics; CloudWatch dashboard + alarms.
 
 ## Install
 
 ```bash
 uv sync --extra dev
-cp .env.example ~/.litehorse/.env   # then fill in OPENAI_API_KEY
+cp .env.example .env                # fill in DB / Redis / JWKS / provider keys
 ```
 
-Requires Python 3.11+. First run writes a default `config.yaml` under
-`~/.litehorse/`.
+Requires Python 3.11+.
 
 ## Quickstart
 
-### CLI
+### Cloud HTTP API
 
 ```bash
-litehorse                          # interactive REPL
+docker compose up                  # api + scheduler + worker + postgres + redis
+curl -sS -X POST http://localhost:8080/v1/turns \
+    -H "Authorization: Bearer $JWT" \
+    -H "Content-Type: application/json" \
+    -H "Idempotency-Key: $(uuidgen)" \
+    -d '{"session_key":"demo","text":"hello"}'
+```
+
+Surface reference: [docs/HTTP-API.md](docs/HTTP-API.md). Live OpenAPI
+schema at `GET /openapi.json` on a running instance.
+
+### CLI (developer use only)
+
+```bash
+litehorse                          # interactive REPL against ~/.litehorse/
 litehorse "write a haiku"          # one-shot; stream, then exit
 litehorse --session <key>          # resume an existing session
 echo "hi" | litehorse              # one-shot from piped stdin
 ```
 
-In the REPL: `/help` lists slash commands, **Meta-Enter** submits, **Ctrl-C**
-cancels the in-flight turn (press twice within 2 s to exit), **Ctrl-D** on an
-empty prompt exits.
+The CLI is **not deployed** in v0.4. It's a local-only convenience for
+working on skills/memory before pushing them to the cloud.
 
-### Embedded
+### Embedded (deprecated)
 
-```python
-import asyncio
-from lite_horse.api import run_turn
-from lite_horse.core.session_key import build_session_key
-
-async def main() -> None:
-    key = build_session_key(platform="web", chat_type="dm", chat_id=42)
-    result = await run_turn(session_key=key, user_text="hello")
-    print(result.final_output)
-
-asyncio.run(main())
-```
-
-Same-`session_key` calls serialize; distinct keys run in parallel. Full
-contract (`run_turn`, `run_turn_streaming`, `end_session`, `search_sessions`,
-`shutdown`) is in [docs/EMBEDDING.md](docs/EMBEDDING.md).
+The Python `lite_horse.api` import path is preserved so the dev REPL
+keeps building, but webapps should integrate via the HTTP API. See
+[docs/EMBEDDING.md](docs/EMBEDDING.md).
 
 ## Automation
 
@@ -91,17 +91,18 @@ litehorse debug share                    # bundle logs + transcript + config
 
 Opt-in structured stderr logs: `LITEHORSE_STRUCTURED_LOGS=1`.
 
-## Cron worker
+## Scheduler + worker
 
-Runs in its own process, reads `~/.litehorse/jobs.json`, and POSTs each job's
-output to your webapp with an HMAC-SHA256 signature:
+Two standalone processes share the api's container image:
 
 ```bash
-litehorse cron scheduler
+python -m lite_horse.scheduler         # 60 s cron tick + daily evolve tick
+python -m lite_horse.worker            # SQS long-poll: turns + webhooks + evolve
 ```
 
-Webhook body + signature format:
-[docs/EMBEDDING.md#webhook-delivery-protocol](docs/EMBEDDING.md#webhook-delivery-protocol).
+Webhook deliveries are HMAC-SHA256 signed; the secret resolves via
+Secrets Manager in cloud envs (5-min TTL cache). Local dev uses an
+in-memory queue.
 
 ## Tools
 
@@ -131,9 +132,11 @@ they never auto-merge. Gates, fitness, and the approval workflow:
 
 | File | What |
 |---|---|
-| [docs/CLI.md](docs/CLI.md) | CLI reference — keys, slash commands, subcommands |
-| [docs/EMBEDDING.md](docs/EMBEDDING.md) | Webapp integration contract |
+| [docs/HTTP-API.md](docs/HTTP-API.md) | Cloud surface contract (auth, rate limits, idempotency, errors) |
+| [docs/CLI.md](docs/CLI.md) | Developer CLI reference (dev-only; not deployed) |
+| [docs/SECRET_ROTATION.md](docs/SECRET_ROTATION.md) | Secrets Manager rotation runbook |
 | [docs/EVOLVE.md](docs/EVOLVE.md) | Offline SKILL.md evolution loop |
+| [docs/EMBEDDING.md](docs/EMBEDDING.md) | Legacy embedded Python surface (deprecated) |
 | [docs/PROGRESS.md](docs/PROGRESS.md) | Phase status and active plan |
 
 ## Development

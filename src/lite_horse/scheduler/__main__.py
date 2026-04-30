@@ -26,11 +26,13 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from lite_horse.config import get_settings
 from lite_horse.observability import configure_logging, configure_tracing
+from lite_horse.scheduler.evolve_tick import evolve_tick
 from lite_horse.scheduler.tick import tick
 from lite_horse.storage import make_message_queue
 from lite_horse.storage.queue import MessageQueue
 
 TICK_SECONDS = 60
+EVOLVE_TICK_SECONDS = 86400
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +43,16 @@ def _wrap_tick(queue: MessageQueue) -> Any:
             await tick(queue=queue)
         except Exception:
             log.exception("scheduler tick failed")
+
+    return _job
+
+
+def _wrap_evolve_tick(queue: MessageQueue) -> Any:
+    async def _job() -> None:
+        try:
+            await evolve_tick(queue=queue)
+        except Exception:
+            log.exception("evolve tick failed")
 
     return _job
 
@@ -58,6 +70,13 @@ async def run_scheduler() -> None:
         id="cron-tick",
         replace_existing=True,
         next_run_time=None,  # first fire after one TICK_SECONDS
+    )
+    sched.add_job(
+        _wrap_evolve_tick(queue),
+        trigger=IntervalTrigger(seconds=EVOLVE_TICK_SECONDS),
+        id="evolve-tick",
+        replace_existing=True,
+        next_run_time=None,
     )
     sched.start()
     log.info("scheduler up")

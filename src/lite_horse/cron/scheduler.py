@@ -185,14 +185,11 @@ async def run_scheduler() -> None:
     fire = make_fire(db=db, cfg=cfg, store=store)
     loaded = _schedule_jobs(sched, store, fire)
 
-    home = litehorse_home()
-    home.mkdir(parents=True, exist_ok=True)
-    pid_file = home / "cron.pid"
-    pid_file.write_text(str(os.getpid()))
-
-    sched.start()
-    log.info("cron up; %d jobs loaded", loaded)
-
+    # Install signal handlers BEFORE advertising readiness via the pid
+    # file: the subprocess test (and supervisors in general) read the
+    # pid file as the "scheduler is up, you can send signals now" mark,
+    # so any SIGTERM landing before the handler is registered would
+    # kill the process with rc=-15 instead of triggering clean shutdown.
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -201,6 +198,15 @@ async def run_scheduler() -> None:
         except NotImplementedError:
             # Windows / restricted envs — fall back to KeyboardInterrupt.
             pass
+
+    home = litehorse_home()
+    home.mkdir(parents=True, exist_ok=True)
+    pid_file = home / "cron.pid"
+    pid_file.write_text(str(os.getpid()))
+
+    sched.start()
+    log.info("cron up; %d jobs loaded", loaded)
+
     try:
         await stop.wait()
     finally:
