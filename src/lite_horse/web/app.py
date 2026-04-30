@@ -19,12 +19,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from lite_horse.agent.mcp_pool import McpPool
 from lite_horse.config import get_settings
 from lite_horse.observability import (
     configure_logging,
     configure_tracing,
     install_middleware,
 )
+from lite_horse.storage import make_kms
 from lite_horse.storage.db import dispose_engine, get_engine
 from lite_horse.storage.redis_client import make_redis_client
 from lite_horse.web.effective_invalidate import run_invalidation_subscriber
@@ -46,11 +48,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.turn_registry = TurnRegistry()
     app.state.permission_broker = PermissionBroker(redis=app.state.redis)
+    app.state.kms = make_kms()
+    app.state.mcp_pool = McpPool(kms=app.state.kms)
     await app.state.permission_broker.start()
     try:
         yield
     finally:
         await app.state.permission_broker.stop()
+        await app.state.mcp_pool.shutdown()
         app.state.invalidation_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await app.state.invalidation_task

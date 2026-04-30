@@ -25,10 +25,12 @@ from pydantic import BaseModel, Field
 
 from lite_horse.api import run_turn_streaming
 from lite_horse.repositories.usage_repo import UsageRepo
+from lite_horse.repositories.user_settings_repo import UserSettings, UserSettingsRepo
 from lite_horse.storage.db import db_session
 from lite_horse.storage.locks import LockTimeoutError, SessionLock
 from lite_horse.storage.redis_client import Redis
 from lite_horse.web.context import RequestContext
+from lite_horse.web.cost_budget import check_budget, record_cost
 from lite_horse.web.deps import get_redis, get_request_context
 from lite_horse.web.errors import ErrorKind, http_error
 from lite_horse.web.idempotency import (
@@ -38,6 +40,7 @@ from lite_horse.web.idempotency import (
     store_cached_stream,
 )
 from lite_horse.web.permissions import PermissionBroker
+from lite_horse.web.rate_limit import check_and_consume
 from lite_horse.web.sse import event_done, event_error
 from lite_horse.web.turns import (
     TurnRegistry,
@@ -180,6 +183,67 @@ async def _record_usage(
         )
 
 
+async def _load_user_settings(user_id: str) -> UserSettings:
+    """Read per-user limits in a fresh tenant transaction.
+
+    Same pattern as :func:`_record_usage`: a short-lived session that
+    doesn't share the request-scoped one, so the read is off the SSE
+    critical path.
+    """
+    async with db_session(user_id) as session:
+        return await UserSettingsRepo(session).get()
+
+
+async def _enforce_preflight_limits(
+    *, redis: Redis | None, user_id: str
+) -> UserSettings | None:
+    """Run rate-limit + cost-budget checks before the agent runs.
+
+    Returns the loaded :class:`UserSettings` so the post-turn step can
+    record cost against the same per-user budget without re-querying.
+    Returns ``None`` if no DB is reachable (test paths that override
+    ``get_redis`` and skip ``app.user_id`` plumbing).
+    """
+    if redis is None:
+        return None
+    try:
+        settings = await _load_user_settings(user_id)
+    except Exception:
+        return None
+    allowed = await check_and_consume(
+        redis, user_id=user_id, limit_per_min=settings.rate_limit_per_min
+    )
+    if not allowed:
+        raise http_error(
+            ErrorKind.RATE_LIMIT, "per-user turn rate limit exceeded"
+        )
+    within_budget = await check_budget(
+        redis, user_id=user_id, budget_micro=settings.cost_budget_usd_micro
+    )
+    if not within_budget:
+        raise http_error(
+            ErrorKind.FORBIDDEN, "cost_budget_exceeded"
+        )
+    return settings
+
+
+async def _record_cost_metered(
+    *,
+    redis: Redis | None,
+    user_id: str,
+    settings: UserSettings | None,
+    usage: TurnUsage,
+) -> None:
+    if redis is None or settings is None or usage.cost_usd_micro <= 0:
+        return
+    await record_cost(
+        redis,
+        user_id=user_id,
+        cost_micro=usage.cost_usd_micro,
+        budget_micro=settings.cost_budget_usd_micro,
+    )
+
+
 # ---------- routes ----------
 
 
@@ -207,6 +271,10 @@ async def post_turn(
     )
     if cached is not None:
         return TurnOut(**cached)
+
+    user_settings = await _enforce_preflight_limits(
+        redis=redis, user_id=ctx.user_id
+    )
 
     lock_cm = await _maybe_acquire_lock(
         lock_factory, key=_session_lock_key(ctx.user_id, body.session_key)
@@ -240,6 +308,12 @@ async def post_turn(
     await _record_usage(
         user_id=ctx.user_id,
         session_key=body.session_key,
+        usage=handle.usage,
+    )
+    await _record_cost_metered(
+        redis=redis,
+        user_id=ctx.user_id,
+        settings=user_settings,
         usage=handle.usage,
     )
 
@@ -284,6 +358,10 @@ async def post_turn_stream(
 
         return StreamingResponse(_replay(), media_type="text/event-stream")
 
+    user_settings = await _enforce_preflight_limits(
+        redis=redis, user_id=ctx.user_id
+    )
+
     handle = registry.new()
     turn_req = TurnRequest(
         user_id=ctx.user_id,
@@ -327,6 +405,12 @@ async def post_turn_stream(
             await _record_usage(
                 user_id=ctx.user_id,
                 session_key=body.session_key,
+                usage=handle.usage,
+            )
+            await _record_cost_metered(
+                redis=redis,
+                user_id=ctx.user_id,
+                settings=user_settings,
                 usage=handle.usage,
             )
 

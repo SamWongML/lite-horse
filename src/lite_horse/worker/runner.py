@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from lite_horse.cron.scheduler import CronMessage
+from lite_horse.evolve.cloud import EvolveMessage, is_evolve_payload, run_evolve
 from lite_horse.storage.queue import QueueMessage
 
 log = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ async def dispatch_message(
     *,
     run_turn_fn: RunTurnFn | None = None,
     deliver_fn: DeliverFn | None = None,
+    evolve_fn: Callable[[EvolveMessage], Awaitable[bool]] | None = None,
 ) -> bool:
     """Run one queue message end-to-end.
 
@@ -74,7 +76,27 @@ async def dispatch_message(
     ``False`` on failure (caller leaves the message for SQS to redeliver).
     Parse failures count as success — a malformed message will never
     parse correctly and shouldn't poison the queue.
+
+    The body's ``kind`` discriminator routes between the cron path
+    (default) and the Phase-39 evolve path.
     """
+    if is_evolve_payload(raw.body):
+        try:
+            evolve_msg = EvolveMessage.from_json(raw.body)
+        except (ValueError, KeyError, TypeError) as exc:
+            log.error("worker: dropping unparseable evolve message: %s", exc)
+            return True
+        evolve = evolve_fn or run_evolve
+        try:
+            return await evolve(evolve_msg)
+        except Exception:
+            log.exception(
+                "worker: evolve failed (user=%s slug=%s)",
+                evolve_msg.user_id,
+                evolve_msg.skill_slug,
+            )
+            return False
+
     try:
         msg = CronMessage.from_json(raw.body)
     except (ValueError, KeyError, TypeError) as exc:

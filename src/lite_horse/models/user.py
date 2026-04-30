@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, LargeBinary, String, text
+from sqlalchemy import BigInteger, CheckConstraint, Integer, LargeBinary, String, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -41,3 +41,7 @@ class User(Base):
     byo_provider_key_dk: Mapped[bytes | None] = mapped_column(
         LargeBinary, nullable=True
     )
+    # Phase 39: per-user rate limit + daily cost budget overrides.
+    # NULL → use process default; non-positive → unlimited tier.
+    rate_limit_per_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost_budget_usd_micro: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

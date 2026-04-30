@@ -1,5 +1,12 @@
 # `litehorse` CLI
 
+> **Dev-only surface.** As of v0.4 the cloud HTTP API
+> (see [`HTTP-API.md`](HTTP-API.md)) is the only deployed product
+> surface. The CLI is preserved for local development against
+> `~/.litehorse/` — quickly iterating on skills, memory, and the agent
+> loop without standing up Postgres / Redis / SQS. It does **not** talk
+> to the cloud service and shares no state with it.
+
 The `litehorse` command is the interactive-first face of the lite-horse
 runtime. Bare `litehorse` drops into a streaming REPL; named subcommands
 (`sessions`, `skills`, `cron`, `memory`, `logs`, …) are the scripted
