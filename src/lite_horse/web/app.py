@@ -26,7 +26,7 @@ from lite_horse.observability import (
     configure_tracing,
     install_middleware,
 )
-from lite_horse.storage import make_kms
+from lite_horse.storage import make_kms, make_session_lock
 from lite_horse.storage.db import dispose_engine, get_engine
 from lite_horse.storage.redis_client import make_redis_client
 from lite_horse.web.effective_invalidate import run_invalidation_subscriber
@@ -49,6 +49,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.turn_registry = TurnRegistry()
     app.state.permission_broker = PermissionBroker(redis=app.state.redis)
     app.state.kms = make_kms()
+    app.state.session_lock = make_session_lock(app.state.redis)
     app.state.mcp_pool = McpPool(kms=app.state.kms)
     await app.state.permission_broker.start()
     try:
