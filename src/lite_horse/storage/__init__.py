@@ -11,6 +11,7 @@ from lite_horse.storage.blob import BlobStore
 from lite_horse.storage.kms import Kms, KmsDecryptError
 from lite_horse.storage.locks import LockTimeout, LockTimeoutError, SessionLock
 from lite_horse.storage.queue import MessageQueue, QueueMessage
+from lite_horse.storage.redis_client import Redis
 from lite_horse.storage.secrets import SecretsProvider
 
 
@@ -95,6 +96,30 @@ def reset_local_message_queue_for_tests() -> None:
     _LOCAL_QUEUE_SINGLETON = None
 
 
+def make_session_lock(redis: Redis | None = None) -> SessionLock:
+    """Return the env-appropriate :class:`SessionLock` impl.
+
+    `LITEHORSE_ENV=local` → in-process :class:`InMemorySessionLock` (one
+    per call; callers store the singleton on `app.state.session_lock`).
+    Anything else → :class:`RedisSessionLock` bound to ``redis``; if
+    ``redis`` is ``None`` a fresh client is created from
+    ``Settings.redis_url``. Imported lazily so the local path stays free
+    of the redis-async dep tree.
+    """
+    from lite_horse.config import get_settings  # noqa: PLC0415
+
+    settings = get_settings()
+    if settings.env == "local":
+        from lite_horse.storage.locks_memory import (  # noqa: PLC0415
+            InMemorySessionLock,
+        )
+
+        return InMemorySessionLock()
+    from lite_horse.storage.locks_redis import RedisSessionLock  # noqa: PLC0415
+
+    return RedisSessionLock(client=redis)
+
+
 __all__ = [
     "BlobStore",
     "Kms",
@@ -108,5 +133,6 @@ __all__ = [
     "make_kms",
     "make_message_queue",
     "make_secrets_provider",
+    "make_session_lock",
     "reset_local_message_queue_for_tests",
 ]
