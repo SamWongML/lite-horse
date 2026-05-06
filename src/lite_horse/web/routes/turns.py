@@ -23,7 +23,6 @@ from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from lite_horse.api import run_turn_streaming
 from lite_horse.repositories.usage_repo import UsageRepo
 from lite_horse.repositories.user_settings_repo import UserSettings, UserSettingsRepo
 from lite_horse.storage.db import db_session
@@ -118,24 +117,30 @@ def get_session_lock(request: Request) -> SessionLock | None:
 def get_turn_runner(request: Request) -> TurnRunner:
     """Resolve the agent stream factory.
 
-    Default (production) wraps ``lite_horse.api.run_turn_streaming``.
+    Default (production) builds a per-user agent through
+    :func:`lite_horse.web.turn_engine.run_turn_streaming_for_user`,
+    closing over ``mcp_pool`` / ``kms`` / ``redis`` from app state.
     Tests override this to inject a deterministic event sequence.
     """
     state = request.app.state
     runner = getattr(state, "turn_runner", None)
     if runner is not None:
         return runner  # type: ignore[no-any-return]
-    return _default_turn_runner
+    mcp_pool = getattr(state, "mcp_pool", None)
+    kms = getattr(state, "kms", None)
+    redis = getattr(state, "redis", None)
 
+    async def _runner(req: TurnRequest) -> AsyncIterator[Any]:
+        from lite_horse.web.turn_engine import (  # noqa: PLC0415
+            run_turn_streaming_for_user,
+        )
 
-async def _default_turn_runner(req: TurnRequest) -> AsyncIterator[Any]:
-    async for ev in run_turn_streaming(
-        session_key=req.session_key,
-        user_text=req.text,
-        source="web",
-        user_id=req.user_id,
-    ):
-        yield ev
+        async for ev in run_turn_streaming_for_user(
+            req, mcp_pool=mcp_pool, kms=kms, redis=redis
+        ):
+            yield ev
+
+    return _runner
 
 
 # ---------- helpers ----------
