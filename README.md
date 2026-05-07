@@ -39,28 +39,56 @@ for skill / memory iteration.
 ## Architecture
 
 ```mermaid
-flowchart LR
-    Web[Webapp / Browser] -- JWT --> API[FastAPI api]
-    API -- SSE turns --> Web
+flowchart TB
+    Client["Webapp / Browser"]
 
-    subgraph aws["AWS / docker-compose"]
-        API --> PG[(Postgres 16<br/>pgvector + RLS)]
-        API --> Redis[(Redis<br/>idem · rate · cost · pubsub)]
-        API --> KMS[KMS<br/>BYO key envelopes]
-
-        Sched[scheduler<br/>60s tick + daily evolve] --> SQS[(SQS)]
-        SQS --> Worker[worker<br/>turns · webhooks · embed · evolve]
-        Worker --> PG
-        Worker --> Webhook[Signed webhook<br/>HMAC-SHA256]
-
-        API --> Providers[OpenAI · Anthropic<br/>via ModelProvider]
-        Worker --> Providers
+    subgraph Compute["Compute &nbsp;·&nbsp; one container image, three processes"]
+        direction LR
+        API["api<br/><sub>FastAPI · SSE turns · admin</sub>"]
+        Sched["scheduler<br/><sub>60 s cron · daily evolve</sub>"]
+        Worker["worker<br/><sub>SQS dispatcher</sub>"]
     end
+
+    subgraph Stateful["Stateful infra"]
+        direction LR
+        PG[("Postgres 16<br/><sub>pgvector · RLS</sub>")]
+        Redis[("Redis<br/><sub>idem · rate · cost · pubsub</sub>")]
+        SQS[("SQS")]
+        KMS["KMS<br/><sub>BYO-key envelopes</sub>"]
+    end
+
+    subgraph External["External"]
+        direction LR
+        LLM["LLM providers<br/><sub>OpenAI · Anthropic</sub>"]
+        Hook["Signed webhooks<br/><sub>HMAC-SHA256</sub>"]
+    end
+
+    Client <-->|"JWT &nbsp;·&nbsp; SSE"| API
+
+    API --> PG
+    API --> Redis
+    API --> KMS
+    API --> LLM
+
+    Sched -- enqueue --> SQS
+    SQS -- long-poll --> Worker
+    Worker --> PG
+    Worker --> Redis
+    Worker --> LLM
+    Worker --> Hook
+
+    classDef svc  fill:#1f6feb22,stroke:#1f6feb,color:#1f6feb,stroke-width:1.5px
+    classDef data fill:#8957e522,stroke:#8957e5,color:#8957e5,stroke-width:1.5px
+    classDef ext  fill:#6e768122,stroke:#6e7681,color:#6e7681,stroke-width:1.5px
+    class API,Sched,Worker svc
+    class PG,Redis,SQS,KMS data
+    class Client,LLM,Hook ext
 ```
 
-Three processes share one container image: `api` (FastAPI + SSE), `scheduler`
-(APScheduler — cron + daily evolve), `worker` (SQS long-poll for turns,
-webhooks, embed backfill, evolve proposals).
+Three processes share one container image: **api** (FastAPI + SSE),
+**scheduler** (APScheduler — cron + daily evolve enqueue), **worker**
+(SQS long-poll: turns, signed webhooks, embedding backfill, evolve
+proposals).
 
 ## Surfaces
 
