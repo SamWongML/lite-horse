@@ -21,12 +21,14 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from lite_horse.config import get_settings
 from lite_horse.models.command import Command as CommandModel
 from lite_horse.models.cron_job import CronJob as CronJobModel
 from lite_horse.models.instruction import Instruction as InstructionModel
 from lite_horse.models.mcp_server import McpServer as McpServerModel
 from lite_horse.models.skill import Skill as SkillModel
 from lite_horse.repositories import (
+    ByoKeyStore,
     CommandRepo,
     CronRepo,
     InstructionRepo,
@@ -34,6 +36,10 @@ from lite_horse.repositories import (
     MemoryFull,
     MemoryRepo,
     OptOutRepo,
+    ProposalAlreadyDecidedError,
+    ProposalNotFoundError,
+    ProposalRepo,
+    ProposalSkillSlugTakenError,
     SkillRepo,
     UnsafeMemoryContent,
     UserSettingsRepo,
@@ -60,6 +66,8 @@ from lite_horse.web.schemas import (
     DocumentIn,
     DocumentOut,
     EffectiveConfigView,
+    GithubOAuthCallbackIn,
+    GithubOAuthCallbackOut,
     InstructionCreateIn,
     InstructionOut,
     InstructionUpdateIn,
@@ -77,6 +85,7 @@ from lite_horse.web.schemas import (
     SettingsOut,
     SkillCreateIn,
     SkillOut,
+    SkillProposalOut,
     SkillUpdateIn,
 )
 
@@ -607,6 +616,142 @@ async def remove_opt_out(
         raise http_error(
             ErrorKind.NOT_FOUND, f"opt-out for {entity}:{slug!r} not found"
         )
+
+
+# ---------- BYO keys / GitHub OAuth ----------
+
+
+@router.post(
+    "/byo-keys/github/oauth/callback", response_model=GithubOAuthCallbackOut
+)
+async def github_oauth_callback(
+    body: GithubOAuthCallbackIn, session: DbSession, kms: KmsDep
+) -> GithubOAuthCallbackOut:
+    """Exchange a GitHub OAuth ``code`` for a token bundle and persist it.
+
+    Phase 37 §Open question 4: replaces the per-user-paste PAT design. The
+    webapp redirects the user to GitHub, GitHub bounces them back with a
+    short-lived ``code``; the webapp posts the code (plus optional CSRF
+    ``state`` it already verified) to this endpoint. We POST to GitHub's
+    token endpoint server-side, then encrypt the resulting bundle into
+    ``users.byo_provider_key_ct`` via :class:`ByoKeyStore`.
+    """
+    settings = get_settings()
+    if not settings.github_oauth_client_id or not settings.github_oauth_client_secret:
+        raise http_error(
+            ErrorKind.UNAVAILABLE, "github oauth client credentials not configured"
+        )
+    payload = {
+        "client_id": settings.github_oauth_client_id,
+        "client_secret": settings.github_oauth_client_secret,
+        "code": body.code,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                settings.github_oauth_token_url,
+                data=payload,
+                headers={"Accept": "application/json"},
+            )
+            resp.raise_for_status()
+            doc = resp.json()
+    except httpx.HTTPError as exc:
+        raise http_error(
+            ErrorKind.UNAVAILABLE, f"github token exchange failed: {exc}"
+        ) from exc
+
+    if not isinstance(doc, dict) or doc.get("error"):
+        msg = (doc or {}).get("error_description") or "github rejected the code"
+        raise http_error(ErrorKind.UNPROCESSABLE, str(msg))
+
+    access_token = doc.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        raise http_error(
+            ErrorKind.UNPROCESSABLE, "github response missing access_token"
+        )
+    refresh_token = doc.get("refresh_token")
+    expires_in = doc.get("expires_in")
+    expires_at: int | None = None
+    if isinstance(expires_in, int) and expires_in > 0:
+        expires_at = int(datetime.now(UTC).timestamp()) + int(expires_in)
+
+    await ByoKeyStore(session, kms).set_github_oauth(
+        access_token=access_token,
+        refresh_token=refresh_token if isinstance(refresh_token, str) else None,
+        expires_at=expires_at,
+    )
+    return GithubOAuthCallbackOut(has_access_token=True, expires_at=expires_at)
+
+
+# ---------- skill proposals ----------
+
+
+def _proposal_to_out(p: dict[str, Any]) -> SkillProposalOut:
+    return SkillProposalOut(
+        id=str(p["id"]),
+        skill_slug=str(p["skill_slug"]),
+        base_version=p.get("base_version"),
+        body=str(p["body"]),
+        fitness=p.get("fitness"),
+        status=p["status"],
+        created_at=p["created_at"],
+        decided_at=p.get("decided_at"),
+    )
+
+
+@router.get("/skill-proposals", response_model=list[SkillProposalOut])
+async def list_skill_proposals(
+    session: DbSession, status_filter: str | None = None, limit: int = 50
+) -> list[SkillProposalOut]:
+    try:
+        rows = await ProposalRepo(session).list_(status=status_filter, limit=limit)
+    except ValueError as exc:
+        raise http_error(ErrorKind.UNPROCESSABLE, str(exc)) from exc
+    return [_proposal_to_out(r) for r in rows]
+
+
+@router.post(
+    "/skill-proposals/{proposal_id}:approve", response_model=SkillProposalOut
+)
+async def approve_skill_proposal(
+    proposal_id: str, session: DbSession
+) -> SkillProposalOut:
+    try:
+        row = await ProposalRepo(session).approve(proposal_id)
+    except ProposalNotFoundError as exc:
+        raise http_error(
+            ErrorKind.NOT_FOUND, f"proposal {proposal_id!r} not found"
+        ) from exc
+    except ProposalAlreadyDecidedError as exc:
+        raise http_error(
+            ErrorKind.CONFLICT, f"proposal already {exc.args[0]}"
+        ) from exc
+    except ProposalSkillSlugTakenError as exc:
+        raise http_error(
+            ErrorKind.CONFLICT,
+            f"user-scope skill {exc.args[0]!r} already exists; "
+            "delete it or reject this proposal first",
+        ) from exc
+    return _proposal_to_out(row)
+
+
+@router.post(
+    "/skill-proposals/{proposal_id}:reject", response_model=SkillProposalOut
+)
+async def reject_skill_proposal(
+    proposal_id: str, session: DbSession
+) -> SkillProposalOut:
+    try:
+        row = await ProposalRepo(session).reject(proposal_id)
+    except ProposalNotFoundError as exc:
+        raise http_error(
+            ErrorKind.NOT_FOUND, f"proposal {proposal_id!r} not found"
+        ) from exc
+    except ProposalAlreadyDecidedError as exc:
+        raise http_error(
+            ErrorKind.CONFLICT, f"proposal already {exc.args[0]}"
+        ) from exc
+    return _proposal_to_out(row)
 
 
 # ---------- effective-config ----------

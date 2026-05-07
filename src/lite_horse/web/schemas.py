@@ -488,3 +488,102 @@ class McpHealthRow(BaseModel):
 
 class McpHealthOut(BaseModel):
     rows: list[McpHealthRow]
+
+
+# ---------- sessions ----------
+
+
+class SessionMetaOut(BaseModel):
+    """One row from ``GET /v1/sessions[/{key}]`` — metadata only."""
+
+    id: str
+    source: str
+    model: str | None
+    started_at: float | None
+    ended_at: float | None
+    end_reason: str | None
+    message_count: int
+    tool_call_count: int
+    input_tokens: int
+    output_tokens: int
+    title: str | None
+
+
+class SessionMessageOut(BaseModel):
+    """One message row in the body of ``GET /v1/sessions/{key}/messages``.
+
+    Mirrors the dict shape :func:`MessageRepo.get_messages` returns. Tool
+    plumbing fields stay optional so non-tool turns remain compact.
+    """
+
+    role: str
+    content: str | None = None
+    tool_call_id: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
+    name: str | None = None
+
+
+class SessionMessagesOut(BaseModel):
+    messages: list[SessionMessageOut]
+
+
+class SessionForkIn(BaseModel):
+    new_key: str = Field(min_length=1, max_length=200)
+
+
+class SessionForkOut(BaseModel):
+    src_key: str
+    new_key: str
+    copied: int
+
+
+class SessionCompactOut(BaseModel):
+    entries_added: int
+    skipped: int
+
+
+class SessionSearchHitOut(BaseModel):
+    id: int
+    session_id: str
+    role: str
+    timestamp: float
+    snippet: str
+    source: str
+
+
+class SessionSearchOut(BaseModel):
+    hits: list[SessionSearchHitOut]
+
+
+class SessionExportOut(BaseModel):
+    url: str
+    expires_in: int
+
+
+# ---------- skill proposals ----------
+
+
+class SkillProposalOut(BaseModel):
+    id: str
+    skill_slug: str
+    base_version: int | None
+    body: str
+    fitness: dict[str, Any] | None
+    status: Literal["pending", "approved", "rejected", "superseded"]
+    created_at: datetime
+    decided_at: datetime | None
+
+
+# ---------- BYO keys / GitHub OAuth ----------
+
+
+class GithubOAuthCallbackIn(BaseModel):
+    """Body for ``POST /v1/users/me/byo-keys/github/oauth/callback``."""
+
+    code: str = Field(min_length=1)
+    state: str | None = None
+
+
+class GithubOAuthCallbackOut(BaseModel):
+    has_access_token: bool
+    expires_at: int | None = None

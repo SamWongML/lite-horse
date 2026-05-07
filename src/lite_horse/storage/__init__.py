@@ -96,6 +96,33 @@ def reset_local_message_queue_for_tests() -> None:
     _LOCAL_QUEUE_SINGLETON = None
 
 
+def make_blob_store(kind: str = "exports") -> BlobStore:
+    """Return the env-appropriate :class:`BlobStore` impl for ``kind``.
+
+    `kind` is one of ``"exports"|"attachments"|"evolve"|"audit"``; each maps
+    to a different bucket name from `Settings`. `LITEHORSE_ENV=local` →
+    :class:`LocalBlobStore` rooted under ``~/.lite-horse/blob/<kind>/`` so
+    integration tests don't need MinIO.
+    """
+    from lite_horse.config import get_settings  # noqa: PLC0415
+
+    settings = get_settings()
+    bucket_attr = f"s3_bucket_{kind}"
+    bucket = getattr(settings, bucket_attr, None)
+    if not isinstance(bucket, str) or not bucket:
+        raise ValueError(f"unknown blob kind: {kind!r}")
+    if settings.env == "local":
+        from pathlib import Path  # noqa: PLC0415
+
+        from lite_horse.storage.blob_local import LocalBlobStore  # noqa: PLC0415
+
+        root = Path.home() / ".lite-horse" / "blob" / kind
+        return LocalBlobStore(root)
+    from lite_horse.storage.blob_s3 import S3BlobStore  # noqa: PLC0415
+
+    return S3BlobStore.from_settings(bucket)
+
+
 def make_session_lock(redis: Redis | None = None) -> SessionLock:
     """Return the env-appropriate :class:`SessionLock` impl.
 
@@ -130,6 +157,7 @@ __all__ = [
     "QueueMessage",
     "SecretsProvider",
     "SessionLock",
+    "make_blob_store",
     "make_kms",
     "make_message_queue",
     "make_secrets_provider",

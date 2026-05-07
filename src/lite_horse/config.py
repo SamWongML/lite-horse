@@ -179,6 +179,12 @@ class Settings(BaseSettings):
     # cloud envs; falls back to LITEHORSE_WEBHOOK_SECRET for local.
     webhook_secret_name: str = "litehorse/webhook-secret"
 
+    # GitHub OAuth App (Phase 37) — used by the callback route to swap a
+    # `code` for a token bundle that lands in users.byo_provider_key_ct.
+    github_oauth_client_id: str | None = None
+    github_oauth_client_secret: str | None = None
+    github_oauth_token_url: str = "https://github.com/login/oauth/access_token"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

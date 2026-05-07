@@ -38,6 +38,12 @@ from lite_horse.repositories.memory_repo import (
 )
 from lite_horse.repositories.message_repo import MessageRepo
 from lite_horse.repositories.opt_out_repo import VALID_ENTITIES, OptOutRepo
+from lite_horse.repositories.proposal_repo import (
+    ProposalAlreadyDecidedError,
+    ProposalNotFoundError,
+    ProposalRepo,
+    ProposalSkillSlugTakenError,
+)
 from lite_horse.repositories.session_repo import SessionRepo
 from lite_horse.repositories.skill_repo import SkillRepo
 from lite_horse.repositories.usage_repo import UsageRepo
@@ -69,6 +75,10 @@ __all__ = [
     "MemoryRepo",
     "MessageRepo",
     "OptOutRepo",
+    "ProposalAlreadyDecidedError",
+    "ProposalNotFoundError",
+    "ProposalRepo",
+    "ProposalSkillSlugTakenError",
     "ResolvedCommand",
     "ResolvedInstruction",
     "ResolvedMcpServer",
