@@ -192,19 +192,23 @@ def resolve_provider(
 
 
 def build_cloud_tenant_context(
-    *, user_id: str, eff: EffectiveConfig | None = None
+    *,
+    user_id: str,
+    agent_id: str | None = None,
+    eff: EffectiveConfig | None = None,
 ) -> TenantContext:
     """Construct a multi-tenant :class:`TenantContext` for one HTTP turn.
 
-    The cloud backends each open a short-lived ``db_session(user_id)``
-    transaction per call so the request connection isn't pinned for the
-    duration of the agent run. ``eff`` (when provided) lets the
-    :class:`SkillCloudBackend` short-circuit ``list_resolved`` from the
-    already-resolved config rather than re-querying.
+    The cloud backends each open a short-lived ``db_session(user_id,
+    agent_id)`` transaction per call so the request connection isn't
+    pinned for the duration of the agent run. ``eff`` (when provided)
+    lets the :class:`SkillCloudBackend` short-circuit ``list_resolved``
+    from the already-resolved config rather than re-querying. Phase 41
+    threads ``agent_id`` so RLS narrows tenant-scoped reads to one agent.
     """
     return TenantContext(
         user_id=user_id,
-        agent_id=None,
+        agent_id=agent_id,
         memory=MemoryCloudBackend(user_id=user_id),
         skill=SkillCloudBackend(user_id=user_id, effective=eff),
         cron=CronCloudBackend(user_id=user_id),

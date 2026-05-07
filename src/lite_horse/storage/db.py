@@ -83,12 +83,20 @@ def reset_engine_for_tests() -> None:
 
 
 @asynccontextmanager
-async def db_session(user_id: str | None) -> AsyncIterator[AsyncSession]:
-    """Open a transaction, set `app.user_id` GUC, yield the session.
+async def db_session(
+    user_id: str | None, agent_id: str | None = None
+) -> AsyncIterator[AsyncSession]:
+    """Open a transaction, set tenant GUCs, yield the session.
 
-    Pass `user_id=None` only for genuinely tenant-less work (admin
+    Pass ``user_id=None`` only for genuinely tenant-less work (admin
     bootstrap, migrations). RLS policies use
-    `current_setting('app.user_id', true)` and treat NULL as "no tenant".
+    ``current_setting('app.user_id', true)`` and treat NULL / "" as
+    "no tenant".
+
+    Phase 41 added ``agent_id`` as the second tenant axis. When set, the
+    ``app.agent_id`` GUC narrows RLS-extended tables (user_documents,
+    sessions, skill_proposals, …) to that agent. The empty-string default
+    keeps cross-agent admin queries (curator, GDPR delete) working.
     """
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
@@ -98,6 +106,10 @@ async def db_session(user_id: str | None) -> AsyncIterator[AsyncSession]:
                     text("SELECT set_config('app.user_id', :uid, true)"),
                     {"uid": str(user_id)},
                 )
+            await session.execute(
+                text("SELECT set_config('app.agent_id', :aid, true)"),
+                {"aid": "" if agent_id is None else str(agent_id)},
+            )
             yield session
 
 
@@ -112,6 +124,17 @@ async def get_session_user_id(session: AsyncSession) -> str | None:
     """Read the `app.user_id` GUC from the current transaction (or None)."""
     result = await session.execute(
         text("SELECT current_setting('app.user_id', true)")
+    )
+    raw = result.scalar_one()
+    if raw is None or raw == "":
+        return None
+    return str(raw)
+
+
+async def get_session_agent_id(session: AsyncSession) -> str | None:
+    """Read the `app.agent_id` GUC from the current transaction (or None)."""
+    result = await session.execute(
+        text("SELECT current_setting('app.agent_id', true)")
     )
     raw = result.scalar_one()
     if raw is None or raw == "":

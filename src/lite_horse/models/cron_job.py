@@ -35,6 +35,11 @@ class CronJob(Base):
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agents.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     slug: Mapped[str] = mapped_column(String, nullable=False)
     cron_expr: Mapped[str] = mapped_column(String, nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)

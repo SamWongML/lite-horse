@@ -33,21 +33,29 @@ def _ymd(now: datetime | None = None) -> str:
     return moment.strftime("%Y%m%d")
 
 
-def _counter_key(user_id: str, ymd: str) -> str:
+def _counter_key(user_id: str, ymd: str, agent_id: str | None = None) -> str:
+    if agent_id:
+        return f"{_PREFIX}{user_id}:{agent_id}:{ymd}"
     return f"{_PREFIX}{user_id}:{ymd}"
 
 
-def _alert_key(user_id: str, ymd: str) -> str:
+def _alert_key(user_id: str, ymd: str, agent_id: str | None = None) -> str:
+    if agent_id:
+        return f"{_ALERT_PREFIX}{user_id}:{agent_id}:{ymd}"
     return f"{_ALERT_PREFIX}{user_id}:{ymd}"
 
 
 async def get_spent_micro(
-    redis: Redis | None, *, user_id: str, now: datetime | None = None
+    redis: Redis | None,
+    *,
+    user_id: str,
+    agent_id: str | None = None,
+    now: datetime | None = None,
 ) -> int:
-    """Return the user's micro-USD spend so far today (UTC), 0 on miss."""
+    """Return the (user, agent) micro-USD spend so far today (UTC), 0 on miss."""
     if redis is None:
         return 0
-    raw = await redis.get(_counter_key(user_id, _ymd(now)))
+    raw = await redis.get(_counter_key(user_id, _ymd(now), agent_id))
     if raw is None:
         return 0
     try:
@@ -60,17 +68,20 @@ async def check_budget(
     redis: Redis | None,
     *,
     user_id: str,
+    agent_id: str | None = None,
     budget_micro: int | None,
     now: datetime | None = None,
 ) -> bool:
-    """Return True if the user is still under their daily cap.
+    """Return True if the (user, agent) is still under its daily cap.
 
     ``budget_micro=None`` (no override) is treated as "no budget" and
     always returns True. Tests can pass ``redis=None`` to short-circuit.
     """
     if redis is None or budget_micro is None or budget_micro <= 0:
         return True
-    spent = await get_spent_micro(redis, user_id=user_id, now=now)
+    spent = await get_spent_micro(
+        redis, user_id=user_id, agent_id=agent_id, now=now
+    )
     return spent < budget_micro
 
 
@@ -78,6 +89,7 @@ async def record_cost(
     redis: Redis | None,
     *,
     user_id: str,
+    agent_id: str | None = None,
     cost_micro: int,
     budget_micro: int | None = None,
     now: datetime | None = None,
@@ -86,12 +98,12 @@ async def record_cost(
 
     When ``budget_micro`` is set and this write is the first to cross
     80% of the cap, emit a ``cost_budget_alert`` metric exactly once
-    per user-day.
+    per (user, agent)-day.
     """
     if redis is None or cost_micro <= 0:
         return 0
     ymd = _ymd(now)
-    key = _counter_key(user_id, ymd)
+    key = _counter_key(user_id, ymd, agent_id)
     pipe = redis.pipeline()
     pipe.incrby(key, int(cost_micro))
     pipe.expire(key, _TTL_SECONDS)
@@ -102,7 +114,10 @@ async def record_cost(
         previous = total - int(cost_micro)
         if previous < threshold <= total:
             already = await redis.set(
-                _alert_key(user_id, ymd), "1", ex=_TTL_SECONDS, nx=True
+                _alert_key(user_id, ymd, agent_id),
+                "1",
+                ex=_TTL_SECONDS,
+                nx=True,
             )
             if already:
                 emit_metric(

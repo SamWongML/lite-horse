@@ -32,6 +32,7 @@ from lite_horse.storage.redis_client import make_redis_client
 from lite_horse.web.effective_invalidate import run_invalidation_subscriber
 from lite_horse.web.permissions import PermissionBroker
 from lite_horse.web.routes.admin import router as admin_router
+from lite_horse.web.routes.agents import router as agents_router
 from lite_horse.web.routes.debug import router as debug_router
 from lite_horse.web.routes.ops import router as ops_router
 from lite_horse.web.routes.turns import router as turns_router
@@ -74,6 +75,7 @@ def create_app() -> FastAPI:
     install_middleware(app)
     app.include_router(ops_router)
     app.include_router(user_config_router)
+    app.include_router(agents_router)
     app.include_router(admin_router)
     app.include_router(turns_router)
     if settings.env == "local":

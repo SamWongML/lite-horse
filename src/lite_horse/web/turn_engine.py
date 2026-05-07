@@ -41,6 +41,7 @@ from lite_horse.api import (
     _StreamCounters,
 )
 from lite_horse.core.permission import PermissionPolicy, get_policy
+from lite_horse.repositories.agent_repo import AgentRepo
 from lite_horse.repositories.byo_repo import ByoKeyStore
 from lite_horse.repositories.memory_repo import MemoryRepo
 from lite_horse.repositories.user_settings_repo import UserSettingsRepo
@@ -60,7 +61,7 @@ _PROVIDER_ENV_FALLBACK = {
 }
 
 
-async def run_turn_streaming_for_user(
+async def run_turn_streaming_for_user(  # noqa: PLR0912, PLR0915
     req: TurnRequest,
     *,
     mcp_pool: McpPool | None,
@@ -77,9 +78,23 @@ async def run_turn_streaming_for_user(
     """
     db, _ignored_global_agent, cfg = await _ensure_ready()
 
+    # Resolve which of the user's agents owns this turn. The agent_id GUC
+    # is then set for every subsequent ``db_session`` open so RLS narrows
+    # reads to that agent's slice. Resolution order: request body →
+    # users.default_agent_id (auto-created if missing) → escalate.
+    async with db_session(req.user_id) as bootstrap:
+        agent_repo = AgentRepo(bootstrap)
+        if req.agent_id is not None:
+            agent_row = await agent_repo.get(req.agent_id)
+            if agent_row is None or agent_row.archived_at is not None:
+                raise ValueError(f"agent {req.agent_id!r} not found")
+        else:
+            agent_row = await agent_repo.ensure_default()
+    resolved_agent_id = str(agent_row.id)
+
     # Tenant-scoped reads — close the session before running the agent so
     # the request connection isn't pinned for the duration of the turn.
-    async with db_session(req.user_id) as session:
+    async with db_session(req.user_id, resolved_agent_id) as session:
         eff = await get_or_compute_effective_config(
             session, redis=redis, user_id=req.user_id
         )
@@ -88,7 +103,14 @@ async def run_turn_streaming_for_user(
         user_md_text = await memory_repo.get("user.md")
         user_settings = await UserSettingsRepo(session).get()
 
-        chosen_model = req.model or user_settings.default_model
+        # Per-agent overrides shadow per-user defaults: persona / model /
+        # permission_mode are agent-scoped.
+        agent_default_model = agent_row.default_model
+        agent_permission_mode = agent_row.permission_mode
+
+        chosen_model = (
+            req.model or agent_default_model or user_settings.default_model
+        )
         provider, model_name = resolve_provider(
             default_model=chosen_model, fallback_model=cfg.model
         )
@@ -118,8 +140,11 @@ async def run_turn_streaming_for_user(
         mcp_servers = []
 
     policy = get_policy(req.session_key)
-    if policy is None and user_settings.permission_mode == "ro":
-        policy = PermissionPolicy(mode="ro")
+    if policy is None:
+        # Per-agent permission_mode shadows users.permission_mode.
+        effective_mode = agent_permission_mode or user_settings.permission_mode
+        if effective_mode == "ro":
+            policy = PermissionPolicy(mode="ro")
 
     agent = build_agent_for_user(
         eff=eff,
@@ -141,7 +166,9 @@ async def run_turn_streaming_for_user(
         user_id=req.user_id,
         model=model_name,
     )
-    tenant_ctx = build_cloud_tenant_context(user_id=req.user_id, eff=eff)
+    tenant_ctx = build_cloud_tenant_context(
+        user_id=req.user_id, agent_id=resolved_agent_id, eff=eff
+    )
     streaming = Runner.run_streamed(
         agent,
         req.text,

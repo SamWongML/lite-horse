@@ -73,6 +73,7 @@ def _alembic_command(args: list[str], db_url: str) -> None:
 
 def _expected_tables() -> set[str]:
     return {
+        "agents",
         "users",
         "skills",
         "instructions",

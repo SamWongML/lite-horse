@@ -54,6 +54,22 @@ class BaseRepo:
             )
         return str(raw)
 
+    async def current_agent_id(self) -> str | None:
+        """Return the `app.agent_id` GUC, or ``None`` if unset.
+
+        Phase 41: not all callers run inside an agent scope (admin
+        queries, curator). An unset / empty GUC simply means "no agent
+        narrowing" — distinct from an unset ``app.user_id`` which is a
+        configuration error.
+        """
+        result = await self.session.execute(
+            text("SELECT current_setting('app.agent_id', true)")
+        )
+        raw = result.scalar_one()
+        if raw is None or raw == "":
+            return None
+        return str(raw)
+
 
 def audited(
     action: str,

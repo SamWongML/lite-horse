@@ -24,8 +24,10 @@ WINDOW_SECONDS = 60
 _PREFIX = "rate:turn:"
 
 
-def _key(user_id: str, *, now: float) -> str:
+def _key(user_id: str, *, agent_id: str | None, now: float) -> str:
     bucket = int(now // WINDOW_SECONDS)
+    if agent_id:
+        return f"{_PREFIX}{user_id}:{agent_id}:{bucket}"
     return f"{_PREFIX}{user_id}:{bucket}"
 
 
@@ -33,6 +35,7 @@ async def check_and_consume(
     redis: Redis | None,
     *,
     user_id: str,
+    agent_id: str | None = None,
     limit_per_min: int | None = None,
     now: float | None = None,
 ) -> bool:
@@ -42,6 +45,11 @@ async def check_and_consume(
     a non-positive override disables the limit (unlimited tier). Without
     Redis (tests / local dev with disabled cache) the call is a no-op
     success.
+
+    Phase 41: when ``agent_id`` is supplied the bucket key becomes
+    ``rate:turn:{user_id}:{agent_id}:{epoch_min}`` so per-agent caps are
+    independent. Omitting ``agent_id`` keeps the v0.4 user-only key for
+    legacy callers.
     """
     if redis is None:
         return True
@@ -49,7 +57,7 @@ async def check_and_consume(
     if cap <= 0:
         return True
     moment = time.time() if now is None else now
-    key = _key(user_id, now=moment)
+    key = _key(user_id, agent_id=agent_id, now=moment)
     pipe = redis.pipeline()
     pipe.incr(key)
     pipe.expire(key, WINDOW_SECONDS * 2)

@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from lite_horse.repositories.agent_repo import AgentRepo
 from lite_horse.repositories.usage_repo import UsageRepo
 from lite_horse.repositories.user_settings_repo import UserSettings, UserSettingsRepo
 from lite_horse.storage.db import db_session
@@ -63,6 +65,8 @@ class TurnIn(BaseModel):
     attachments: list[dict[str, Any]] | None = None
     command: str | None = None
     model: str | None = None
+    # Phase 41: optional override; falls back to users.default_agent_id.
+    agent_id: str | None = None
 
 
 class TurnOut(BaseModel):
@@ -166,6 +170,57 @@ def _session_lock_key(user_id: str, session_key: str) -> str:
     return f"{user_id}:{session_key}"
 
 
+@dataclass
+class _AgentLimits:
+    """Resolved per-agent caps blended with the per-user fallbacks."""
+
+    agent_id: str | None
+    rate_limit_per_min: int | None
+    cost_budget_usd_micro: int | None
+    user_settings: UserSettings
+
+
+async def _resolve_agent_limits(
+    *, user_id: str, requested_agent_id: str | None
+) -> _AgentLimits | None:
+    """Resolve which agent owns this turn + the rate / cost caps.
+
+    Per-agent overrides shadow per-user defaults. Returns ``None`` if the
+    DB is unreachable (test paths that skip auth + DB plumbing).
+    """
+    try:
+        async with db_session(user_id) as session:
+            user_settings = await UserSettingsRepo(session).get()
+            agent_repo = AgentRepo(session)
+            if requested_agent_id is not None:
+                agent_row = await agent_repo.get(requested_agent_id)
+                if agent_row is None or agent_row.archived_at is not None:
+                    raise http_error(
+                        ErrorKind.NOT_FOUND,
+                        f"agent {requested_agent_id!r} not found",
+                    )
+            else:
+                agent_row = await agent_repo.ensure_default()
+            return _AgentLimits(
+                agent_id=str(agent_row.id),
+                rate_limit_per_min=(
+                    agent_row.rate_limit_per_min
+                    if agent_row.rate_limit_per_min is not None
+                    else user_settings.rate_limit_per_min
+                ),
+                cost_budget_usd_micro=(
+                    agent_row.cost_budget_usd_micro
+                    if agent_row.cost_budget_usd_micro is not None
+                    else user_settings.cost_budget_usd_micro
+                ),
+                user_settings=user_settings,
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        return None
+
+
 async def _record_usage(
     *, user_id: str, session_key: str, usage: TurnUsage
 ) -> None:
@@ -200,52 +255,61 @@ async def _load_user_settings(user_id: str) -> UserSettings:
 
 
 async def _enforce_preflight_limits(
-    *, redis: Redis | None, user_id: str
-) -> UserSettings | None:
+    *,
+    redis: Redis | None,
+    user_id: str,
+    requested_agent_id: str | None,
+) -> _AgentLimits | None:
     """Run rate-limit + cost-budget checks before the agent runs.
 
-    Returns the loaded :class:`UserSettings` so the post-turn step can
-    record cost against the same per-user budget without re-querying.
-    Returns ``None`` if no DB is reachable (test paths that override
-    ``get_redis`` and skip ``app.user_id`` plumbing).
+    Returns the resolved :class:`_AgentLimits` so the post-turn step can
+    record cost against the same per-(user, agent) budget without
+    re-querying. Returns ``None`` if no DB is reachable (test paths that
+    override ``get_redis`` and skip ``app.user_id`` plumbing).
     """
     if redis is None:
         return None
-    try:
-        settings = await _load_user_settings(user_id)
-    except Exception:
+    limits = await _resolve_agent_limits(
+        user_id=user_id, requested_agent_id=requested_agent_id
+    )
+    if limits is None:
         return None
     allowed = await check_and_consume(
-        redis, user_id=user_id, limit_per_min=settings.rate_limit_per_min
+        redis,
+        user_id=user_id,
+        agent_id=limits.agent_id,
+        limit_per_min=limits.rate_limit_per_min,
     )
     if not allowed:
         raise http_error(
-            ErrorKind.RATE_LIMIT, "per-user turn rate limit exceeded"
+            ErrorKind.RATE_LIMIT, "per-agent turn rate limit exceeded"
         )
     within_budget = await check_budget(
-        redis, user_id=user_id, budget_micro=settings.cost_budget_usd_micro
+        redis,
+        user_id=user_id,
+        agent_id=limits.agent_id,
+        budget_micro=limits.cost_budget_usd_micro,
     )
     if not within_budget:
-        raise http_error(
-            ErrorKind.FORBIDDEN, "cost_budget_exceeded"
-        )
-    return settings
+        raise http_error(ErrorKind.FORBIDDEN, "cost_budget_exceeded")
+    return limits
 
 
 async def _record_cost_metered(
     *,
     redis: Redis | None,
     user_id: str,
-    settings: UserSettings | None,
+    limits: _AgentLimits | None,
     usage: TurnUsage,
 ) -> None:
-    if redis is None or settings is None or usage.cost_usd_micro <= 0:
+    if redis is None or limits is None or usage.cost_usd_micro <= 0:
         return
     await record_cost(
         redis,
         user_id=user_id,
+        agent_id=limits.agent_id,
         cost_micro=usage.cost_usd_micro,
-        budget_micro=settings.cost_budget_usd_micro,
+        budget_micro=limits.cost_budget_usd_micro,
     )
 
 
@@ -277,8 +341,10 @@ async def post_turn(
     if cached is not None:
         return TurnOut(**cached)
 
-    user_settings = await _enforce_preflight_limits(
-        redis=redis, user_id=ctx.user_id
+    agent_limits = await _enforce_preflight_limits(
+        redis=redis,
+        user_id=ctx.user_id,
+        requested_agent_id=body.agent_id,
     )
 
     lock_cm = await _maybe_acquire_lock(
@@ -294,6 +360,11 @@ async def post_turn(
                 attachments=body.attachments,
                 command=body.command,
                 model=body.model,
+                agent_id=(
+                    agent_limits.agent_id
+                    if agent_limits is not None
+                    else body.agent_id
+                ),
             )
             handle = registry.new()
             try:
@@ -318,7 +389,7 @@ async def post_turn(
     await _record_cost_metered(
         redis=redis,
         user_id=ctx.user_id,
-        settings=user_settings,
+        limits=agent_limits,
         usage=handle.usage,
     )
 
@@ -363,8 +434,10 @@ async def post_turn_stream(
 
         return StreamingResponse(_replay(), media_type="text/event-stream")
 
-    user_settings = await _enforce_preflight_limits(
-        redis=redis, user_id=ctx.user_id
+    agent_limits = await _enforce_preflight_limits(
+        redis=redis,
+        user_id=ctx.user_id,
+        requested_agent_id=body.agent_id,
     )
 
     handle = registry.new()
@@ -376,6 +449,11 @@ async def post_turn_stream(
         attachments=body.attachments,
         command=body.command,
         model=body.model,
+        agent_id=(
+            agent_limits.agent_id
+            if agent_limits is not None
+            else body.agent_id
+        ),
     )
 
     async def _outer() -> AsyncIterator[bytes]:
@@ -415,7 +493,7 @@ async def post_turn_stream(
             await _record_cost_metered(
                 redis=redis,
                 user_id=ctx.user_id,
-                settings=user_settings,
+                limits=agent_limits,
                 usage=handle.usage,
             )
 
