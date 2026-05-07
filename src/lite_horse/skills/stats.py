@@ -1,18 +1,25 @@
 """Per-skill usage statistics sidecar (Phase 20).
 
-Each skill owns a ``.stats.json`` sidecar inside its skill directory. The file
-is touched on every successful ``skill_view`` (``record_view``) and on run end
-when the :class:`EvolutionHook` observes a viewed skill in the trajectory
-(``record_outcome``). The numbers feed two downstream consumers:
+Phase 40 made the API path-based: callers pass the skill directory
+(``Path``) explicitly so this module stays free of any ``skills_root()``
+or ``litehorse_home()`` access. The local skill backend resolves the
+path; the cloud backend skips this module entirely (Phase 44 will lift
+counters into the ``skills`` table).
 
-- ``instructions._skills_index`` appends a *fragile* decay tag when a skill's
-  success ratio drops below 50 % with at least 3 recorded errors.
+Each skill owns a ``.stats.json`` sidecar inside its skill directory. The
+file is touched on every successful ``skill_view`` (``record_view``) and
+on run end when the :class:`EvolutionHook` observes a viewed skill in the
+trajectory (``record_outcome``). The numbers feed two downstream
+consumers:
+
+- ``instructions._skills_index`` appends a *fragile* decay tag when a
+  skill's success ratio drops below 50 % with at least 3 recorded errors.
 - Phase 24's offline evolve pipeline uses the counts to prioritise which
   skills to mutate.
 
-Writes are guarded by an ``fcntl`` advisory lock so the hook and the view tool
-cannot clobber each other. We target POSIX (linux for the embed); ``fcntl`` is
-unavailable on Windows and the lock becomes a no-op there.
+Writes are guarded by an ``fcntl`` advisory lock so the hook and the view
+tool cannot clobber each other. We target POSIX (linux for the embed);
+``fcntl`` is unavailable on Windows and the lock becomes a no-op there.
 """
 from __future__ import annotations
 
@@ -22,9 +29,6 @@ import os
 import time
 from pathlib import Path
 from typing import Any
-
-from lite_horse.skills._slug import _SLUG_RE
-from lite_horse.skills.source import skills_root
 
 SCHEMA_VERSION = 1
 _STATS_FILENAME = ".stats.json"
@@ -49,14 +53,7 @@ def _default_stats() -> dict[str, Any]:
     }
 
 
-def _sidecar_path(name: str) -> Path | None:
-    """Resolve the sidecar path, rejecting bad slugs and skill escapes."""
-    if not isinstance(name, str) or not _SLUG_RE.match(name):
-        return None
-    root = skills_root().resolve()
-    skill_dir = (root / name).resolve()
-    if not skill_dir.is_relative_to(root):
-        return None
+def _sidecar(skill_dir: Path) -> Path:
     return skill_dir / _STATS_FILENAME
 
 
@@ -113,25 +110,23 @@ def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime())
 
 
-def read(name: str) -> dict[str, Any] | None:
-    """Return the full stats dict for ``name``, or ``None`` if unknown/bad."""
-    path = _sidecar_path(name)
-    if path is None or not path.exists():
+def read(skill_dir: Path) -> dict[str, Any] | None:
+    """Return the full stats dict for ``skill_dir``, or ``None`` if absent."""
+    sidecar = _sidecar(skill_dir)
+    if not sidecar.exists():
         return None
     try:
-        with _locked(path) as fd:
+        with _locked(sidecar) as fd:
             return _read_fd(fd)
     except OSError:
         return None
 
 
-def record_view(name: str) -> None:
+def record_view(skill_dir: Path) -> None:
     """Increment ``usage_count`` and refresh ``last_used_at``. Swallow errors."""
-    path = _sidecar_path(name)
-    if path is None:
-        return
+    sidecar = _sidecar(skill_dir)
     try:
-        with _locked(path) as fd:
+        with _locked(sidecar) as fd:
             data = _read_fd(fd)
             data["usage_count"] = int(data.get("usage_count", 0)) + 1
             data["last_used_at"] = _now_iso()
@@ -140,13 +135,13 @@ def record_view(name: str) -> None:
         return
 
 
-def record_outcome(name: str, *, ok: bool, error_summary: str | None = None) -> None:
+def record_outcome(
+    skill_dir: Path, *, ok: bool, error_summary: str | None = None
+) -> None:
     """Update success/error counters based on run outcome. Swallow errors."""
-    path = _sidecar_path(name)
-    if path is None:
-        return
+    sidecar = _sidecar(skill_dir)
     try:
-        with _locked(path) as fd:
+        with _locked(sidecar) as fd:
             data = _read_fd(fd)
             if ok:
                 data["success_count"] = int(data.get("success_count", 0)) + 1
@@ -161,13 +156,11 @@ def record_outcome(name: str, *, ok: bool, error_summary: str | None = None) -> 
         return
 
 
-def mark_optimized(name: str) -> None:
+def mark_optimized(skill_dir: Path) -> None:
     """Stamp ``last_optimized_at`` (used by the Phase 24 approval flow)."""
-    path = _sidecar_path(name)
-    if path is None:
-        return
+    sidecar = _sidecar(skill_dir)
     try:
-        with _locked(path) as fd:
+        with _locked(sidecar) as fd:
             data = _read_fd(fd)
             data["last_optimized_at"] = _now_iso()
             _write_fd(fd, data)

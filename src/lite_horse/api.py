@@ -24,6 +24,7 @@ from typing import Any
 from agents import Agent, Runner, ToolCallItem, ToolCallOutputItem
 from agents.mcp import MCPServer
 
+from lite_horse.agent.backends import build_local_tenant_context
 from lite_horse.agent.errors import ErrorKind, classify
 from lite_horse.agent.factory import build_agent, build_mcp_servers
 from lite_horse.config import Config, load_config
@@ -192,6 +193,7 @@ async def run_turn(
                     user_text,
                     session=session,  # type: ignore[arg-type]
                     max_turns=turns,
+                    context=build_local_tenant_context(),
                 )
                 break
             except Exception as exc:
@@ -313,6 +315,7 @@ async def run_turn_streaming(
                 user_text,
                 session=session,  # type: ignore[arg-type]
                 max_turns=turns,
+                context=build_local_tenant_context(),
             )
         except Exception as exc:
             classified = classify(exc)

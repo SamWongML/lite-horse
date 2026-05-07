@@ -228,7 +228,7 @@ def approve_proposal(path_str: str, *, pytest_runner: Any = None) -> dict[str, A
         }
 
     live.write_text(candidate, encoding="utf-8")
-    skills_stats.mark_optimized(slug)
+    skills_stats.mark_optimized(live.parent)
     sidecar = md.with_suffix(".json")
     md.unlink()
     if sidecar.is_file():

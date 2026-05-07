@@ -15,6 +15,10 @@ On the WARNING-tier transition the hook also fires a :class:`Consolidator`
 side-agent once per run to distill durable facts out of the trajectory into
 MEMORY.md before truncation. Consolidation failures are swallowed — it must
 never break the user's run (same rule as :class:`EvolutionHook`).
+
+Phase 40: writes flow through ``ctx.context.memory`` (a
+:class:`MemoryBackend`) so consolidation stamps land in the right tenant's
+store regardless of which ECS task is hosting the agent.
 """
 from __future__ import annotations
 
@@ -23,6 +27,11 @@ from typing import Any
 
 from agents import Agent, AgentHooks, RunContextWrapper, Tool
 
+from lite_horse.agent.backends import (
+    MemoryFull,
+    UnsafeMemoryContent,
+    resolve_tenant,
+)
 from lite_horse.agent.consolidator import Consolidator
 from lite_horse.constants import (
     BUDGET_CAUTION_THRESHOLD,
@@ -30,7 +39,6 @@ from lite_horse.constants import (
     DEFAULT_MAX_TURNS,
     NUDGE_EVERY_N_TOOL_CALLS,
 )
-from lite_horse.memory.store import MemoryFull, MemoryStore, UnsafeMemoryContent
 
 _TIER_CAUTION = "caution"
 _TIER_WARNING = "warning"
@@ -139,7 +147,7 @@ class BudgetHook(AgentHooks[Any]):
         return False
 
     async def _consolidate(self, context: RunContextWrapper[Any]) -> None:
-        """Run the distiller once; write surviving entries straight to MEMORY.md.
+        """Run the distiller once; write surviving entries through the backend.
 
         Every failure path is swallowed — consolidation is best-effort and
         must not break the user's run.
@@ -154,13 +162,10 @@ class BudgetHook(AgentHooks[Any]):
             return
         if not entries:
             return
-        try:
-            store = MemoryStore.for_memory()
-        except Exception:
-            return
+        backend = resolve_tenant(context).memory
         for entry in entries:
             try:
-                store.add(entry)
+                await backend.add("memory", entry)
             except (MemoryFull, UnsafeMemoryContent, ValueError):
                 continue
             except Exception:

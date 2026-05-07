@@ -1,4 +1,11 @@
-"""``memory`` @function_tool — agent-facing add/replace/remove for MEMORY.md and USER.md."""
+"""``memory`` @function_tool — agent-facing add/replace/remove for MEMORY.md and USER.md.
+
+Phase 40 routes every read/write through the per-turn
+:class:`TenantContext.memory` backend on ``RunContextWrapper.context``.
+Cloud calls land in Postgres via ``MemoryRepo``; CLI calls land on the
+local filesystem via :class:`MemoryStore` — both behind the same
+``MemoryBackend`` Protocol so the JSON wire shape is identical.
+"""
 from __future__ import annotations
 
 import json
@@ -6,7 +13,11 @@ from typing import Any, Literal
 
 from agents import RunContextWrapper, function_tool
 
-from lite_horse.memory.store import MemoryFull, MemoryStore, UnsafeMemoryContent
+from lite_horse.agent.backends import (
+    MemoryFull,
+    UnsafeMemoryContent,
+    resolve_tenant,
+)
 
 
 @function_tool(
@@ -27,38 +38,51 @@ async def memory_tool(  # noqa: PLR0911 — branch-per-action keeps the JSON sha
     content: str | None = None,
     old_text: str | None = None,
 ) -> str:
-    del ctx  # unused; the tool reads its target store from disk on each call
-    store = MemoryStore.for_memory() if target == "memory" else MemoryStore.for_user()
+    backend = resolve_tenant(ctx).memory
+    kind: Literal["memory", "user"] = (
+        "memory" if target == "memory" else "user"
+    )
     try:
         if action == "add":
             if not content:
-                return json.dumps({"success": False, "error": "content is required for add"})
-            store.add(content)
+                return json.dumps(
+                    {"success": False, "error": "content is required for add"}
+                )
+            await backend.add(kind, content)
+            total = await backend.total_chars(kind)
             return json.dumps(
-                {"success": True, "usage": f"{store.total_chars()}/{store.char_limit}"}
+                {"success": True, "usage": f"{total}/{backend.char_limit(kind)}"}
             )
         if action == "replace":
             if not (old_text and content):
                 return json.dumps(
-                    {"success": False, "error": "old_text and content required for replace"}
+                    {
+                        "success": False,
+                        "error": "old_text and content required for replace",
+                    }
                 )
-            store.replace(old_text, content)
+            await backend.replace(kind, old_text, content)
+            total = await backend.total_chars(kind)
             return json.dumps(
-                {"success": True, "usage": f"{store.total_chars()}/{store.char_limit}"}
+                {"success": True, "usage": f"{total}/{backend.char_limit(kind)}"}
             )
         if action == "remove":
             if not old_text:
-                return json.dumps({"success": False, "error": "old_text is required for remove"})
-            store.remove(old_text)
+                return json.dumps(
+                    {"success": False, "error": "old_text is required for remove"}
+                )
+            await backend.remove(kind, old_text)
+            total = await backend.total_chars(kind)
             return json.dumps(
-                {"success": True, "usage": f"{store.total_chars()}/{store.char_limit}"}
+                {"success": True, "usage": f"{total}/{backend.char_limit(kind)}"}
             )
     except MemoryFull as e:
+        entries = await backend.entries(kind)
         return json.dumps(
             {
                 "success": False,
                 "error": str(e),
-                "current_entries": store.entries(),
+                "current_entries": entries,
                 "usage": f"{e.current}/{e.limit}",
             }
         )

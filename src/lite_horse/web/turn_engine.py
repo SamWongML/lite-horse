@@ -28,6 +28,7 @@ from agents import Runner
 
 from lite_horse.agent.factory import (
     build_agent_for_user,
+    build_cloud_tenant_context,
     resolve_provider,
 )
 from lite_horse.agent.mcp_pool import McpPool
@@ -140,11 +141,13 @@ async def run_turn_streaming_for_user(
         user_id=req.user_id,
         model=model_name,
     )
+    tenant_ctx = build_cloud_tenant_context(user_id=req.user_id, eff=eff)
     streaming = Runner.run_streamed(
         agent,
         req.text,
         session=sdk_session,  # type: ignore[arg-type]
         max_turns=cfg.agent.max_turns,
+        context=tenant_ctx,
     )
 
     counters = _StreamCounters()

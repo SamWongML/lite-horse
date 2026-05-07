@@ -11,26 +11,33 @@ change, and cache matching keys on the prefix.
 The SDK evaluates ``instructions`` once per ``Runner.run``, so each of these
 reads is a frozen snapshot for the duration of the run. Writes that happen
 during the run land on disk but won't enter the prompt until the next run.
+
+Phase 40: memory reads route through ``ctx.context.memory`` (a
+:class:`MemoryBackend`) so cloud calls land in Postgres and CLI calls hit
+the local FS — both via the same Protocol seam. The CLI skill index +
+SOUL / AGENTS.md reads come through opt-in helpers from
+:mod:`lite_horse.skills.activation` and :mod:`lite_horse.local_prompt`,
+keeping this module free of ``litehorse_home`` / ``MemoryStore`` /
+``skills_root`` imports per the Phase 40 lint contract.
 """
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from agents import Agent, RunContextWrapper
 
-from lite_horse.constants import litehorse_home
+from lite_horse.agent.backends import MemoryBackend, resolve_tenant
+from lite_horse.constants import ENTRY_DELIMITER
 from lite_horse.effective import EffectiveConfig
-from lite_horse.memory.store import MemoryStore
-from lite_horse.skills import stats as skill_stats
-from lite_horse.skills.activation import filter_for_turn, filter_resolved_for_turn
+from lite_horse.local_prompt import LocalPromptExtras, load_local_prompt_extras
+from lite_horse.skills.activation import (
+    filter_resolved_for_turn,
+    render_local_skills_index_block,
+)
 
 _SKILLS_INDEX_HEADER = "AVAILABLE SKILLS (load with skill_view)"
-_FRAGILE_MIN_ERRORS = 3
-_FRAGILE_MAX_SUCCESS_RATIO = 0.5
-_FRAGILE_TAG = " (fragile — see stats)"
 _USER_REQUEST_MAX_CHARS = 500
 
 _TOOL_GUIDANCE = (
@@ -46,54 +53,54 @@ _TOOL_GUIDANCE = (
 )
 
 
-def _read_optional(path: Path, max_chars: int = 8_000) -> str:
+InstructionsFn = Callable[
+    [RunContextWrapper[Any], Agent[Any]], Awaitable[str]
+]
+
+
+def _default_extras_loader() -> LocalPromptExtras:
+    return load_local_prompt_extras()
+
+
+__all__ = [
+    "InstructionsFn",
+    "LocalPromptExtras",
+    "make_instructions",
+    "make_instructions_for_user",
+]
+
+
+async def _entries_to_block(
+    backend: MemoryBackend, kind: Any, label: str
+) -> str:
+    """Render a memory document as the v0.3 system-prompt block."""
     try:
-        return path.read_text(encoding="utf-8")[:max_chars].strip()
-    except (FileNotFoundError, OSError):
+        entries = await backend.entries(kind)
+    except Exception:
         return ""
-
-
-def _fragile_suffix(name: str) -> str:
-    data = skill_stats.read(name)
-    if not data:
+    if not entries:
         return ""
-    errors = int(data.get("error_count", 0) or 0)
-    successes = int(data.get("success_count", 0) or 0)
-    uses = int(data.get("usage_count", 0) or 0)
-    if errors < _FRAGILE_MIN_ERRORS or uses <= 0:
-        return ""
-    if successes / max(1, uses) >= _FRAGILE_MAX_SUCCESS_RATIO:
-        return ""
-    return _FRAGILE_TAG
+    chars = sum(len(e) for e in entries) + max(0, len(entries) - 1) * len(
+        ENTRY_DELIMITER
+    )
+    limit = backend.char_limit(kind)
+    pct = round(chars / limit * 100) if limit else 0
+    body = ENTRY_DELIMITER.join(entries)
+    rule = "═" * 46
+    return f"{rule}\n{label} [{pct}% — {chars}/{limit} chars]\n{rule}\n{body}"
 
 
 def _skills_index(user_text: str | None = None) -> str:
-    """Render a stable, alphabetised index of relevant skills for this turn.
-
-    Phase 21: ``user_text`` drives conditional activation. When None, the
-    filter returns every skill (fallback); otherwise the top-K most relevant
-    are selected and re-sorted alphabetically for prompt stability.
-    """
-    skills_dir = litehorse_home() / "skills"
-    entries = filter_for_turn(skills_dir=skills_dir, user_text=user_text)
-    if not entries:
-        return ""
-    lines: list[str] = []
-    for entry in sorted(entries, key=lambda e: e.name):
-        desc = entry.description or "(no description)"
-        suffix = _fragile_suffix(entry.name)
-        lines.append(f"- **{entry.name}**: {desc}{suffix}")
-    return f"{_SKILLS_INDEX_HEADER}\n" + "\n".join(lines)
+    """Sync local-FS skills index. Used by the CLI prompt path + tests."""
+    return render_local_skills_index_block(
+        user_text=user_text, header=_SKILLS_INDEX_HEADER
+    )
 
 
 def _extract_user_request(  # noqa: PLR0911 — branches are the shape
     ctx: RunContextWrapper[Any] | None,
 ) -> str | None:
-    """Best-effort scrape of the latest user message from ``ctx.turn_input``.
-
-    Mirrors :meth:`EvolutionHook._extract_user_request` — kept local so the
-    instructions module has no dependency on the evolution hook.
-    """
+    """Best-effort scrape of the latest user message from ``ctx.turn_input``."""
     if ctx is None:
         return None
     try:
@@ -121,35 +128,47 @@ def _extract_user_request(  # noqa: PLR0911 — branches are the shape
     return None
 
 
-InstructionsFn = Callable[[RunContextWrapper[Any], Agent[Any]], Awaitable[str]]
+def make_instructions(
+    *,
+    extras_loader: Callable[[], LocalPromptExtras] | None = None,
+) -> InstructionsFn:
+    """Return an async callable suitable for ``Agent(instructions=...)``.
 
-
-def make_instructions() -> InstructionsFn:
-    """Return an async callable suitable for ``Agent(instructions=...)``."""
+    ``extras_loader`` injects the CLI-only SOUL / AGENTS.md reads. When
+    ``None``, the loader from :mod:`lite_horse.local_prompt` is used so
+    legacy tests calling ``make_instructions()`` keep observing the
+    same prompt shape.
+    """
+    resolved_loader = extras_loader or _default_extras_loader
 
     async def _instructions(
         ctx: RunContextWrapper[Any], agent: Agent[Any]
     ) -> str:
         del agent
-        home = litehorse_home()
-        soul = _read_optional(home / "soul.md")
-        agents_md = _read_optional(home / "AGENTS.md", max_chars=4_000)
-        mem_block = MemoryStore.for_memory().render_block()
-        usr_block = MemoryStore.for_user().render_block()
+        tenant = resolve_tenant(ctx)
+        try:
+            extras = resolved_loader()
+        except Exception:
+            extras = LocalPromptExtras.empty()
+
+        mem_block = await _entries_to_block(tenant.memory, "memory", "MEMORY")
+        usr_block = await _entries_to_block(
+            tenant.memory, "user", "USER PROFILE"
+        )
         skills_index = _skills_index(_extract_user_request(ctx))
         now = datetime.now().astimezone().isoformat(timespec="seconds")
 
         parts: list[str] = []
-        if soul:
-            parts.append(soul)
+        if extras.soul:
+            parts.append(extras.soul)
         if mem_block:
             parts.append(mem_block)
         if usr_block:
             parts.append(usr_block)
         if skills_index:
             parts.append(skills_index)
-        if agents_md:
-            parts.append("PROJECT CONTEXT (AGENTS.md):\n" + agents_md)
+        if extras.agents_md:
+            parts.append("PROJECT CONTEXT (AGENTS.md):\n" + extras.agents_md)
         parts.append(_TOOL_GUIDANCE)
         parts.append(f"Current time: {now}")
         return "\n\n".join(parts)
@@ -176,11 +195,6 @@ def make_instructions_for_user(
     4. Skills index (activated subset).
     5. Tool guidance.
     6. Current time (last so cache-prefix bytes don't change per turn).
-
-    The skills index is the only block that varies with ``ctx`` (it
-    re-scores against the latest user message); everything else is
-    fixed at agent-build time so the OpenAI prompt cache hits cleanly
-    on subsequent turns of the same session.
     """
 
     instruction_blocks = [

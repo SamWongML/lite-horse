@@ -3,6 +3,13 @@
 Wires together the dynamic instructions, model settings, tool bundle, and the
 composite :class:`LiteHorseHooks` (budget + evolution). Used by the CLI,
 gateway, and cron entrypoints so everyone talks to the same agent shape.
+
+Phase 40 split tenant state out of the agent itself: the factory exposes
+:func:`build_local_tenant_context` (CLI / single-user) and
+:func:`build_cloud_tenant_context_for_user` (multi-tenant API). Callers
+pass the resulting :class:`TenantContext` through
+``Runner.run(..., context=tenant_ctx)`` so tools / hooks can pick the
+right backend at runtime via :func:`resolve_tenant`.
 """
 from __future__ import annotations
 
@@ -20,10 +27,17 @@ from agents.mcp import MCPServer, MCPServerStreamableHttp
 from agents.models.interface import Model
 from openai.types.shared import Reasoning
 
+from lite_horse.agent.backends import TenantContext, build_local_tenant_context
+from lite_horse.agent.backends.cron_cloud import CronCloudBackend
+from lite_horse.agent.backends.memory_cloud import MemoryCloudBackend
+from lite_horse.agent.backends.skill_cloud import SkillCloudBackend
 from lite_horse.agent.budget import BudgetHook
 from lite_horse.agent.consolidator import Consolidator
 from lite_horse.agent.evolution import EvolutionHook
-from lite_horse.agent.instructions import make_instructions, make_instructions_for_user
+from lite_horse.agent.instructions import (
+    make_instructions,
+    make_instructions_for_user,
+)
 from lite_horse.config import Config, load_config
 from lite_horse.core.permission import PermissionPolicy, filter_tools
 from lite_horse.cron.manage_tool import cron_manage
@@ -95,14 +109,12 @@ def build_agent(
     mcp_servers: list[MCPServer] | None = None,
     permission_policy: PermissionPolicy | None = None,
 ) -> Agent[Any]:
-    """Construct the main user-facing agent.
+    """Construct the main user-facing agent (CLI / single-user path).
 
-    ``config`` can be passed in by tests to skip the on-disk load.
-    ``mcp_servers`` is an already-constructed list whose lifecycle the caller
-    manages; when omitted, none are attached.
-    ``permission_policy`` (when provided) filters the tool bundle at build
-    time: under ``ro`` mode write tools are removed so the model cannot
-    invoke them at all.
+    Tools route writes through :class:`TenantContext` from
+    ``RunContextWrapper.context``. The CLI caller is expected to also
+    construct one via :func:`build_local_tenant_context` and pass it into
+    ``Runner.run(..., context=tenant_ctx)``.
     """
     cfg = config or load_config()
     tools: list[Tool] = [
@@ -179,6 +191,26 @@ def resolve_provider(
     return provider_for_model(model), model
 
 
+def build_cloud_tenant_context(
+    *, user_id: str, eff: EffectiveConfig | None = None
+) -> TenantContext:
+    """Construct a multi-tenant :class:`TenantContext` for one HTTP turn.
+
+    The cloud backends each open a short-lived ``db_session(user_id)``
+    transaction per call so the request connection isn't pinned for the
+    duration of the agent run. ``eff`` (when provided) lets the
+    :class:`SkillCloudBackend` short-circuit ``list_resolved`` from the
+    already-resolved config rather than re-querying.
+    """
+    return TenantContext(
+        user_id=user_id,
+        agent_id=None,
+        memory=MemoryCloudBackend(user_id=user_id),
+        skill=SkillCloudBackend(user_id=user_id, effective=eff),
+        cron=CronCloudBackend(user_id=user_id),
+    )
+
+
 def build_agent_for_user(
     *,
     eff: EffectiveConfig,
@@ -200,7 +232,10 @@ def build_agent_for_user(
     - fetching ``memory_text`` and ``user_md_text`` from ``MemoryRepo``,
     - decrypting the BYO provider key (``api_key``) for the chosen model,
     - constructing ``mcp_servers`` via :func:`build_mcp_servers_for_user`
-      and managing their connect/cleanup lifecycle.
+      and managing their connect/cleanup lifecycle,
+    - constructing the per-turn :class:`TenantContext` via
+      :func:`build_cloud_tenant_context` and passing it into
+      ``Runner.run_streamed(..., context=tenant_ctx)``.
 
     ``model_override`` lets the caller plumb ``users.default_model``
     through without re-reading ``Config``. ``github_token`` (when set)
@@ -241,3 +276,15 @@ def build_agent_for_user(
         mcp_servers=mcp_servers or [],
         hooks=LiteHorseHooks(max_turns=cfg.agent.max_turns, model=model_name),
     )
+
+
+__all__ = [
+    "LiteHorseHooks",
+    "build_agent",
+    "build_agent_for_user",
+    "build_cloud_tenant_context",
+    "build_local_tenant_context",
+    "build_mcp_servers",
+    "build_mcp_servers_for_user",
+    "resolve_provider",
+]

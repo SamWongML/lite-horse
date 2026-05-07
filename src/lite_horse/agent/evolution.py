@@ -15,20 +15,25 @@ Two side-agents, one hook:
 Only one of the two fires per run. Failure with a viewed skill takes
 precedence over the creation path — distilling a new skill from a known-bad
 trajectory is the wrong signal.
+
+Phase 40: skill reads + counter writes route through
+``ctx.context.skill`` (a :class:`SkillBackend`) so a side-agent firing on
+an ECS task always lands writes against the right tenant. The same
+:class:`TenantContext` is propagated into the distiller / refiner runs
+via ``Runner.run(..., context=tenant)`` so their tool calls see the same
+backends.
 """
 from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 from typing import Any
 
 from agents import Agent, AgentHooks, RunContextWrapper, Runner, Tool
 
+from lite_horse.agent.backends import resolve_tenant
 from lite_horse.constants import SKILL_CREATION_MIN_TOOL_CALLS
-from lite_horse.skills import stats as skill_stats
 from lite_horse.skills.manage_tool import skill_manage
-from lite_horse.skills.source import skills_root
 
 _DISTILLER_INSTRUCTIONS = (
     "You inspect a completed agent trajectory and decide whether the work "
@@ -121,15 +126,15 @@ class EvolutionHook(AgentHooks[Any]):
         agent: Agent[Any],
         output: Any,
     ) -> None:
-        del context, agent
+        del agent
         self._final_output = str(output)[:1000] if output else None
-        await self._record_viewed_outcomes()
+        await self._record_viewed_outcomes(context)
         if self._viewed_skills and self._error_summary is not None:
-            await self._maybe_refine_skill()
+            await self._maybe_refine_skill(context)
             return
         if self._tool_call_count < self.min_tool_calls:
             return
-        await self._maybe_create_skill()
+        await self._maybe_create_skill(context)
 
     def _track_view(self, result: str) -> None:
         try:
@@ -142,17 +147,22 @@ class EvolutionHook(AgentHooks[Any]):
         if isinstance(name, str) and name not in self._viewed_skills:
             self._viewed_skills.append(name)
 
-    async def _record_viewed_outcomes(self) -> None:
+    async def _record_viewed_outcomes(
+        self, context: RunContextWrapper[Any]
+    ) -> None:
         ok = self._error_summary is None
+        backend = resolve_tenant(context).skill
         for name in self._viewed_skills:
             try:
-                skill_stats.record_outcome(
+                await backend.record_outcome(
                     name, ok=ok, error_summary=self._error_summary
                 )
             except Exception:
                 continue
 
-    async def _maybe_create_skill(self) -> None:
+    async def _maybe_create_skill(
+        self, context: RunContextWrapper[Any]
+    ) -> None:
         decider = Agent(
             name="skill-distiller",
             model=self.model,
@@ -166,16 +176,25 @@ class EvolutionHook(AgentHooks[Any]):
                 "final_output_excerpt": self._final_output,
             }
         )
+        tenant = resolve_tenant(context)
         try:
-            await Runner.run(decider, prompt, max_turns=self.distiller_max_turns)
+            await Runner.run(
+                decider,
+                prompt,
+                max_turns=self.distiller_max_turns,
+                context=tenant,
+            )
         except Exception:
             # Evolution must never break the main run.
             pass
 
-    async def _maybe_refine_skill(self) -> None:
+    async def _maybe_refine_skill(
+        self, context: RunContextWrapper[Any]
+    ) -> None:
         """Refine the most recently viewed skill on a failed run."""
         target = self._viewed_skills[-1]
-        skill_md = _read_skill_md(target)
+        tenant = resolve_tenant(context)
+        skill_md = await tenant.skill.read_md(target)
         if not skill_md:
             return
         refiner = Agent(
@@ -194,7 +213,12 @@ class EvolutionHook(AgentHooks[Any]):
             }
         )
         try:
-            await Runner.run(refiner, prompt, max_turns=self.refiner_max_turns)
+            await Runner.run(
+                refiner,
+                prompt,
+                max_turns=self.refiner_max_turns,
+                context=tenant,
+            )
         except Exception:
             pass
 
@@ -236,11 +260,3 @@ def _first_error_marker(result: str) -> str | None:
             end = min(len(result), match.end() + 60)
             return result[start:end].strip()[:_ERROR_SUMMARY_LEN]
     return None
-
-
-def _read_skill_md(name: str) -> str | None:
-    path: Path = skills_root() / name / "SKILL.md"
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError:
-        return None
