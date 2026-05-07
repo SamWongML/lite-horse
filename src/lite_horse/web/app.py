@@ -35,6 +35,7 @@ from lite_horse.web.routes.admin import router as admin_router
 from lite_horse.web.routes.agents import router as agents_router
 from lite_horse.web.routes.debug import router as debug_router
 from lite_horse.web.routes.ops import router as ops_router
+from lite_horse.web.routes.sessions import router as sessions_router
 from lite_horse.web.routes.turns import router as turns_router
 from lite_horse.web.routes.user_config import router as user_config_router
 from lite_horse.web.turns import TurnRegistry
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(agents_router)
     app.include_router(admin_router)
     app.include_router(turns_router)
+    app.include_router(sessions_router)
     if settings.env == "local":
         app.include_router(debug_router)
     return app

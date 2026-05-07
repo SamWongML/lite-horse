@@ -13,7 +13,8 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lite_horse.storage import make_kms
+from lite_horse.storage import make_blob_store, make_kms
+from lite_horse.storage.blob import BlobStore
 from lite_horse.storage.db import db_session
 from lite_horse.storage.kms import Kms
 from lite_horse.storage.redis_client import Redis
@@ -70,3 +71,17 @@ def get_kms(request: Request) -> Kms:
         state.kms = make_kms()
     kms: Kms = state.kms
     return kms
+
+
+def get_blob_store_exports(request: Request) -> BlobStore:
+    """Return the app-scoped exports :class:`BlobStore`.
+
+    Stored on ``app.state.blob_exports`` so tests can override the dep
+    without touching env. Used by the session-export route to upload a
+    short-lived JSON dump and return a presigned URL.
+    """
+    state = request.app.state
+    if not hasattr(state, "blob_exports"):
+        state.blob_exports = make_blob_store("exports")
+    store: BlobStore = state.blob_exports
+    return store

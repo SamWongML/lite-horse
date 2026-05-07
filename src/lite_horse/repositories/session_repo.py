@@ -125,6 +125,29 @@ class SessionRepo(BaseRepo):
         )
         return len(ids)
 
+    async def delete_session(self, session_id: str) -> bool:
+        """Drop one session row + its messages. Returns True on hit.
+
+        Used by ``DELETE /v1/sessions/{key}``. Cascade on the FK takes care
+        of the message rows, but we delete them explicitly first so the
+        message_count update path stays simple.
+        """
+        user_id = UUID(await self.current_user_id())
+        await self.session.execute(
+            delete(Message).where(
+                and_(
+                    Message.user_id == user_id,
+                    Message.session_id == session_id,
+                )
+            )
+        )
+        result = await self.session.execute(
+            delete(Session).where(
+                and_(Session.user_id == user_id, Session.id == session_id)
+            ).returning(Session.id)
+        )
+        return result.first() is not None
+
     async def find_session_by_prefix(self, prefix: str) -> str | None:
         """Resolve a session-key prefix to a unique id; raise on ambiguity."""
         if not prefix:
