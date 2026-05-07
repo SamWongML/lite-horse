@@ -3,7 +3,8 @@
 Phase 40 introduces a per-turn dependency injection seam between the agent
 runtime and durable state. Every tool that touches memory, skills, or cron
 goes through one of the Protocols here; the SDK delivers the bundle via
-``RunContextWrapper.context``.
+``RunContextWrapper.context``. Phase 42 adds :class:`RecallBackend` for
+semantic recall via the new ``memory_search`` tool.
 
 Two impls per Protocol live next to it:
 - ``*_local.py`` wraps the v0.4 filesystem code under ``~/.litehorse/``.
@@ -28,6 +29,8 @@ from lite_horse.agent.backends.memory import (
     UnsafeMemoryContent,
 )
 from lite_horse.agent.backends.memory_local import MemoryLocalBackend
+from lite_horse.agent.backends.recall import RecallBackend, Recalled, SourceKind
+from lite_horse.agent.backends.recall_local import RecallLocalBackend
 from lite_horse.agent.backends.skill import SkillBackend
 from lite_horse.agent.backends.skill_local import SkillLocalBackend
 
@@ -39,6 +42,10 @@ class TenantContext:
     ``user_id`` / ``agent_id`` are ``None`` in the CLI / single-user path
     where there is no authenticated tenant. Phase 41 lifts ``agent_id`` to
     a populated value once the multi-agent table lands.
+
+    ``recall`` (Phase 42) provides semantic recall over the user's
+    memory + summary + skill history; the agent reaches it via the
+    ``memory_search`` tool.
     """
 
     user_id: str | None
@@ -46,6 +53,7 @@ class TenantContext:
     memory: MemoryBackend
     skill: SkillBackend
     cron: CronBackend
+    recall: RecallBackend
 
 
 def build_local_tenant_context() -> TenantContext:
@@ -61,6 +69,7 @@ def build_local_tenant_context() -> TenantContext:
         memory=MemoryLocalBackend(),
         skill=SkillLocalBackend(),
         cron=CronLocalBackend(),
+        recall=RecallLocalBackend(),
     )
 
 
@@ -85,7 +94,10 @@ __all__ = [
     "MemoryBackend",
     "MemoryFull",
     "MemoryKind",
+    "RecallBackend",
+    "Recalled",
     "SkillBackend",
+    "SourceKind",
     "TenantContext",
     "UnsafeMemoryContent",
     "build_local_tenant_context",

@@ -14,9 +14,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 BACKENDS_DIR = REPO / "src" / "lite_horse" / "agent" / "backends"
 
-# Phase 40 ships these three Protocols. Phase 42 / 44 add ``recall`` and
-# ``feedback`` next to them; the test list is updated as each phase lands.
-EXPECTED_PROTOCOLS: tuple[str, ...] = ("memory", "skill", "cron")
+# Phase 40 ships these three Protocols. Phase 42 adds ``recall``;
+# Phase 44 will add ``feedback`` next to them.
+EXPECTED_PROTOCOLS: tuple[str, ...] = ("memory", "skill", "cron", "recall")
 
 
 def _read_class_methods(path: Path, class_name: str) -> set[str]:

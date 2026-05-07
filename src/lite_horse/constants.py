@@ -38,3 +38,8 @@ ACTIVATION_TOP_K = 8
 SKILL_MAX_BYTES = 15_360
 
 SCHEMA_VERSION = 2
+
+# Phase 42 — embedding dimension. Memory chunks store ``vector(1536)``.
+# OpenAI ``text-embedding-3-small`` is 1536-dim natively; Voyage's 1024
+# dims are right-padded to fit this fixed shape.
+EMBED_DIM = 1536
