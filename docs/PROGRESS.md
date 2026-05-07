@@ -1,6 +1,6 @@
 # lite-horse — phase status
 
-**Active plan:** [plans/v0.4-cloud-multi-tenant.md](plans/v0.4-cloud-multi-tenant.md)
+**Active plan:** [plans/v0.5-tenant-evolve-recall.md](plans/v0.5-tenant-evolve-recall.md)
 
 One row per phase. Flip ☐ → ✅ only when every acceptance checkbox in the
 plan file for that phase is green. Do not put plan detail here — it belongs
@@ -167,6 +167,7 @@ observability tests (log JSON shape, contextvars merge, EMF line
 shape, OTel span via in-memory exporter, middleware behaviour
 incl. ``X-Request-Id`` echo + JSON access lines + EMF
 ``http_requests_total`` / ``http_request_duration_ms``).
+**v0.5 in flight; see active plan.**
 Phase 39 shipped 2026-04-30: ``alembic 0002_phase39_user_limits``
 adds ``users.rate_limit_per_min`` + ``users.cost_budget_usd_micro``
 columns and ``ALTER TABLE ... FORCE ROW LEVEL SECURITY`` on the
@@ -194,6 +195,39 @@ under a non-superuser app role with ``app.user_id`` GUC + RLS
 rewritten around the cloud surface; ``docs/CLI.md`` flagged
 dev-only; ``docs/EMBEDDING.md`` deprecated in favour of new
 ``docs/HTTP-API.md``. v0.4 plan flipped to **SHIPPED**.
+
+## v0.5 — tenant-safe tools, multi-agent personas, evolution & recall — ☐ ACTIVE (2026-05-07)
+
+**Active plan:** [plans/v0.5-tenant-evolve-recall.md](plans/v0.5-tenant-evolve-recall.md).
+**Predecessor:** v0.4. **Background:** [HERMES_GAP_ANALYSIS.md](HERMES_GAP_ANALYSIS.md).
+
+Closes the four gaps that block lite-horse from being the website
+personal-assistant engine the product wants: (1) tenant-safe agent
+tools — today `memory_tool`, `skill_manage`, `cron_manage`, plus the
+`BudgetHook.consolidate` and `EvolutionHook` writes, all reach into
+``litehorse_home()`` on the local container FS regardless of the
+caller's `user_id`, so multi-task ECS leaks between tenants; (2)
+multiple agents per user, the missing "agent management center" axis
+(persona / model / tool-bundle / memory all per-agent); (3) a
+Hermes-grade evolution layer (curator background pass + outcome
+classifier + GEPA-style population evolve + user-skill→official
+promotion) instead of today's regex-only refinement; (4) long-horizon
+recall via pgvector + per-session summaries + cross-session memory
+compaction. **Hard parity rule:** every cloud capability ships a
+`*_local` backend so the `litehorse` Mac CLI keeps working
+byte-for-byte against `~/.litehorse/` — phases include explicit "CLI
+parity gate" acceptance items, and `tests/lint/test_cli_parity.py`
+asserts every backend Protocol has both impls.
+
+| #  | Subject | Status |
+|----|---|---|
+| 40 | Tool-backend abstraction + tenant-safe writes (BLOCKER)            | ☐ |
+| 41 | Per-agent personas + agent CRUD                                    | ☐ |
+| 42 | pgvector recall + ``memory_search`` tool                           | ☐ |
+| 43 | Session summaries + cross-session compaction                       | ☐ |
+| 44 | Curator background pass + outcome classifier                       | ☐ |
+| 45 | User-skill promotion + GEPA-style offline evolve                   | ☐ |
+| 46 | Hardening: GDPR delete, audit shipper, SDK bumps, CLI parity gate  | ☐ |
 
 ---
 
