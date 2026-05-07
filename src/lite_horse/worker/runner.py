@@ -20,6 +20,7 @@ from typing import Any
 from lite_horse.cron.scheduler import CronMessage
 from lite_horse.evolve.cloud import EvolveMessage, is_evolve_payload, run_evolve
 from lite_horse.storage.queue import QueueMessage
+from lite_horse.worker.embed import EmbedMessage, is_embed_payload, run_embed
 
 log = logging.getLogger(__name__)
 
@@ -63,12 +64,13 @@ async def _default_deliver(
     await deliver_webhook(spec, text, session_key)
 
 
-async def dispatch_message(
+async def dispatch_message(  # noqa: PLR0911 — flat per-kind dispatch is the readable shape
     raw: QueueMessage,
     *,
     run_turn_fn: RunTurnFn | None = None,
     deliver_fn: DeliverFn | None = None,
     evolve_fn: Callable[[EvolveMessage], Awaitable[bool]] | None = None,
+    embed_fn: Callable[[EmbedMessage], Awaitable[bool]] | None = None,
 ) -> bool:
     """Run one queue message end-to-end.
 
@@ -78,7 +80,8 @@ async def dispatch_message(
     parse correctly and shouldn't poison the queue.
 
     The body's ``kind`` discriminator routes between the cron path
-    (default) and the Phase-39 evolve path.
+    (default), the Phase-39 evolve path, and the Phase-42 embed-backfill
+    path.
     """
     if is_evolve_payload(raw.body):
         try:
@@ -94,6 +97,23 @@ async def dispatch_message(
                 "worker: evolve failed (user=%s slug=%s)",
                 evolve_msg.user_id,
                 evolve_msg.skill_slug,
+            )
+            return False
+
+    if is_embed_payload(raw.body):
+        try:
+            embed_msg = EmbedMessage.from_json(raw.body)
+        except (ValueError, KeyError, TypeError) as exc:
+            log.error("worker: dropping unparseable embed message: %s", exc)
+            return True
+        embed = embed_fn or run_embed
+        try:
+            return await embed(embed_msg)
+        except Exception:
+            log.exception(
+                "worker: embed failed (user=%s agent=%s)",
+                embed_msg.user_id,
+                embed_msg.agent_id,
             )
             return False
 

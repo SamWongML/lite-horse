@@ -196,7 +196,7 @@ rewritten around the cloud surface; ``docs/CLI.md`` flagged
 dev-only; ``docs/EMBEDDING.md`` deprecated in favour of new
 ``docs/HTTP-API.md``. v0.4 plan flipped to **SHIPPED**.
 
-## v0.5 — tenant-safe tools, multi-agent personas, evolution & recall — ☐ ACTIVE (2026-05-07)
+## v0.5 — tenant-safe tools, multi-agent personas, evolution & recall — ☐ ACTIVE (2026-05-07; through Phase 42)
 
 **Active plan:** [plans/v0.5-tenant-evolve-recall.md](plans/v0.5-tenant-evolve-recall.md).
 **Predecessor:** v0.4. **Background:** [HERMES_GAP_ANALYSIS.md](HERMES_GAP_ANALYSIS.md).
@@ -223,6 +223,7 @@ asserts every backend Protocol has both impls.
 |----|---|---|
 | 40 | Tool-backend abstraction + tenant-safe writes (BLOCKER)            | ✅ |
 | 41 | Per-agent personas + agent CRUD                                    | ✅ |
+| 42 | pgvector recall + ``memory_search`` tool                           | ✅ |
 
 ### Blocked / in progress
 Phase 40 shipped 2026-05-07: ``src/lite_horse/agent/backends/`` adds
@@ -290,8 +291,59 @@ archive guard), ``tests/security/test_agent_isolation.py``
 (non-superuser cross-agent RLS leak gate), ``tests/cli/test_agent_cmd.py``
 (CLI parity), ``tests/models/test_phase41_migration_static.py``
 (static migration shape).
-**v0.5 Phase 42 next.**
-| 42 | pgvector recall + ``memory_search`` tool                           | ☐ |
+Phase 42 shipped 2026-05-07: ``alembic 0004_phase42_pgvector``
+adds ``CREATE EXTENSION IF NOT EXISTS vector`` + the
+``memory_chunks`` table (BIGINT identity PK, ``user_id`` /
+``agent_id`` FKs, ``source_kind`` CHECK enumerating
+``memory_md`` / ``user_md`` / ``session_summary`` / ``message`` /
+``skill_body``, ``content`` TEXT, ``tsv`` GENERATED ALWAYS
+``to_tsvector('simple', content)``, ``embedding vector(1536)``,
+HNSW cosine + GIN tsv + ``(user_id, agent_id, ts DESC)`` and
+``(user_id, agent_id, source_kind, source_id)`` indexes), enables
+RLS with FORCE + the compound user/agent ``tenant_isolation``
+policy, and bounds ``maintenance_work_mem='512MB'`` for the
+HNSW build. ``models/memory_chunk.py`` registers the SQLAlchemy
+model (vector column held as a minimal ``UserDefinedType`` stub
+so SQLAlchemy round-trips the DDL without pulling pgvector's
+Python adapter).
+``repositories/memory_chunk_repo.py`` owns ``insert`` /
+``set_embedding`` / ``delete_source`` /
+``list_pending_embeddings`` / ``hybrid_search``; ``hybrid_search``
+runs a CTE that combines ``ts_rank_cd`` BM25 with
+``1 - (embedding <=> :q)`` cosine, normalises BM25 against the
+tenant's max, and blends ``alpha * cos + (1 - alpha) * bm25``.
+``providers/embedding.py`` exposes the ``EmbeddingProvider``
+Protocol + ``NullEmbeddingProvider`` + ``select_embedding_provider``;
+concrete impls in ``providers/embedding_openai.py``
+(``text-embedding-3-small``, native 1536-dim) and
+``providers/embedding_voyage.py`` (``voyage-3``, 1024-dim
+right-padded to 1536). ``providers/chunker.py`` is a 256-token
+sliding window with 32-token overlap (tiktoken when present,
+char-based fallback). ``agent/backends/recall.py`` defines
+``RecallBackend`` Protocol + ``Recalled`` row + ``SourceKind``;
+``recall_cloud.py`` wraps :class:`MemoryChunkRepo` with a fresh
+``db_session(user_id, agent_id)`` per call; ``recall_local.py``
+is a SQLite store under ``~/.litehorse/embeddings/recall.sqlite``
+with Python-side cosine for the CLI. ``TenantContext`` gains a
+``recall`` field; ``build_local_tenant_context`` /
+``build_cloud_tenant_context`` populate it. New
+``memory/search_tool.py::memory_search`` is added to both
+factory tool bundles. ``memory/tool.py`` and
+``skills/manage_tool.py`` re-index after every successful write
+through ``ctx.context.recall.index`` (best-effort; failures
+swallowed). ``worker/embed.py`` adds ``EmbedMessage`` + ``run_embed``
+to backfill NULL embeddings; the dispatcher in
+``worker/runner.py`` routes the new ``kind="embed"`` message
+ahead of the cron path. ``tests/lint/test_cli_parity.py`` now
+includes ``recall`` so drift between ``recall_local`` /
+``recall_cloud`` breaks CI; new
+``tests/models/test_phase42_migration_static.py``,
+``tests/test_memory_search_tool.py``,
+``tests/test_recall_local.py``,
+``tests/providers/test_chunker.py``,
+``tests/providers/test_embedding_select.py``,
+``tests/worker/test_embed_dispatch.py``.
+**v0.5 Phase 43 next.**
 | 43 | Session summaries + cross-session compaction                       | ☐ |
 | 44 | Curator background pass + outcome classifier                       | ☐ |
 | 45 | User-skill promotion + GEPA-style offline evolve                   | ☐ |

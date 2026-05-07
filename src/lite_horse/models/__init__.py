@@ -13,6 +13,7 @@ from lite_horse.models.command import Command
 from lite_horse.models.cron_job import CronJob
 from lite_horse.models.instruction import Instruction
 from lite_horse.models.mcp_server import McpServer
+from lite_horse.models.memory_chunk import MemoryChunk
 from lite_horse.models.message import Message
 from lite_horse.models.opt_out import UserOfficialOptOut
 from lite_horse.models.session import Session
@@ -30,6 +31,7 @@ __all__ = [
     "CronJob",
     "Instruction",
     "McpServer",
+    "MemoryChunk",
     "Message",
     "Session",
     "Skill",

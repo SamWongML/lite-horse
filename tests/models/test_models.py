@@ -17,6 +17,7 @@ EXPECTED_TABLES = {
     "user_documents",
     "sessions",
     "messages",
+    "memory_chunks",
     "skill_proposals",
     "audit_log",
     "usage_events",

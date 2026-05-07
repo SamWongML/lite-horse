@@ -5,19 +5,43 @@ Phase 40 routes every read/write through the per-turn
 Cloud calls land in Postgres via ``MemoryRepo``; CLI calls land on the
 local filesystem via :class:`MemoryStore` — both behind the same
 ``MemoryBackend`` Protocol so the JSON wire shape is identical.
+
+Phase 42 layers a best-effort recall re-index on top of every successful
+write so the new ``memory_search`` tool can surface freshly-stored
+entries the next time the agent asks. Indexing failures are swallowed
+— the caller's write already succeeded and recall is auxiliary.
 """
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Literal
 
 from agents import RunContextWrapper, function_tool
 
 from lite_horse.agent.backends import (
     MemoryFull,
+    TenantContext,
     UnsafeMemoryContent,
     resolve_tenant,
 )
+
+_log = logging.getLogger(__name__)
+
+
+async def _reindex_memory_doc(
+    tenant: TenantContext, kind: Literal["memory", "user"]
+) -> None:
+    """Re-embed the whole memory doc after a successful mutation."""
+    try:
+        body = await tenant.memory.get(kind)
+        await tenant.recall.index(
+            source_kind="memory_md" if kind == "memory" else "user_md",
+            source_id=None,
+            content=body,
+        )
+    except Exception:
+        _log.warning("memory: recall.index failed (kind=%s)", kind)
 
 
 @function_tool(
@@ -38,7 +62,8 @@ async def memory_tool(  # noqa: PLR0911 — branch-per-action keeps the JSON sha
     content: str | None = None,
     old_text: str | None = None,
 ) -> str:
-    backend = resolve_tenant(ctx).memory
+    tenant = resolve_tenant(ctx)
+    backend = tenant.memory
     kind: Literal["memory", "user"] = (
         "memory" if target == "memory" else "user"
     )
@@ -49,6 +74,7 @@ async def memory_tool(  # noqa: PLR0911 — branch-per-action keeps the JSON sha
                     {"success": False, "error": "content is required for add"}
                 )
             await backend.add(kind, content)
+            await _reindex_memory_doc(tenant, kind)
             total = await backend.total_chars(kind)
             return json.dumps(
                 {"success": True, "usage": f"{total}/{backend.char_limit(kind)}"}
@@ -62,6 +88,7 @@ async def memory_tool(  # noqa: PLR0911 — branch-per-action keeps the JSON sha
                     }
                 )
             await backend.replace(kind, old_text, content)
+            await _reindex_memory_doc(tenant, kind)
             total = await backend.total_chars(kind)
             return json.dumps(
                 {"success": True, "usage": f"{total}/{backend.char_limit(kind)}"}
@@ -72,6 +99,7 @@ async def memory_tool(  # noqa: PLR0911 — branch-per-action keeps the JSON sha
                     {"success": False, "error": "old_text is required for remove"}
                 )
             await backend.remove(kind, old_text)
+            await _reindex_memory_doc(tenant, kind)
             total = await backend.total_chars(kind)
             return json.dumps(
                 {"success": True, "usage": f"{total}/{backend.char_limit(kind)}"}

@@ -23,7 +23,10 @@ from lite_horse.agent.backends import (
     CronBackend,
     CronJobView,
     MemoryBackend,
+    RecallBackend,
+    Recalled,
     SkillBackend,
+    SourceKind,
     TenantContext,
 )
 from lite_horse.cron.manage_tool import cron_manage
@@ -170,6 +173,41 @@ class _InMemoryCronBackend(CronBackend):
 # ---------------- ctx stand-in carrying the TenantContext ----------------
 
 
+class _InMemoryRecallBackend(RecallBackend):
+    def __init__(self) -> None:
+        self.rows: list[tuple[str, str | None, str]] = []
+
+    async def index(
+        self, *, source_kind: SourceKind, source_id: str | None, content: str
+    ) -> int:
+        self.rows = [r for r in self.rows if r[:2] != (source_kind, source_id)]
+        self.rows.append((source_kind, source_id, content))
+        return 1
+
+    async def search(self, query: str, *, k: int = 5) -> list[Recalled]:
+        out: list[Recalled] = []
+        ql = query.lower()
+        for kind, src_id, content in self.rows:
+            if ql in content.lower():
+                out.append(
+                    Recalled(
+                        source_kind=kind,
+                        source_id=src_id,
+                        content=content,
+                        score=1.0,
+                        ts_iso="",
+                    )
+                )
+        return out[:k]
+
+    async def delete(
+        self, *, source_kind: SourceKind, source_id: str | None
+    ) -> int:
+        before = len(self.rows)
+        self.rows = [r for r in self.rows if r[:2] != (source_kind, source_id)]
+        return before - len(self.rows)
+
+
 def _make_ctx(
     user_id: str, *, tool_name: str = "tool"
 ) -> ToolContext[TenantContext]:
@@ -179,6 +217,7 @@ def _make_ctx(
         memory=_InMemoryMemoryBackend(),
         skill=_InMemorySkillBackend(),
         cron=_InMemoryCronBackend(),
+        recall=_InMemoryRecallBackend(),
     )
     return ToolContext(
         context=tenant,

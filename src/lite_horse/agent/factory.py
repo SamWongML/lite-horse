@@ -30,6 +30,9 @@ from openai.types.shared import Reasoning
 from lite_horse.agent.backends import TenantContext, build_local_tenant_context
 from lite_horse.agent.backends.cron_cloud import CronCloudBackend
 from lite_horse.agent.backends.memory_cloud import MemoryCloudBackend
+from lite_horse.agent.backends.recall import RecallBackend
+from lite_horse.agent.backends.recall_cloud import RecallCloudBackend
+from lite_horse.agent.backends.recall_local import RecallLocalBackend
 from lite_horse.agent.backends.skill_cloud import SkillCloudBackend
 from lite_horse.agent.budget import BudgetHook
 from lite_horse.agent.consolidator import Consolidator
@@ -42,8 +45,13 @@ from lite_horse.config import Config, load_config
 from lite_horse.core.permission import PermissionPolicy, filter_tools
 from lite_horse.cron.manage_tool import cron_manage
 from lite_horse.effective import EffectiveConfig
+from lite_horse.memory.search_tool import memory_search
 from lite_horse.memory.tool import memory_tool
 from lite_horse.providers import ModelProvider, provider_for_model
+from lite_horse.providers.embedding import (
+    EmbeddingProvider,
+    select_embedding_provider,
+)
 from lite_horse.sessions.search_tool import session_search
 from lite_horse.skills.manage_tool import skill_manage
 from lite_horse.skills.view_tool import skill_view
@@ -119,6 +127,7 @@ def build_agent(
     cfg = config or load_config()
     tools: list[Tool] = [
         memory_tool,
+        memory_search,
         session_search,
         skill_manage,
         skill_view,
@@ -196,6 +205,7 @@ def build_cloud_tenant_context(
     user_id: str,
     agent_id: str | None = None,
     eff: EffectiveConfig | None = None,
+    embedder: EmbeddingProvider | None = None,
 ) -> TenantContext:
     """Construct a multi-tenant :class:`TenantContext` for one HTTP turn.
 
@@ -205,13 +215,28 @@ def build_cloud_tenant_context(
     lets the :class:`SkillCloudBackend` short-circuit ``list_resolved``
     from the already-resolved config rather than re-querying. Phase 41
     threads ``agent_id`` so RLS narrows tenant-scoped reads to one agent.
+
+    Phase 42: ``embedder`` (when provided) drives the recall backend's
+    semantic indexing + query path; if omitted, one is selected from
+    ``LITEHORSE_EMBEDDING_PROVIDER`` + the ambient API key. ``recall``
+    is always populated — the agent's ``memory_search`` tool can't be
+    optional without a wire-shape change.
     """
+    chosen_embedder = embedder or select_embedding_provider()
+    recall_backend: RecallBackend
+    if agent_id is not None:
+        recall_backend = RecallCloudBackend(
+            user_id=user_id, agent_id=agent_id, embedder=chosen_embedder
+        )
+    else:
+        recall_backend = RecallLocalBackend(embedder=chosen_embedder)
     return TenantContext(
         user_id=user_id,
         agent_id=agent_id,
         memory=MemoryCloudBackend(user_id=user_id),
         skill=SkillCloudBackend(user_id=user_id, effective=eff),
         cron=CronCloudBackend(user_id=user_id),
+        recall=recall_backend,
     )
 
 
@@ -253,6 +278,7 @@ def build_agent_for_user(
     sdk_model: Model = provider.build_model(model_name, api_key)
     tools: list[Tool] = [
         memory_tool,
+        memory_search,
         session_search,
         skill_manage,
         skill_view,

@@ -25,6 +25,10 @@ from lite_horse.repositories.command_repo import CommandRepo
 from lite_horse.repositories.cron_repo import CronRepo
 from lite_horse.repositories.instruction_repo import InstructionRepo
 from lite_horse.repositories.mcp_repo import McpRepo
+from lite_horse.repositories.memory_chunk_repo import (
+    ChunkRow,
+    MemoryChunkRepo,
+)
 from lite_horse.repositories.memory_repo import (
     MEMORY_MD_CHAR_LIMIT,
     USER_MD_CHAR_LIMIT,
@@ -54,11 +58,13 @@ __all__ = [
     "AuditRepo",
     "BaseRepo",
     "ByoKeyStore",
+    "ChunkRow",
     "CommandRepo",
     "CronRepo",
     "EffectiveConfig",
     "InstructionRepo",
     "McpRepo",
+    "MemoryChunkRepo",
     "MemoryFull",
     "MemoryRepo",
     "MessageRepo",
