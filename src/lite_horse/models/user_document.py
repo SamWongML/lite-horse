@@ -25,6 +25,11 @@ class UserDocument(Base):
         primary_key=True,
     )
     kind: Mapped[str] = mapped_column(String, primary_key=True)
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agents.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     content: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("''")
     )

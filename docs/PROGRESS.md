@@ -222,7 +222,7 @@ asserts every backend Protocol has both impls.
 | #  | Subject | Status |
 |----|---|---|
 | 40 | Tool-backend abstraction + tenant-safe writes (BLOCKER)            | ✅ |
-| 41 | Per-agent personas + agent CRUD                                    | ☐ |
+| 41 | Per-agent personas + agent CRUD                                    | ✅ |
 
 ### Blocked / in progress
 Phase 40 shipped 2026-05-07: ``src/lite_horse/agent/backends/`` adds
@@ -250,7 +250,47 @@ impls with the full method set. New
 writes don't leak through any of the three tools; new
 ``tests/cli/test_cli_byte_parity.py`` asserts local writes still
 land at the v0.4 byte-shape paths.
-**v0.5 Phase 41 next.**
+Phase 41 shipped 2026-05-07: ``alembic 0003_phase41_agents`` creates
+the ``agents`` table (per-user persona + ``default_model`` +
+``permission_mode`` + ``enabled_tools`` JSONB + per-agent
+``rate_limit_per_min`` / ``cost_budget_usd_micro`` + soft-delete
+``archived_at``), adds ``users.default_agent_id`` and nullable
+``agent_id`` to ``user_documents`` / ``skills`` / ``cron_jobs`` /
+``sessions`` / ``skill_proposals`` / ``mcp_servers`` / ``commands`` /
+``instructions``, backfills one default agent per existing user,
+``SET NOT NULL`` on the user-only tables, ``CHECK (scope='user' AND
+agent_id IS NOT NULL OR scope='official' AND agent_id IS NULL)`` on
+the layered tables, and rewrites the RLS ``tenant_isolation`` policy
+on ``user_documents`` / ``sessions`` / ``skill_proposals`` to the
+compound ``user_id::text = current_setting('app.user_id', true) AND
+(current_setting('app.agent_id', true) = '' OR agent_id::text =
+current_setting('app.agent_id', true))``.
+``src/lite_horse/storage/db.py::db_session(user_id, agent_id=None)``
+now sets both GUCs; ``BaseRepo.current_agent_id()`` exposes the
+agent GUC. ``models/agent.py`` + ``repositories/agent_repo.py`` own
+list / get / create / update / archive / set_default / ensure_default
+(the auto-create on first sight). New router
+``web/routes/agents.py`` mounts ``/v1/users/me/agents`` with the
+seven endpoints; ``TurnIn.agent_id`` and ``TurnRequest.agent_id``
+flow into ``web/turn_engine.py`` which resolves the agent (request
+body → ``users.default_agent_id`` → ``ensure_default``), opens
+``db_session(user_id, resolved_agent_id)``, and threads
+``agent_id`` through ``build_cloud_tenant_context``. Per-agent
+overrides (``default_model`` / ``permission_mode``) shadow the
+per-user defaults. Redis rate-limit + cost-budget keys gain an
+``agent_id`` axis (``rate:turn:{user_id}:{agent_id}:{epoch_min}`` /
+``cost:day:{user_id}:{agent_id}:{YYYYMMDD}``); per-agent
+overrides shadow per-user limits. CLI ``litehorse agent {ls,
+create, use, show}`` lays down ``~/.litehorse/agents/<slug>/``
+mirrors of memory.md / user.md / skills/ / jobs.json, plus a
+``current_agent`` selector file (``LITEHORSE_AGENT`` env override
+takes precedence). New tests:
+``tests/web/test_agents_api.py`` (HTTP CRUD + default-promotion +
+archive guard), ``tests/security/test_agent_isolation.py``
+(non-superuser cross-agent RLS leak gate), ``tests/cli/test_agent_cmd.py``
+(CLI parity), ``tests/models/test_phase41_migration_static.py``
+(static migration shape).
+**v0.5 Phase 42 next.**
 | 42 | pgvector recall + ``memory_search`` tool                           | ☐ |
 | 43 | Session summaries + cross-session compaction                       | ☐ |
 | 44 | Curator background pass + outcome classifier                       | ☐ |

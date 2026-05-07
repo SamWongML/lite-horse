@@ -183,6 +183,49 @@ class CronJobUpdateIn(BaseModel):
     enabled: bool | None = None
 
 
+# ---------- agents ----------
+
+
+class AgentOut(BaseModel):
+    id: str
+    slug: str
+    name: str
+    persona: str
+    default_model: str | None
+    permission_mode: Literal["auto", "ask", "ro"]
+    enabled_tools: list[str]
+    rate_limit_per_min: int | None
+    cost_budget_usd_micro: int | None
+    is_default: bool
+    archived_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentCreateIn(BaseModel):
+    slug: str = Field(min_length=1, max_length=80)
+    name: str = Field(min_length=1, max_length=200)
+    persona: str = ""
+    default_model: str | None = None
+    permission_mode: Literal["auto", "ask", "ro"] = "auto"
+    enabled_tools: list[str] = Field(default_factory=list)
+    rate_limit_per_min: int | None = None
+    cost_budget_usd_micro: int | None = None
+
+
+class AgentUpdateIn(BaseModel):
+    name: str | None = None
+    persona: str | None = None
+    default_model: str | None = None
+    clear_default_model: bool = False
+    permission_mode: Literal["auto", "ask", "ro"] | None = None
+    enabled_tools: list[str] | None = None
+    rate_limit_per_min: int | None = None
+    clear_rate_limit: bool = False
+    cost_budget_usd_micro: int | None = None
+    clear_cost_budget: bool = False
+
+
 # ---------- opt-outs ----------
 
 

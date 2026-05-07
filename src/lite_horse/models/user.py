@@ -4,7 +4,15 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, Integer, LargeBinary, String, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    text,
+)
 from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,3 +53,10 @@ class User(Base):
     # NULL → use process default; non-positive → unlimited tier.
     rate_limit_per_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cost_budget_usd_micro: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Phase 41: points at the user's "main" agent. Auto-created on first login.
+    # Nullable so the FK can be added before the agents table is populated.
+    default_agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agents.id", use_alter=True, name="fk_users_default_agent"),
+        nullable=True,
+    )

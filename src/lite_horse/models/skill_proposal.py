@@ -34,6 +34,11 @@ class SkillProposal(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agents.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     skill_slug: Mapped[str] = mapped_column(String, nullable=False)
     base_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)

@@ -6,6 +6,7 @@ from sqlalchemy import CheckConstraint, Index
 from lite_horse.models import Base
 
 EXPECTED_TABLES = {
+    "agents",
     "users",
     "skills",
     "instructions",

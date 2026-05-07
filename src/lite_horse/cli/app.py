@@ -69,6 +69,7 @@ def _attach_typer_commands() -> None:
     """
     import typer
 
+    from lite_horse.cli.commands import agent as agent_cmd
     from lite_horse.cli.commands import completion as completion_cmd
     from lite_horse.cli.commands import config as config_cmd
     from lite_horse.cli.commands import cron as cron_cmd
@@ -86,6 +87,7 @@ def _attach_typer_commands() -> None:
         ("config", config_cmd.app),
         ("completion", completion_cmd.app),
         ("debug", debug_cmd.app),
+        ("agent", agent_cmd.app),
         ("sessions", sessions_cmd.app),
         ("skills", skills_cmd.app),
         ("cron", cron_cmd.app),

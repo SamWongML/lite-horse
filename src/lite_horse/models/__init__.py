@@ -6,6 +6,7 @@ hand-written to preserve precise DDL (partial unique indexes, generated
 tsvector column, RLS policies).
 """
 
+from lite_horse.models.agent import Agent
 from lite_horse.models.audit_log import AuditLog
 from lite_horse.models.base import Base
 from lite_horse.models.command import Command
@@ -22,6 +23,7 @@ from lite_horse.models.user import User
 from lite_horse.models.user_document import UserDocument
 
 __all__ = [
+    "Agent",
     "AuditLog",
     "Base",
     "Command",

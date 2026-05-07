@@ -53,6 +53,9 @@ class TurnRequest:
     attachments: list[dict[str, Any]] | None = None
     command: str | None = None
     model: str | None = None
+    # Phase 41: which of the user's agents owns this turn. ``None`` →
+    # turn engine resolves ``users.default_agent_id``.
+    agent_id: str | None = None
 
 
 @dataclass

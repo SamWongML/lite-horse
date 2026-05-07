@@ -116,6 +116,28 @@ class _FakeByo:
         return {"openai": "sk-byo-test", "github": "ghp_test"}.get(name)
 
 
+class _FakeAgentRow:
+    """Phase 41 stub for ``AgentRepo.ensure_default()`` returning a row."""
+
+    id = "00000000-0000-0000-0000-0000000000aa"
+    slug = "default"
+    name = "default"
+    permission_mode = "auto"
+    default_model: str | None = None
+    archived_at = None
+
+
+class _FakeAgentRepo:
+    def __init__(self, _session: Any) -> None:
+        pass
+
+    async def ensure_default(self) -> _FakeAgentRow:
+        return _FakeAgentRow()
+
+    async def get(self, _agent_id: Any) -> _FakeAgentRow:
+        return _FakeAgentRow()
+
+
 class _FakeKms:
     pass
 
@@ -143,13 +165,14 @@ async def test_per_user_engine_invokes_build_agent_for_user(  # noqa: PLR0915
     import lite_horse.web.turn_engine as engine_mod
 
     @asynccontextmanager
-    async def fake_db_session(user_id: str | None):
-        yield SimpleNamespace(_user_id=user_id)
+    async def fake_db_session(user_id: str | None, agent_id: str | None = None):
+        yield SimpleNamespace(_user_id=user_id, _agent_id=agent_id)
 
     monkeypatch.setattr(engine_mod, "db_session", fake_db_session)
     monkeypatch.setattr(engine_mod, "MemoryRepo", _FakeMemoryRepo)
     monkeypatch.setattr(engine_mod, "UserSettingsRepo", _FakeUserSettingsRepo)
     monkeypatch.setattr(engine_mod, "ByoKeyStore", _FakeByo)
+    monkeypatch.setattr(engine_mod, "AgentRepo", _FakeAgentRepo)
 
     fake_eff = SimpleNamespace(mcp_servers=[])
 
