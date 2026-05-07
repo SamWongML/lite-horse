@@ -38,3 +38,6 @@ coverage.xml
 *.db
 *.db-wal
 *.db-shm
+
+# Claude Code
+.claude/
