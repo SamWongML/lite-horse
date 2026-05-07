@@ -40,50 +40,50 @@ for skill / memory iteration.
 
 ```mermaid
 flowchart TB
-    Client["Webapp / Browser"]
+    Client(["Webapp / Browser"]):::client
 
-    subgraph Compute["Compute &nbsp;·&nbsp; one container image, three processes"]
+    subgraph Compute["Compute · one container image, three processes"]
         direction LR
-        API["api<br/><sub>FastAPI · SSE turns · admin</sub>"]
-        Sched["scheduler<br/><sub>60 s cron · daily evolve</sub>"]
-        Worker["worker<br/><sub>SQS dispatcher</sub>"]
+        API["api<br/>FastAPI — SSE turns · admin"]:::svc
+        Sched["scheduler<br/>60 s cron · daily evolve tick"]:::svc
+        Worker["worker<br/>SQS dispatcher"]:::svc
     end
 
-    subgraph Stateful["Stateful infra"]
+    subgraph Stateful["Stateful infrastructure"]
         direction LR
-        PG[("Postgres 16<br/><sub>pgvector · RLS</sub>")]
-        Redis[("Redis<br/><sub>idem · rate · cost · pubsub</sub>")]
-        SQS[("SQS")]
-        KMS["KMS<br/><sub>BYO-key envelopes</sub>"]
+        PG[("Postgres 16<br/>pgvector · RLS")]:::data
+        Redis[("Redis<br/>idem · rate · cost · pubsub")]:::data
+        SQS[("SQS<br/>turns · webhooks · embed · evolve")]:::data
+        KMS["KMS<br/>BYO-key envelopes"]:::data
     end
 
-    subgraph External["External"]
+    subgraph External["External services"]
         direction LR
-        LLM["LLM providers<br/><sub>OpenAI · Anthropic</sub>"]
-        Hook["Signed webhooks<br/><sub>HMAC-SHA256</sub>"]
+        LLM["LLM providers<br/>OpenAI · Anthropic"]:::ext
+        Hook["Tenant webhooks<br/>HMAC-SHA256"]:::ext
     end
 
-    Client <-->|"JWT &nbsp;·&nbsp; SSE"| API
+    Client <-->|"JWT · SSE"| API
 
     API --> PG
     API --> Redis
     API --> KMS
-    API --> LLM
+    API ==>|"chat completions"| LLM
 
-    Sched -- enqueue --> SQS
-    SQS -- long-poll --> Worker
+    Sched -.->|"enqueue"| SQS
+    SQS -.->|"long-poll"| Worker
     Worker --> PG
     Worker --> Redis
-    Worker --> LLM
-    Worker --> Hook
+    Worker ==>|"chat completions"| LLM
+    Worker -.->|"signed delivery"| Hook
 
-    classDef svc  fill:#1f6feb22,stroke:#1f6feb,color:#1f6feb,stroke-width:1.5px
-    classDef data fill:#8957e522,stroke:#8957e5,color:#8957e5,stroke-width:1.5px
-    classDef ext  fill:#6e768122,stroke:#6e7681,color:#6e7681,stroke-width:1.5px
-    class API,Sched,Worker svc
-    class PG,Redis,SQS,KMS data
-    class Client,LLM,Hook ext
+    classDef client fill:#0EA5E9,stroke:#0369A1,color:#FFFFFF,stroke-width:2px
+    classDef svc    fill:#2563EB,stroke:#1E3A8A,color:#FFFFFF,stroke-width:2px
+    classDef data   fill:#7C3AED,stroke:#4C1D95,color:#FFFFFF,stroke-width:2px
+    classDef ext    fill:#475569,stroke:#1E293B,color:#FFFFFF,stroke-width:2px
 ```
+
+<sub>**Legend** — sky: client · blue: compute · violet: stateful infra · slate: external. **`==>`** primary turn path (LLM round-trip) · **`-->`** synchronous service call · **`-.->`** async / queue / signed-webhook hop.</sub>
 
 Three processes share one container image: **api** (FastAPI + SSE),
 **scheduler** (APScheduler — cron + daily evolve enqueue), **worker**
