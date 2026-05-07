@@ -306,18 +306,25 @@ scope for v1, but worth noting as the natural next axis.
 
 ## 6. Multi-tenancy gaps (beyond the §3 bug)
 
-### 6.1 RLS is application-layer only
+### 6.1 RLS is on, but only on four tables
 
-`MemoryRepo` mentions an `app.user_id` GUC + RLS, but the schema is not
-defined as `ENABLE ROW LEVEL SECURITY` in the Alembic migration (verify
-in `20260426_0001_initial_schema.py`). All tenant boundaries are
-WHERE-clause guarded. A single missed `where(user_id=...)` is a data
-leak.
+**Calibrated 2026-05-07.** RLS is real:
+`alembic/versions/20260426_0001_initial_schema.py:535` enables RLS and
+creates `tenant_isolation` policies on `messages`, `sessions`,
+`user_documents`, `skill_proposals`;
+`20260430_0002_phase39_user_limits.py:43` adds `FORCE ROW LEVEL
+SECURITY` so even table-owners cannot bypass. `db_session()` sets the
+`app.user_id` GUC on connection acquire.
 
-**Missing puzzle**: real Postgres RLS policies on every tenant-scoped
-table (or at least on `user_documents`, `messages`, `skills`,
-`usage_events`, `audit_log`). Set the GUC at connection-acquire time;
-deny by default.
+The remaining gap is **scope**: `skills`, `cron_jobs`, `commands`,
+`instructions`, `mcp_servers`, `usage_events`, and `audit_log` are
+WHERE-clause-guarded only. A single missed `where(user_id=...)` on any
+of those is a data leak.
+
+**Missing puzzle**: extend RLS to cover every tenant-scoped table.
+v0.5 Phase 41 covers this for new tables it adds (`agents`,
+`memory_chunks`, `session_summaries`, `turn_outcomes`); a back-fill
+migration for the older user-scoped tables is a Tier-2 item.
 
 ### 6.2 No per-user MCP server isolation at network layer
 
@@ -490,9 +497,16 @@ Top-down, rough effort estimates:
 1. **§3** Fix the FS-vs-DB write asymmetry. Migrate `memory_tool`,
    `skill_manage`, `cron_manage`, `BudgetHook._consolidate`, and
    `EvolutionHook` skill IO to per-user repos. **(Blocker.)**
-2. **§6.1** Enable real Postgres RLS on tenant tables.
-3. **§5.3 + §9** Introduce `agents` table with persona, default model,
+2. **§5.3 + §9** Introduce `agents` table with persona, default model,
    tool bundle. Add agent CRUD. Pivot session ownership by agent.
+3. **§6.1** Extend RLS coverage to `skills`, `cron_jobs`, `commands`,
+   `instructions`, `mcp_servers`, `usage_events`, `audit_log` (RLS
+   already on for `messages` / `sessions` / `user_documents` /
+   `skill_proposals`).
+
+> Tracked in [plans/v0.5-tenant-evolve-recall.md](plans/v0.5-tenant-evolve-recall.md)
+> Phases 40 (#1) and 41 (#2 + new-table RLS for #3); legacy-table RLS
+> back-fill is a Tier-2 item.
 
 ### Tier 2 — closes the Hermes-feature gap
 
