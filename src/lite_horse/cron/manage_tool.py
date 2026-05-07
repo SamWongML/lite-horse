@@ -1,9 +1,11 @@
 """``cron_manage`` @function_tool — agent-driven CRUD over scheduled jobs.
 
-Actions: ``add`` / ``list`` / ``remove`` / ``enable`` / ``disable``. Bounded
-delivery platforms — ``log`` for local dev, ``webhook`` for embed. Writes go
-through :class:`JobStore`; the cron scheduler picks them up on next boot or on
-its own reload cycle. Tests target the pure :func:`dispatch` helper.
+Phase 40 routes every read/write through ``ctx.context.cron`` (a
+:class:`CronBackend`) so cloud calls land on the tenant-scoped
+:class:`CronRepo` and CLI calls hit ``~/.litehorse/jobs.json`` via the
+local :class:`JobStore`. The wire shape is frozen: ``add`` / ``list`` /
+``remove`` / ``enable`` / ``disable`` against ``log`` / ``webhook``
+delivery platforms.
 """
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ from urllib.parse import urlparse
 
 from agents import RunContextWrapper, function_tool
 
+from lite_horse.agent.backends import resolve_tenant
 from lite_horse.cron.jobs import JobStore
 from lite_horse.cron.scheduler import parse_schedule
 
@@ -55,16 +58,18 @@ def dispatch(  # noqa: PLR0911 — branch-per-action; flat dispatch is the reada
     delivery_platform: str | None = None,
     delivery_url: str | None = None,
     job_id: str | None = None,
-    store: JobStore | None = None,
+    store: Any | None = None,
 ) -> dict[str, Any]:
-    """Execute a cron-management action and return a JSON-serializable result."""
+    """Local-FS impl over :class:`JobStore`.
+
+    Kept for backward compatibility — tests target this; the local cron
+    backend wraps it. Cloud writes never touch this function (they go
+    through :class:`CronCloudBackend` directly).
+    """
     s = store or JobStore()
 
     if action == "list":
-        return {
-            "success": True,
-            "jobs": [asdict(j) for j in s.all()],
-        }
+        return {"success": True, "jobs": [asdict(j) for j in s.all()]}
 
     if action == "add":
         if not schedule:
@@ -92,7 +97,7 @@ def dispatch(  # noqa: PLR0911 — branch-per-action; flat dispatch is the reada
     if action in ("enable", "disable"):
         if not job_id:
             return {"success": False, "error": "job_id is required"}
-        if not s.set_enabled(job_id, enabled=(action == "enable")):
+        if not s.set_enabled(job_id, (action == "enable")):
             return {"success": False, "error": f"no such job: {job_id}"}
         return {"success": True}
 
@@ -110,7 +115,7 @@ def dispatch(  # noqa: PLR0911 — branch-per-action; flat dispatch is the reada
         "persist to disk and fire on the cron process's next reload."
     ),
 )
-async def cron_manage(
+async def cron_manage(  # noqa: PLR0911 — flat dispatch keeps the wire shape readable
     ctx: RunContextWrapper[Any],
     action: Action,
     schedule: str | None = None,
@@ -119,13 +124,68 @@ async def cron_manage(
     delivery_url: str | None = None,
     job_id: str | None = None,
 ) -> str:
-    del ctx
-    result = dispatch(
-        action,
-        schedule=schedule,
-        prompt=prompt,
-        delivery_platform=delivery_platform,
-        delivery_url=delivery_url,
-        job_id=job_id,
-    )
-    return json.dumps(result)
+    backend = resolve_tenant(ctx).cron
+    if action == "list":
+        jobs = await backend.list_jobs()
+        return json.dumps(
+            {
+                "success": True,
+                "jobs": [
+                    {
+                        "id": j.id,
+                        "schedule": j.schedule,
+                        "prompt": j.prompt,
+                        "delivery": dict(j.delivery),
+                        "enabled": j.enabled,
+                        "disabled_reason": j.disabled_reason,
+                    }
+                    for j in jobs
+                ],
+            }
+        )
+    if action == "add":
+        if not schedule:
+            return json.dumps({"success": False, "error": "schedule is required"})
+        if not prompt:
+            return json.dumps({"success": False, "error": "prompt is required"})
+        try:
+            parse_schedule(schedule)
+        except (ValueError, KeyError) as e:
+            return json.dumps(
+                {"success": False, "error": f"invalid schedule: {e}"}
+            )
+        try:
+            delivery = _build_delivery(delivery_platform, delivery_url)
+        except ValueError as e:
+            return json.dumps({"success": False, "error": str(e)})
+        job = await backend.add(schedule=schedule, prompt=prompt, delivery=delivery)
+        return json.dumps(
+            {
+                "success": True,
+                "job": {
+                    "id": job.id,
+                    "schedule": job.schedule,
+                    "prompt": job.prompt,
+                    "delivery": dict(job.delivery),
+                    "enabled": job.enabled,
+                    "disabled_reason": job.disabled_reason,
+                },
+            }
+        )
+    if action == "remove":
+        if not job_id:
+            return json.dumps({"success": False, "error": "job_id is required"})
+        if not await backend.remove(job_id):
+            return json.dumps(
+                {"success": False, "error": f"no such job: {job_id}"}
+            )
+        return json.dumps({"success": True})
+    if action in ("enable", "disable"):
+        if not job_id:
+            return json.dumps({"success": False, "error": "job_id is required"})
+        if not await backend.set_enabled(job_id, enabled=(action == "enable")):
+            return json.dumps(
+                {"success": False, "error": f"no such job: {job_id}"}
+            )
+        return json.dumps({"success": True})
+    return json.dumps({"success": False, "error": f"unknown action {action!r}"})

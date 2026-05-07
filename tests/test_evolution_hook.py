@@ -217,7 +217,7 @@ async def test_refiner_fires_on_failure_with_viewed_skill(
     assert calls[0]["kwargs"].get("max_turns") == 4
 
     # Outcome stat must show one error for the viewed skill.
-    stats = skill_stats.read("probe")
+    stats = skill_stats.read(litehorse_home / "skills" / "probe")
     assert stats is not None
     assert stats["error_count"] == 1
     assert stats["success_count"] == 0
@@ -241,7 +241,7 @@ async def test_refiner_does_not_fire_on_success(
     assert len(calls) == 1
     assert getattr(calls[0]["agent"], "name", None) == "skill-distiller"
 
-    stats = skill_stats.read("happy")
+    stats = skill_stats.read(litehorse_home / "skills" / "happy")
     assert stats is not None
     assert stats["success_count"] == 1
     assert stats["error_count"] == 0
@@ -286,8 +286,8 @@ async def test_refiner_picks_most_recent_viewed_skill(
     assert payload["skill_name"] == "second"
 
     # Both viewed skills record an error.
-    assert skill_stats.read("first")["error_count"] == 1  # type: ignore[index]
-    assert skill_stats.read("second")["error_count"] == 1  # type: ignore[index]
+    assert skill_stats.read(litehorse_home / "skills" / "first")["error_count"] == 1  # type: ignore[index]
+    assert skill_stats.read(litehorse_home / "skills" / "second")["error_count"] == 1  # type: ignore[index]
 
 
 @pytest.mark.asyncio

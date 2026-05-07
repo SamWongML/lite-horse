@@ -1,154 +1,38 @@
-"""``skill_manage`` @function_tool — agent-managed CRUD over ~/.litehorse/skills/.
+"""``skill_manage`` @function_tool — agent-managed CRUD over skills.
 
-The tool is intentionally a thin wrapper around :func:`dispatch`; tests target
-the pure dispatch helper rather than the SDK-decorated callable.
+Phase 40 made the tool body a thin async dispatcher routed through
+:class:`TenantContext.skill` from ``RunContextWrapper.context``. Cloud
+calls land in Postgres via :class:`SkillRepo`; CLI calls land on the
+local filesystem via the legacy :func:`dispatch` helper, now hosted in
+:mod:`lite_horse.skills.local_dispatch` so this file stays free of
+``skills_root`` imports per the Phase 40 lint contract.
+
+The ``dispatch`` symbol is re-exported here for backward compatibility
+with existing tests; new code should call into the relevant
+``SkillBackend`` impl directly.
 """
 from __future__ import annotations
 
 import json
-import shutil
-from pathlib import Path
 from typing import Any, Literal
 
 from agents import RunContextWrapper, function_tool
 
-from lite_horse.security.validators import UnsafeContent, check_untrusted
-from lite_horse.skills._slug import _SLUG_RE
-from lite_horse.skills.source import skills_root
+from lite_horse.agent.backends import resolve_tenant
+from lite_horse.skills.local_dispatch import Action, dispatch
 
-Action = Literal[
-    "create", "patch", "edit", "delete", "write_file", "remove_file", "list",
-]
+__all__ = ["Action", "dispatch", "skill_manage"]
 
 
-def _skill_dir(name: str) -> Path:
-    if not _SLUG_RE.match(name):
-        raise ValueError(
-            f"invalid skill name {name!r}; must be lowercase, alphanumeric + dash/underscore, "
-            "max 64 chars, start with [a-z0-9]"
-        )
-    return skills_root() / name
-
-
-def _resolve_inside(root: Path, rel: str) -> Path:
-    """Resolve ``rel`` against ``root`` and reject paths that escape it."""
-    target = (root / rel).resolve()
-    root_resolved = root.resolve()
-    if not target.is_relative_to(root_resolved):
-        raise ValueError("file_path escapes skill directory")
-    return target
-
-
-def dispatch(  # noqa: PLR0911, PLR0912, PLR0915 — branch-per-action; flat dispatch is the readable shape
-    action: Action,
-    *,
-    name: str | None = None,
-    content: str | None = None,
-    old_string: str | None = None,
-    new_string: str | None = None,
-    file_path: str | None = None,
-) -> dict[str, Any]:
-    """Execute a skill-management action and return a JSON-serializable result."""
-    if action == "list":
-        return {
-            "success": True,
-            "skills": [p.name for p in sorted(skills_root().iterdir()) if p.is_dir()],
-        }
-
-    if not name:
-        return {"success": False, "error": "name is required"}
-    try:
-        d = _skill_dir(name)
-    except ValueError as e:
-        return {"success": False, "error": str(e)}
-
-    skill_md = d / "SKILL.md"
-
-    if action == "create":
-        if d.exists():
-            return {"success": False, "error": f"skill {name!r} already exists"}
-        if not content or "---" not in content:
-            return {
-                "success": False,
-                "error": (
-                    "content must be a complete SKILL.md with YAML frontmatter "
-                    "(--- name: ... description: ... ---)"
-                ),
-            }
-        try:
-            check_untrusted(content)
-        except UnsafeContent as e:
-            return {"success": False, "error": f"unsafe skill content: {e}"}
-        d.mkdir(parents=True)
-        skill_md.write_text(content, encoding="utf-8")
-        return {"success": True, "path": f"skills/{name}/SKILL.md"}
-
-    if action == "patch":
-        if not skill_md.exists():
-            return {"success": False, "error": f"skill {name!r} does not exist"}
-        if not (old_string and new_string is not None):
-            return {"success": False, "error": "old_string and new_string required"}
-        text = skill_md.read_text(encoding="utf-8")
-        count = text.count(old_string)
-        if count == 0:
-            return {"success": False, "error": "old_string not found"}
-        if count > 1:
-            return {
-                "success": False,
-                "error": f"old_string matches {count} times; make it unique",
-            }
-        skill_md.write_text(text.replace(old_string, new_string, 1), encoding="utf-8")
-        return {"success": True}
-
-    if action == "edit":
-        if not skill_md.exists():
-            return {"success": False, "error": f"skill {name!r} does not exist"}
-        if not content or "---" not in content:
-            return {"success": False, "error": "content must include YAML frontmatter"}
-        try:
-            check_untrusted(content)
-        except UnsafeContent as e:
-            return {"success": False, "error": f"unsafe skill content: {e}"}
-        skill_md.write_text(content, encoding="utf-8")
-        return {"success": True}
-
-    if action == "delete":
-        if not d.exists():
-            return {"success": False, "error": f"skill {name!r} does not exist"}
-        shutil.rmtree(d)
-        return {"success": True}
-
-    if action == "write_file":
-        if not (file_path and content is not None):
-            return {"success": False, "error": "file_path and content required"}
-        if not d.exists():
-            return {"success": False, "error": f"skill {name!r} does not exist"}
-        try:
-            target = _resolve_inside(d, file_path)
-        except ValueError as e:
-            return {"success": False, "error": str(e)}
-        try:
-            check_untrusted(content)
-        except UnsafeContent as e:
-            return {"success": False, "error": f"unsafe file content: {e}"}
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
-        return {"success": True, "path": f"skills/{name}/{file_path}"}
-
-    if action == "remove_file":
-        if not file_path:
-            return {"success": False, "error": "file_path required"}
-        if not d.exists():
-            return {"success": False, "error": f"skill {name!r} does not exist"}
-        try:
-            target = _resolve_inside(d, file_path)
-        except ValueError as e:
-            return {"success": False, "error": str(e)}
-        if target.exists():
-            target.unlink()
-        return {"success": True}
-
-    return {"success": False, "error": f"unknown action {action!r}"}
+_ACTIONS: tuple[str, ...] = (
+    "create",
+    "patch",
+    "edit",
+    "delete",
+    "write_file",
+    "remove_file",
+    "list",
+)
 
 
 @function_tool(
@@ -162,22 +46,66 @@ def dispatch(  # noqa: PLR0911, PLR0912, PLR0915 — branch-per-action; flat dis
         "enumerate existing skills. Skills you create are picked up on the next run."
     ),
 )
-async def skill_manage(
+async def skill_manage(  # noqa: PLR0911, PLR0912 — flat dispatch keeps the wire shape readable
     ctx: RunContextWrapper[Any],
-    action: Action,
+    action: Literal[
+        "create", "patch", "edit", "delete", "write_file", "remove_file", "list"
+    ],
     name: str | None = None,
     content: str | None = None,
     old_string: str | None = None,
     new_string: str | None = None,
     file_path: str | None = None,
 ) -> str:
-    del ctx  # unused; the tool operates on the on-disk skills dir
-    result = dispatch(
-        action,
-        name=name,
-        content=content,
-        old_string=old_string,
-        new_string=new_string,
-        file_path=file_path,
-    )
-    return json.dumps(result)
+    backend = resolve_tenant(ctx).skill
+    if action == "list":
+        return json.dumps({"success": True, "skills": await backend.list_slugs()})
+    if not name:
+        return json.dumps({"success": False, "error": "name is required"})
+    if action == "create":
+        if not content:
+            return json.dumps(
+                {
+                    "success": False,
+                    "error": (
+                        "content must be a complete SKILL.md with YAML frontmatter "
+                        "(--- name: ... description: ... ---)"
+                    ),
+                }
+            )
+        return json.dumps(await backend.create(slug=name, content=content))
+    if action == "patch":
+        if not (old_string and new_string is not None):
+            return json.dumps(
+                {"success": False, "error": "old_string and new_string required"}
+            )
+        return json.dumps(
+            await backend.patch(
+                slug=name, old_string=old_string, new_string=new_string
+            )
+        )
+    if action == "edit":
+        if not content:
+            return json.dumps(
+                {"success": False, "error": "content must include YAML frontmatter"}
+            )
+        return json.dumps(await backend.edit(slug=name, content=content))
+    if action == "delete":
+        return json.dumps(await backend.delete(slug=name))
+    if action == "write_file":
+        if not (file_path and content is not None):
+            return json.dumps(
+                {"success": False, "error": "file_path and content required"}
+            )
+        return json.dumps(
+            await backend.write_file(
+                slug=name, file_path=file_path, content=content
+            )
+        )
+    if action == "remove_file":
+        if not file_path:
+            return json.dumps({"success": False, "error": "file_path required"})
+        return json.dumps(
+            await backend.remove_file(slug=name, file_path=file_path)
+        )
+    return json.dumps({"success": False, "error": f"unknown action {action!r}"})

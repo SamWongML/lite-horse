@@ -221,8 +221,36 @@ asserts every backend Protocol has both impls.
 
 | #  | Subject | Status |
 |----|---|---|
-| 40 | Tool-backend abstraction + tenant-safe writes (BLOCKER)            | ☐ |
+| 40 | Tool-backend abstraction + tenant-safe writes (BLOCKER)            | ✅ |
 | 41 | Per-agent personas + agent CRUD                                    | ☐ |
+
+### Blocked / in progress
+Phase 40 shipped 2026-05-07: ``src/lite_horse/agent/backends/`` adds
+``TenantContext`` + ``MemoryBackend`` / ``SkillBackend`` /
+``CronBackend`` Protocols with both ``*_local.py`` (wrapping the v0.4
+``MemoryStore`` / ``JobStore`` / local skills tree) and ``*_cloud.py``
+(``MemoryRepo`` / ``CronRepo`` / ``SkillRepo`` per-call short-lived
+``db_session(user_id)``). ``memory_tool`` / ``skill_manage`` /
+``skill_view`` / ``cron_manage`` now resolve their backend off
+``RunContextWrapper.context`` per turn; tool wire shapes are
+unchanged. ``BudgetHook._consolidate`` and ``EvolutionHook``'s
+distiller / refiner / ``record_outcome`` all flow through the same
+backends; ``Runner.run(..., context=tenant)`` propagates the bundle
+into side-agent runs. ``api.run_turn*`` build a local
+``TenantContext``; ``web/turn_engine`` builds a cloud one keyed on
+``req.user_id``. ``skills/stats.py`` is now path-based (caller passes
+the skill dir) and the FS-touching helpers ``_view`` / ``dispatch``
+moved to ``skills/local_view.py`` + ``skills/local_dispatch.py`` so the
+agent layer stays free of ``litehorse_home`` / ``MemoryStore`` /
+``skills_root`` / ``*Repo`` direct imports — enforced by
+``tests/lint/test_no_litehorse_home_in_tools.py``.
+``tests/lint/test_cli_parity.py`` asserts every Protocol has both
+impls with the full method set. New
+``tests/security/test_tool_tenant_isolation.py`` proves cross-user
+writes don't leak through any of the three tools; new
+``tests/cli/test_cli_byte_parity.py`` asserts local writes still
+land at the v0.4 byte-shape paths.
+**v0.5 Phase 41 next.**
 | 42 | pgvector recall + ``memory_search`` tool                           | ☐ |
 | 43 | Session summaries + cross-session compaction                       | ☐ |
 | 44 | Curator background pass + outcome classifier                       | ☐ |

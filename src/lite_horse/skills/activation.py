@@ -39,6 +39,7 @@ import yaml
 
 from lite_horse.constants import ACTIVATION_TOP_K, litehorse_home
 from lite_horse.effective import ResolvedSkill
+from lite_horse.skills import stats as _stats
 
 _ALWAYS_ON_SCORE = 0.5
 _KEYWORD_IN_TEXT_SCORE = 2.0
@@ -194,6 +195,55 @@ def _read_user_profile_text() -> str:
         return path.read_text(encoding="utf-8")
     except OSError:
         return ""
+
+
+# ---------- local-FS skills index for the CLI prompt ----------
+
+
+def render_local_skills_index_block(
+    *,
+    user_text: str | None,
+    header: str,
+    fragile_min_errors: int = 3,
+    fragile_max_success_ratio: float = 0.5,
+    fragile_tag: str = " (fragile — see stats)",
+    top_k: int = ACTIVATION_TOP_K,
+) -> str:
+    """Render the skill index block by scanning ``~/.litehorse/skills/``.
+
+    Used by the CLI prompt builder. Scans on-disk skills, runs the same
+    activation scoring as :func:`filter_for_turn`, and decorates entries
+    with a "fragile" suffix when the per-skill stats sidecar shows a
+    failure rate above the threshold. Lives outside ``agent/`` so the
+    instruction builder can stay free of ``litehorse_home`` /
+    ``skills_root`` imports.
+    """
+    skills_dir = litehorse_home() / "skills"
+    entries = filter_for_turn(
+        skills_dir=skills_dir, user_text=user_text, top_k=top_k
+    )
+    if not entries:
+        return ""
+    lines: list[str] = []
+    for entry in sorted(entries, key=lambda e: e.name):
+        desc = entry.description or "(no description)"
+        suffix = ""
+        try:
+            data = _stats.read(skills_dir / entry.name)
+        except Exception:
+            data = None
+        if data:
+            errors = int(data.get("error_count", 0) or 0)
+            successes = int(data.get("success_count", 0) or 0)
+            uses = int(data.get("usage_count", 0) or 0)
+            if (
+                errors >= fragile_min_errors
+                and uses > 0
+                and successes / max(1, uses) < fragile_max_success_ratio
+            ):
+                suffix = fragile_tag
+        lines.append(f"- **{entry.name}**: {desc}{suffix}")
+    return f"{header}\n" + "\n".join(lines)
 
 
 # ---------- cloud path: input is already-resolved skills ----------

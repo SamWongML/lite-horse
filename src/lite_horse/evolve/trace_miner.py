@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from lite_horse.sessions.local import LocalSessionRepo
 from lite_horse.skills import stats as skill_stats
+from lite_horse.skills.source import skills_root
 
 _ERROR_END_REASONS: frozenset[str] = frozenset(
     {"model_refusal", "tool_error", "unknown_error", "context_overflow"}
@@ -48,7 +49,7 @@ def mine_failures(
     hits = db.search_messages(skill_name, limit=limit * 5)
     seen: set[str] = set()
     trajectories: list[Trajectory] = []
-    sidecar = skill_stats.read(skill_name) or {}
+    sidecar = skill_stats.read(skills_root() / skill_name) or {}
     fallback_outcome = _fallback_outcome(sidecar)
     for hit in hits:
         if hit.timestamp < cutoff or hit.session_id in seen:
