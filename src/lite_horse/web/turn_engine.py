@@ -58,6 +58,7 @@ log = logging.getLogger(__name__)
 _PROVIDER_ENV_FALLBACK = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
+    "openai_compat": "OPENAI_COMPAT_API_KEY",
 }
 
 
