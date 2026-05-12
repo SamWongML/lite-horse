@@ -15,8 +15,19 @@ REPO = Path(__file__).resolve().parents[2]
 BACKENDS_DIR = REPO / "src" / "lite_horse" / "agent" / "backends"
 
 # Phase 40 ships these three Protocols. Phase 42 adds ``recall``;
-# Phase 44 will add ``feedback`` next to them.
-EXPECTED_PROTOCOLS: tuple[str, ...] = ("memory", "skill", "cron", "recall")
+# Phase 44 adds ``feedback`` (its Protocol is named ``FeedbackSink`` rather
+# than ``FeedbackBackend`` — semantically a write sink + projection — so
+# the parity check looks up the explicit class name from this map first).
+EXPECTED_PROTOCOLS: tuple[str, ...] = (
+    "memory", "skill", "cron", "recall", "feedback",
+)
+PROTOCOL_CLASS_OVERRIDES: dict[str, str] = {
+    "feedback": "FeedbackSink",
+}
+IMPL_CLASS_OVERRIDES: dict[str, tuple[str, str]] = {
+    # stem -> (local class, cloud class)
+    "feedback": ("FeedbackLocalBackend", "FeedbackCloudBackend"),
+}
 
 
 def _read_class_methods(path: Path, class_name: str) -> set[str]:
@@ -33,14 +44,20 @@ def _read_class_methods(path: Path, class_name: str) -> set[str]:
 
 
 def _expected_class_name(stem: str) -> str:
+    if stem in PROTOCOL_CLASS_OVERRIDES:
+        return PROTOCOL_CLASS_OVERRIDES[stem]
     return stem.title().replace("_", "") + "Backend"
 
 
 def _local_class_name(stem: str) -> str:
+    if stem in IMPL_CLASS_OVERRIDES:
+        return IMPL_CLASS_OVERRIDES[stem][0]
     return f"{stem.title()}LocalBackend"
 
 
 def _cloud_class_name(stem: str) -> str:
+    if stem in IMPL_CLASS_OVERRIDES:
+        return IMPL_CLASS_OVERRIDES[stem][1]
     return f"{stem.title()}CloudBackend"
 
 

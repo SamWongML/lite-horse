@@ -20,10 +20,20 @@ from typing import Any
 from lite_horse.cron.scheduler import CronMessage
 from lite_horse.evolve.cloud import EvolveMessage, is_evolve_payload, run_evolve
 from lite_horse.storage.queue import QueueMessage
+from lite_horse.worker.classify import (
+    ClassifyMessage,
+    is_classify_payload,
+    run_classify,
+)
 from lite_horse.worker.compact import (
     CompactMessage,
     is_compact_payload,
     run_compact,
+)
+from lite_horse.worker.curate import (
+    CurateMessage,
+    is_curate_payload,
+    run_curate,
 )
 from lite_horse.worker.embed import EmbedMessage, is_embed_payload, run_embed
 from lite_horse.worker.summarize import (
@@ -83,6 +93,8 @@ async def dispatch_message(  # noqa: PLR0911, PLR0912, PLR0915 — flat per-kind
     embed_fn: Callable[[EmbedMessage], Awaitable[bool]] | None = None,
     summarize_fn: Callable[[SummarizeMessage], Awaitable[bool]] | None = None,
     compact_fn: Callable[[CompactMessage], Awaitable[bool]] | None = None,
+    classify_fn: Callable[[ClassifyMessage], Awaitable[bool]] | None = None,
+    curate_fn: Callable[[CurateMessage], Awaitable[bool]] | None = None,
 ) -> bool:
     """Run one queue message end-to-end.
 
@@ -162,6 +174,40 @@ async def dispatch_message(  # noqa: PLR0911, PLR0912, PLR0915 — flat per-kind
                 "worker: compact failed (user=%s agent=%s)",
                 compact_msg.user_id,
                 compact_msg.agent_id,
+            )
+            return False
+
+    if is_classify_payload(raw.body):
+        try:
+            classify_msg = ClassifyMessage.from_json(raw.body)
+        except (ValueError, KeyError, TypeError) as exc:
+            log.error("worker: dropping unparseable classify message: %s", exc)
+            return True
+        classify = classify_fn or run_classify
+        try:
+            return await classify(classify_msg)
+        except Exception:
+            log.exception(
+                "worker: classify failed (user=%s turn=%s)",
+                classify_msg.user_id,
+                classify_msg.turn_id,
+            )
+            return False
+
+    if is_curate_payload(raw.body):
+        try:
+            curate_msg = CurateMessage.from_json(raw.body)
+        except (ValueError, KeyError, TypeError) as exc:
+            log.error("worker: dropping unparseable curate message: %s", exc)
+            return True
+        curate = curate_fn or run_curate
+        try:
+            return await curate(curate_msg)
+        except Exception:
+            log.exception(
+                "worker: curate failed (user=%s agent=%s)",
+                curate_msg.user_id,
+                curate_msg.agent_id,
             )
             return False
 

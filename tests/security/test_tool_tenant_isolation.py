@@ -211,6 +211,8 @@ class _InMemoryRecallBackend(RecallBackend):
 def _make_ctx(
     user_id: str, *, tool_name: str = "tool"
 ) -> ToolContext[TenantContext]:
+    from lite_horse.agent.backends.feedback_local import FeedbackLocalBackend
+
     tenant = TenantContext(
         user_id=user_id,
         agent_id=None,
@@ -218,6 +220,7 @@ def _make_ctx(
         skill=_InMemorySkillBackend(),
         cron=_InMemoryCronBackend(),
         recall=_InMemoryRecallBackend(),
+        feedback=FeedbackLocalBackend(),
     )
     return ToolContext(
         context=tenant,

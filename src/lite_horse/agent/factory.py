@@ -29,6 +29,9 @@ from openai.types.shared import Reasoning
 
 from lite_horse.agent.backends import TenantContext, build_local_tenant_context
 from lite_horse.agent.backends.cron_cloud import CronCloudBackend
+from lite_horse.agent.backends.feedback import FeedbackSink
+from lite_horse.agent.backends.feedback_cloud import FeedbackCloudBackend
+from lite_horse.agent.backends.feedback_local import FeedbackLocalBackend
 from lite_horse.agent.backends.memory_cloud import MemoryCloudBackend
 from lite_horse.agent.backends.recall import RecallBackend
 from lite_horse.agent.backends.recall_cloud import RecallCloudBackend
@@ -225,12 +228,20 @@ def build_cloud_tenant_context(
     """
     chosen_embedder = embedder or select_embedding_provider()
     recall_backend: RecallBackend
+    feedback_backend: FeedbackSink
     if agent_id is not None:
         recall_backend = RecallCloudBackend(
             user_id=user_id, agent_id=agent_id, embedder=chosen_embedder
         )
+        feedback_backend = FeedbackCloudBackend(
+            user_id=user_id, agent_id=agent_id
+        )
     else:
         recall_backend = RecallLocalBackend(embedder=chosen_embedder)
+        # Admin / curator callers without agent_id fall back to the local
+        # NDJSON sink so reads against ``rating_stats`` don't blow up; the
+        # real cloud path always resolves agent_id before opening a turn.
+        feedback_backend = FeedbackLocalBackend()
     return TenantContext(
         user_id=user_id,
         agent_id=agent_id,
@@ -238,6 +249,7 @@ def build_cloud_tenant_context(
         skill=SkillCloudBackend(user_id=user_id, effective=eff),
         cron=CronCloudBackend(user_id=user_id),
         recall=recall_backend,
+        feedback=feedback_backend,
     )
 
 

@@ -32,7 +32,10 @@ from typing import Any
 from agents import Agent, AgentHooks, RunContextWrapper, Runner, Tool
 
 from lite_horse.agent.backends import resolve_tenant
-from lite_horse.constants import SKILL_CREATION_MIN_TOOL_CALLS
+from lite_horse.constants import (
+    CURATOR_REFINE_MIN_OUTCOMES,
+    SKILL_CREATION_MIN_TOOL_CALLS,
+)
 from lite_horse.skills.manage_tool import skill_manage
 
 _DISTILLER_INSTRUCTIONS = (
@@ -129,12 +132,51 @@ class EvolutionHook(AgentHooks[Any]):
         del agent
         self._final_output = str(output)[:1000] if output else None
         await self._record_viewed_outcomes(context)
-        if self._viewed_skills and self._error_summary is not None:
+        should_refine = await self._should_refine(context)
+        if should_refine:
             await self._maybe_refine_skill(context)
             return
         if self._tool_call_count < self.min_tool_calls:
             return
         await self._maybe_create_skill(context)
+
+    async def _should_refine(self, context: RunContextWrapper[Any]) -> bool:
+        """Decide whether to invoke the refiner side-agent.
+
+        In-trajectory error markers remain the primary trigger. The
+        Phase-44 feedback path adds two gates:
+
+        * once the most-recently viewed skill has accumulated
+          ``CURATOR_REFINE_MIN_OUTCOMES`` rated turns, the aggregate
+          net-rating overrides the in-trajectory signal — non-negative
+          history suppresses refinement, negative history triggers it
+          even without a regex-error marker.
+        """
+        if not self._viewed_skills:
+            return False
+        target = self._viewed_skills[-1]
+        marker_says_fail = self._error_summary is not None
+        stats = await self._latest_skill_stats(context, target)
+        if stats is None:
+            return marker_says_fail
+        outcomes = stats.success_count + stats.error_count
+        if outcomes < CURATOR_REFINE_MIN_OUTCOMES:
+            return marker_says_fail
+        net = stats.success_count - stats.error_count
+        if net >= 0:
+            return False
+        return True
+
+    async def _latest_skill_stats(
+        self, context: RunContextWrapper[Any], skill_slug: str
+    ) -> Any:
+        feedback = getattr(resolve_tenant(context), "feedback", None)
+        if feedback is None:
+            return None
+        try:
+            return await feedback.rating_stats(skill_slug=skill_slug)
+        except Exception:
+            return None
 
     def _track_view(self, result: str) -> None:
         try:

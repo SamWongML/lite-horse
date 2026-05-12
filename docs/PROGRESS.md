@@ -390,8 +390,72 @@ entries with ``ENTRY_DELIMITER``. New tests:
 ``tests/agent/test_session_summary_injection.py``,
 ``tests/sessions/test_local_session_summaries.py``,
 ``tests/cli/test_memory_compact.py``.
-**v0.5 Phase 44 next.**
-| 44 | Curator background pass + outcome classifier                       | ☐ |
+Phase 44 shipped 2026-05-13: ``alembic 0006_phase44_curator``
+adds the ``turn_outcomes`` table (``user_id`` / ``agent_id``
+/ ``session_id`` / ``turn_id`` / ``skill_slug`` / ``source``
+∈ {``classifier``, ``user_explicit``, ``regex_marker``} /
+``rating`` ∈ {-1, 0, 1} / ``reason`` / ``ts``), enables RLS +
+``FORCE ROW LEVEL SECURITY`` with the compound user/agent
+``tenant_isolation`` policy, and tops ``skills`` with
+``curator_state`` ∈ {``active``, ``stale``, ``archived``,
+``pinned``} + ``last_used_at`` / ``success_count`` /
+``error_count`` counters.
+``models/turn_outcome.py`` + ``repositories/turn_outcome_repo.py``
+own ``record`` / ``latest_for_turn`` / ``rating_stats``;
+``SkillRepo`` gains ``bump_use`` / ``update_curator_state`` /
+``list_curator_targets_admin`` for the curator pass.
+``agent/backends/feedback.py`` defines the ``FeedbackSink``
+Protocol (``record`` / ``latest_for_turn`` / ``rating_stats``);
+``feedback_cloud.py`` wraps the repo via a fresh
+``db_session(user_id, agent_id)`` per call, ``feedback_local.py``
+appends NDJSON to ``~/.litehorse/feedback.log`` for CLI parity.
+``TenantContext`` gains a ``feedback`` field;
+``build_local_tenant_context`` / ``build_cloud_tenant_context``
+populate it. ``agent/outcome_classifier.py`` is a small
+side-agent that collapses ``{user_request, final_text, tool_tail}``
+into ``rating ∈ {-1, 0, 1}`` + reason via strict JSON.
+``curator.py`` (top-level module, kept out of the
+``agent/`` tool/hook scope by the Phase 40 lint) owns the
+state-transition logic (``pinned`` never moves, ≥90 days idle +
+0 successes → ``archived``, ≥30 days → ``stale``) plus the
+cosine-paired curator-reviewer side-agent that emits one
+:class:`SkillProposal` per consolidation candidate above
+:data:`CURATOR_CONSOLIDATE_COSINE` — no auto-merges.
+``worker/classify.py`` adds ``ClassifyMessage`` + ``run_classify``
+(reads the turn → runs the classifier → records through
+``FeedbackCloudBackend``); ``worker/curate.py`` adds
+``CurateMessage`` + ``run_curate`` (runs the Curator over one
+``(user_id, agent_id)`` slice). The dispatcher in
+``worker/runner.py`` routes ``kind="classify"`` and
+``kind="curate"`` ahead of cron. ``scheduler/curator_tick.py``
+(daily) scans skill ownership via the admin helper and emits one
+``CurateMessage`` per slice. ``agent/evolution.py`` gates
+``_should_refine`` through ``ctx.context.feedback.rating_stats``:
+once a viewed skill has crossed
+``CURATOR_REFINE_MIN_OUTCOMES`` aggregate ratings flip the
+decision — positive trend suppresses refinement, negative trend
+triggers it without an in-trajectory error; the prior
+marker-only path is preserved as the cache-cold fallback.
+``web/routes/turns.py::POST /v1/turns/{turn_id}/feedback``
+accepts ``{session_key, rating ∈ {-1,0,1}, reason ≤ 240,
+skill_slug, agent_id}`` and writes through
+``FeedbackCloudBackend`` with ``source="user_explicit"``.
+CLI parity: ``cli/commands/feedback.py`` is the ``litehorse
+feedback`` Typer app (``--rating`` / ``--reason`` / ``--session``
+/ ``--skill`` / ``--json``); ``cli/commands/skills.py`` adds
+``curate`` (read-only state preview joining filesystem mtime
+with the feedback-log success map). ``tests/lint/test_cli_parity.py``
+now covers ``feedback`` with explicit ``PROTOCOL_CLASS_OVERRIDES``
+/ ``IMPL_CLASS_OVERRIDES`` since the Protocol class is named
+``FeedbackSink`` (not ``FeedbackBackend``). New tests:
+``tests/models/test_phase44_migration_static.py``,
+``tests/agent/test_outcome_classifier.py``,
+``tests/agent/test_curator_consolidate.py``,
+``tests/agent/test_evolution_feedback_gate.py``,
+``tests/worker/test_classify_curate_dispatch.py``,
+``tests/web/test_feedback_route.py``.
+**v0.5 Phase 45 next.**
+| 44 | Curator background pass + outcome classifier                       | ✅ |
 | 45 | User-skill promotion + GEPA-style offline evolve                   | ☐ |
 | 46 | Hardening: GDPR delete, audit shipper, SDK bumps, CLI parity gate  | ☐ |
 

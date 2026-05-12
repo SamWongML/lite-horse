@@ -22,6 +22,7 @@ EXPECTED_TABLES = {
     "audit_log",
     "usage_events",
     "session_summaries",
+    "turn_outcomes",
 }
 
 

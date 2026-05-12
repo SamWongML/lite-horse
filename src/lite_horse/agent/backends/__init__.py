@@ -22,6 +22,13 @@ from typing import Any
 
 from lite_horse.agent.backends.cron import CronBackend, CronJobView
 from lite_horse.agent.backends.cron_local import CronLocalBackend
+from lite_horse.agent.backends.feedback import (
+    FeedbackSink,
+    OutcomeRecord,
+    OutcomeSource,
+    OutcomeStats,
+)
+from lite_horse.agent.backends.feedback_local import FeedbackLocalBackend
 from lite_horse.agent.backends.memory import (
     MemoryBackend,
     MemoryFull,
@@ -54,6 +61,7 @@ class TenantContext:
     skill: SkillBackend
     cron: CronBackend
     recall: RecallBackend
+    feedback: FeedbackSink
 
 
 def build_local_tenant_context() -> TenantContext:
@@ -70,6 +78,7 @@ def build_local_tenant_context() -> TenantContext:
         skill=SkillLocalBackend(),
         cron=CronLocalBackend(),
         recall=RecallLocalBackend(),
+        feedback=FeedbackLocalBackend(),
     )
 
 
@@ -91,9 +100,13 @@ def resolve_tenant(ctx: Any) -> TenantContext:
 __all__ = [
     "CronBackend",
     "CronJobView",
+    "FeedbackSink",
     "MemoryBackend",
     "MemoryFull",
     "MemoryKind",
+    "OutcomeRecord",
+    "OutcomeSource",
+    "OutcomeStats",
     "RecallBackend",
     "Recalled",
     "SkillBackend",

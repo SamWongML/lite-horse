@@ -43,3 +43,18 @@ SCHEMA_VERSION = 2
 # OpenAI ``text-embedding-3-small`` is 1536-dim natively; Voyage's 1024
 # dims are right-padded to fit this fixed shape.
 EMBED_DIM = 1536
+
+# Phase 44 — curator + outcome classifier thresholds.
+# A skill must have at least this many recorded outcomes before the
+# outcome-classifier's signal can drive ``EvolutionHook`` refinement;
+# protects against false-failure noise on rarely-used skills.
+CURATOR_REFINE_MIN_OUTCOMES = 5
+# Days of idle time (no ``last_used_at`` movement) before a skill flips
+# from ``active`` → ``stale``.
+CURATOR_STALE_AFTER_DAYS = 30
+# Idle days + zero successes flip a skill from ``stale`` → ``archived``.
+CURATOR_ARCHIVE_AFTER_DAYS = 90
+# Cosine similarity between two skill bodies above which the curator
+# proposes a consolidation. 0.85 was the Hermes-side default and matches
+# the regression test in ``tests/agent/test_curator_consolidate.py``.
+CURATOR_CONSOLIDATE_COSINE = 0.85

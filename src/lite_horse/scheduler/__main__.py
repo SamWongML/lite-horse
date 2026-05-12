@@ -27,6 +27,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from lite_horse.config import get_settings
 from lite_horse.observability import configure_logging, configure_tracing
 from lite_horse.scheduler.compact_tick import compact_tick
+from lite_horse.scheduler.curator_tick import curator_tick
 from lite_horse.scheduler.evolve_tick import evolve_tick
 from lite_horse.scheduler.summarize_tick import summarize_tick
 from lite_horse.scheduler.tick import tick
@@ -37,6 +38,7 @@ TICK_SECONDS = 60
 EVOLVE_TICK_SECONDS = 86400
 SUMMARIZE_TICK_SECONDS = 3600
 COMPACT_TICK_SECONDS = 86400
+CURATOR_TICK_SECONDS = 86400
 
 log = logging.getLogger(__name__)
 
@@ -81,6 +83,16 @@ def _wrap_compact_tick(queue: MessageQueue) -> Any:
     return _job
 
 
+def _wrap_curator_tick(queue: MessageQueue) -> Any:
+    async def _job() -> None:
+        try:
+            await curator_tick(queue=queue)
+        except Exception:
+            log.exception("curator tick failed")
+
+    return _job
+
+
 async def run_scheduler() -> None:
     """Async entrypoint: schedule the tick, wait for SIGINT/SIGTERM."""
     settings = get_settings()
@@ -113,6 +125,13 @@ async def run_scheduler() -> None:
         _wrap_compact_tick(queue),
         trigger=IntervalTrigger(seconds=COMPACT_TICK_SECONDS),
         id="compact-tick",
+        replace_existing=True,
+        next_run_time=None,
+    )
+    sched.add_job(
+        _wrap_curator_tick(queue),
+        trigger=IntervalTrigger(seconds=CURATOR_TICK_SECONDS),
+        id="curator-tick",
         replace_existing=True,
         next_run_time=None,
     )

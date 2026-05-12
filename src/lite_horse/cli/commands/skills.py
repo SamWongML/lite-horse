@@ -321,6 +321,100 @@ def evolve_cmd(
         raise typer.Exit(code=int(ExitCode.GENERIC))
 
 
+@app.command("curate")
+def curate_cmd(
+    json_mode: bool = typer.Option(False, "--json", help="Emit NDJSON."),
+    stale_days: int = typer.Option(
+        None, "--stale-days",
+        help="Override curator stale threshold (default: 30).",
+    ),
+    archive_days: int = typer.Option(
+        None, "--archive-days",
+        help="Override curator archive threshold (default: 90).",
+    ),
+) -> None:
+    """Report which skills would transition under the curator's rules.
+
+    Read-only by design: prints a per-skill state report based on the
+    skill directory's most-recent modification time and recorded
+    successes in ``~/.litehorse/feedback.log``. Mirrors the cloud
+    curator's transition rules so a user can preview before opting in.
+    """
+    from datetime import UTC, datetime
+
+    from lite_horse.cli._output import emit_item, emit_result
+    from lite_horse.constants import (
+        CURATOR_ARCHIVE_AFTER_DAYS,
+        CURATOR_STALE_AFTER_DAYS,
+    )
+
+    stale_cutoff = stale_days if stale_days is not None else CURATOR_STALE_AFTER_DAYS
+    archive_cutoff = (
+        archive_days if archive_days is not None else CURATOR_ARCHIVE_AFTER_DAYS
+    )
+    now = datetime.now(UTC)
+    feedback = _load_feedback_success_map()
+    rows: list[dict[str, Any]] = []
+    for s in list_skills():
+        path = Path(s["path"])
+        mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+        idle_days = int((now - mtime).total_seconds() // 86400)
+        successes = feedback.get(s["name"], 0)
+        state = "active"
+        if idle_days >= archive_cutoff and successes == 0:
+            state = "archived"
+        elif idle_days >= stale_cutoff:
+            state = "stale"
+        rows.append({
+            "name": s["name"],
+            "idle_days": idle_days,
+            "success_count": successes,
+            "would_become": state,
+        })
+    for r in rows:
+        emit_item(r, json_mode=json_mode)
+    summary = {
+        "active": sum(1 for r in rows if r["would_become"] == "active"),
+        "stale": sum(1 for r in rows if r["would_become"] == "stale"),
+        "archived": sum(1 for r in rows if r["would_become"] == "archived"),
+    }
+    emit_result(
+        summary if json_mode else
+        f"active={summary['active']} stale={summary['stale']} "
+        f"archived={summary['archived']}",
+        json_mode=json_mode,
+    )
+
+
+def _load_feedback_success_map() -> dict[str, int]:
+    """Count rating=+1 outcomes per ``skill_slug`` in the local feedback log."""
+    import json as _json
+
+    from lite_horse.constants import litehorse_home
+
+    log_path = litehorse_home() / "feedback.log"
+    counts: dict[str, int] = {}
+    if not log_path.exists():
+        return counts
+    try:
+        with log_path.open("r", encoding="utf-8") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    data = _json.loads(line)
+                except _json.JSONDecodeError:
+                    continue
+                slug = data.get("skill_slug")
+                if not slug or int(data.get("rating") or 0) != 1:
+                    continue
+                counts[slug] = counts.get(slug, 0) + 1
+    except OSError:
+        return counts
+    return counts
+
+
 @proposals_app.command("list")
 def proposals_list_cmd(
     slug: str = typer.Argument(None, help="Filter to one skill slug."),
