@@ -43,9 +43,9 @@ from lite_horse.api import (
     _StreamCounters,
 )
 from lite_horse.core.permission import PermissionPolicy, get_policy
+from lite_horse.providers.embedding import select_embedding_provider
 from lite_horse.repositories.agent_repo import AgentRepo
 from lite_horse.repositories.byo_repo import ByoKeyStore
-from lite_horse.providers.embedding import select_embedding_provider
 from lite_horse.repositories.memory_repo import MemoryRepo
 from lite_horse.repositories.session_repo import SessionRepo
 from lite_horse.repositories.session_summary_repo import SessionSummaryRepo

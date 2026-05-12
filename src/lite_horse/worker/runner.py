@@ -74,7 +74,7 @@ async def _default_deliver(
     await deliver_webhook(spec, text, session_key)
 
 
-async def dispatch_message(  # noqa: PLR0911, PLR0912 — flat per-kind dispatch is the readable shape
+async def dispatch_message(  # noqa: PLR0911, PLR0912, PLR0915 — flat per-kind dispatch is the readable shape
     raw: QueueMessage,
     *,
     run_turn_fn: RunTurnFn | None = None,

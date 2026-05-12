@@ -24,7 +24,11 @@ def _migration_source() -> str:
 def test_creates_session_summaries_table() -> None:
     src = _migration_source()
     assert "create_table" in src and '"session_summaries"' in src
-    for column in ("session_id", "user_id", "agent_id", "summary", "topic", "generator", "generated_at"):
+    expected_columns = (
+        "session_id", "user_id", "agent_id",
+        "summary", "topic", "generator", "generated_at",
+    )
+    for column in expected_columns:
         assert column in src, f"missing column {column!r} in migration"
 
 

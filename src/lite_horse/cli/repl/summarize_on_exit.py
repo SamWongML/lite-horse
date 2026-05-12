@@ -16,7 +16,7 @@ from lite_horse.sessions.local import LocalSessionRepo
 log = logging.getLogger(__name__)
 
 
-async def summarize_on_exit(*, session_key: str, model: str) -> bool:
+async def summarize_on_exit(*, session_key: str, model: str) -> bool:  # noqa: PLR0911
     """Summarise one CLI session in place. Returns True if a row was written."""
     db = LocalSessionRepo()
     try:

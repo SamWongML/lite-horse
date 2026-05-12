@@ -7,7 +7,7 @@ pairs whose ``memory.md`` has crossed 80% utilisation, and posts one
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 
 from lite_horse.observability import emit_metric
 from lite_horse.repositories.memory_repo import MemoryRepo
