@@ -4,7 +4,7 @@ Revision ID: 0005_phase43_summaries
 Revises: 0004_phase42_pgvector
 Create Date: 2026-05-21
 
-A side-agent summarises every completed session into a 1–3 sentence blurb
+A side-agent summarises every completed session into a 1-3 sentence blurb
 that the prompt assembly path injects into the next session, plus the
 recall pgvector store from Phase 42 (``source_kind='session_summary'``).
 This migration just creates the durable table; the worker + summarizer

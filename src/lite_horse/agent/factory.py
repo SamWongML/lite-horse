@@ -38,8 +38,8 @@ from lite_horse.agent.budget import BudgetHook
 from lite_horse.agent.consolidator import Consolidator
 from lite_horse.agent.evolution import EvolutionHook
 from lite_horse.agent.instructions import (
-    make_instructions,
     SessionSummaryBlock,
+    make_instructions,
     make_instructions_for_user,
 )
 from lite_horse.config import Config, load_config

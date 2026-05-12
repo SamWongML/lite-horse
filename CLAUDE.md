@@ -1,70 +1,50 @@
-# CLAUDE.md
+# CLAUDE.md — lite-horse
 
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+Python 3.11+, `src/`-layout, managed by **uv**. Behavioral merge: surface tradeoffs, write the minimum, change only what the task requires, verify before declaring done.
 
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+## Commands — use `uv run *` (pre-allowlisted in `.claude/settings.local.json`)
 
-## 1. Think Before Coding
+Dev tools (pytest/ruff/mypy) live in `[project.optional-dependencies] dev`, so they need `--extra dev`. Runtime tools (`litehorse`, `alembic`) don't.
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+| Task                 | Command                                                       |
+|----------------------|---------------------------------------------------------------|
+| All tests            | `uv run --extra dev pytest`                                   |
+| One test             | `uv run --extra dev pytest tests/path/test_x.py::test_name`   |
+| Lint                 | `uv run --extra dev ruff check src tests`                     |
+| Format               | `uv run --extra dev ruff format src tests`                    |
+| Type-check           | `uv run --extra dev mypy src`                                 |
+| CLI                  | `uv run litehorse <subcommand>`                               |
+| Add dep / dev dep    | `uv add <pkg>` / `uv add --optional dev <pkg>`                |
+| Sync (with dev)      | `uv sync --extra dev`                                         |
+| Alembic revision     | `uv run alembic revision -m "msg"`                            |
+| Alembic upgrade      | `uv run alembic upgrade head`                                 |
 
-Before implementing:
+## NEVER
 
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
+- **Never** call `.venv/bin/python`, `.venv/bin/pytest`, or bare `python -m <tool>`. Always `uv run <tool>` — it resolves the venv + lockfile + `PYTHONPATH` and skips the permission prompt every other invocation triggers.
+- **Never** `pip install` or hand-edit `[project] dependencies` in `pyproject.toml`. Use `uv add` / `uv remove` so the lockfile stays in sync.
+- **Never** `source .venv/bin/activate`. Each `uv run` invocation is self-contained.
+- **Never** bypass hooks (`--no-verify`, `--no-gpg-sign`) or skip failing tests. Fix the root cause.
 
-## 2. Simplicity First
+## Repo map
 
-**Minimum code that solves the problem. Nothing speculative.**
+- `src/lite_horse/` — runtime. Subpackages: `agent/`, `cli/`, `web/` (FastAPI), `worker/` (SQS), `scheduler/` (APScheduler), `repositories/`, `models/`, `storage/`, `providers/`, `sessions/`.
+- `tests/` mirrors `src/`. `asyncio_mode = auto` is set in `pyproject.toml`; just decorate with `@pytest.mark.asyncio` where the file isn't already module-async.
+- `docs/PROGRESS.md` — phase ledger; `docs/plans/v0.X-*.md` — active plan with acceptance gates.
+- Alembic migrations: `src/lite_horse/alembic/versions/NNNN_phaseN_*.py` (chain by `down_revision`).
 
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
+## Project workflow
 
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+- Work is phase-scoped. The current plan in `docs/plans/` defines the success criteria — read it before implementing.
+- Each phase ends by flipping its row in `docs/PROGRESS.md` from ☐ to ✅ with a one-paragraph shipped-summary in the same prose style as adjacent phases.
+- **Hard parity rule:** every cloud feature ships a `*_local` backend so the `litehorse` CLI keeps working against `~/.litehorse/`. Cloud tools must not import `litehorse_home` — `tests/lint/test_no_litehorse_home_in_tools.py` enforces this.
 
-## 3. Surgical Changes
+## Behavioral rules
 
-**Touch only what you must. Clean up only your own mess.**
+**Think before coding.** State assumptions explicitly. If multiple interpretations exist, surface them; don't pick silently. Push back when a simpler approach exists. If something is unclear, stop and ask.
 
-When editing existing code:
+**Simplicity.** Minimum code that solves the stated problem. No speculative abstractions, no flexibility that wasn't asked for, no error handling for impossible cases, no comments that restate what the code already says.
 
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
+**Surgical changes.** Touch only what the task requires — every changed line should trace to the user's request. Don't refactor adjacent code, fix unrelated formatting, or delete pre-existing dead code (mention it instead). Remove the imports/vars your changes orphan; leave pre-existing orphans alone unless asked.
 
-When your changes create orphans:
-
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-## 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
----
-
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+**Goal-driven.** Convert vague tasks into verifiable goals before coding: write a failing test, then make it pass; or define an explicit `uv run …` check. Loop until the check passes — don't claim done without running it.
