@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from lite_horse.agent.backends.feedback_cloud import FeedbackCloudBackend
 from lite_horse.repositories.agent_repo import AgentRepo
 from lite_horse.repositories.usage_repo import UsageRepo
 from lite_horse.repositories.user_settings_repo import UserSettings, UserSettingsRepo
@@ -86,6 +87,22 @@ class DecisionOut(BaseModel):
 
 class AbortOut(BaseModel):
     aborted: bool
+
+
+class FeedbackIn(BaseModel):
+    """User-explicit outcome for one turn (Phase 44)."""
+
+    session_key: str = Field(min_length=1, max_length=200)
+    rating: Literal[-1, 0, 1]
+    reason: str | None = Field(default=None, max_length=240)
+    skill_slug: str | None = Field(default=None, max_length=200)
+    agent_id: str | None = None
+
+
+class FeedbackOut(BaseModel):
+    turn_id: str
+    rating: int
+    source: Literal["user_explicit"]
 
 
 # ---------- dependency overrides (test-injection points) ----------
@@ -518,6 +535,41 @@ async def post_decision(
     except ValueError as exc:
         raise http_error(ErrorKind.UNPROCESSABLE, str(exc)) from exc
     return DecisionOut(delivered=delivered)
+
+
+@router.post("/{turn_id}/feedback", response_model=FeedbackOut)
+async def post_feedback(
+    turn_id: str,
+    body: FeedbackIn,
+    ctx: Ctx,
+) -> FeedbackOut:
+    """Persist a user-explicit ``turn_outcomes`` row with ``source='user_explicit'``.
+
+    The user supplies the same ``session_key`` they passed when starting
+    the turn; we resolve the agent the same way as ``POST /v1/turns``.
+    """
+    agent_limits = await _resolve_agent_limits(
+        user_id=ctx.user_id, requested_agent_id=body.agent_id
+    )
+    agent_id = agent_limits.agent_id if agent_limits is not None else body.agent_id
+    if agent_id is None:
+        raise http_error(
+            ErrorKind.UNPROCESSABLE,
+            "feedback requires a resolvable agent_id",
+        )
+    sink = FeedbackCloudBackend(user_id=ctx.user_id, agent_id=agent_id)
+    try:
+        record = await sink.record(
+            session_id=body.session_key,
+            turn_id=turn_id,
+            source="user_explicit",
+            rating=body.rating,
+            reason=body.reason,
+            skill_slug=body.skill_slug,
+        )
+    except ValueError as exc:
+        raise http_error(ErrorKind.UNPROCESSABLE, str(exc)) from exc
+    return FeedbackOut(turn_id=record.turn_id, rating=record.rating, source="user_explicit")
 
 
 @router.post(

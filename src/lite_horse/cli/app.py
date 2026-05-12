@@ -75,6 +75,7 @@ def _attach_typer_commands() -> None:
     from lite_horse.cli.commands import cron as cron_cmd
     from lite_horse.cli.commands import debug as debug_cmd
     from lite_horse.cli.commands import doctor as doctor_cmd
+    from lite_horse.cli.commands import feedback as feedback_cmd
     from lite_horse.cli.commands import logs as logs_cmd
     from lite_horse.cli.commands import memory as memory_cmd
     from lite_horse.cli.commands import sessions as sessions_cmd
@@ -93,6 +94,7 @@ def _attach_typer_commands() -> None:
         ("cron", cron_cmd.app),
         ("memory", memory_cmd.app),
         ("logs", logs_cmd.app),
+        ("feedback", feedback_cmd.app),
     ):
         cli.add_command(typer.main.get_command(app), name)
 

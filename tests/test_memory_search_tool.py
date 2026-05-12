@@ -46,6 +46,7 @@ class _StubRecallBackend(RecallBackend):
 
 
 def _make_ctx(recall: RecallBackend) -> ToolContext[TenantContext]:
+    from lite_horse.agent.backends.feedback_local import FeedbackLocalBackend
     from tests.security.test_tool_tenant_isolation import (
         _InMemoryCronBackend,
         _InMemoryMemoryBackend,
@@ -59,6 +60,7 @@ def _make_ctx(recall: RecallBackend) -> ToolContext[TenantContext]:
         skill=_InMemorySkillBackend(),
         cron=_InMemoryCronBackend(),
         recall=recall,
+        feedback=FeedbackLocalBackend(),
     )
     return ToolContext(
         context=tenant,

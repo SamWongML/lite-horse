@@ -30,6 +30,10 @@ class Skill(Base):
             "OR (scope='official' AND user_id IS NULL)",
             name="skills_scope_user_id_check",
         ),
+        CheckConstraint(
+            "curator_state IN ('active','stale','archived','pinned')",
+            name="skills_curator_state_check",
+        ),
         Index(
             "skills_official_slug_current",
             "slug",
@@ -77,4 +81,22 @@ class Skill(Base):
     )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+
+    # Phase 44 — curator counter columns. Defaults match the migration so
+    # existing rows survive without a backfill.
+    use_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+    success_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+    error_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    curator_state: Mapped[str] = mapped_column(
+        String, nullable=False, server_default=text("'active'")
     )

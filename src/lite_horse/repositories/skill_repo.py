@@ -10,12 +10,14 @@ from collections.abc import Iterable
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, delete, select, update
+from sqlalchemy import and_, delete, func, select, update
 
 from lite_horse.bundled.loaders import BundledSkill, load_bundled_skills
 from lite_horse.effective import ResolvedSkill
 from lite_horse.models.skill import Skill
 from lite_horse.repositories.base import BaseRepo
+
+VALID_CURATOR_STATES = ("active", "stale", "archived", "pinned")
 
 
 class SkillRepo(BaseRepo):
@@ -264,6 +266,87 @@ class SkillRepo(BaseRepo):
         await self.session.flush()
         await self.session.refresh(target)
         return target
+
+    # ---------- curator (Phase 44) ----------
+
+    async def bump_use(
+        self,
+        slug: str,
+        *,
+        success: bool | None = None,
+        error: bool = False,
+    ) -> None:
+        """Increment ``use_count`` (+ optional success/error) for one skill.
+
+        ``success=True`` bumps ``success_count``; ``error=True`` bumps
+        ``error_count``; both stamp ``last_used_at``. The query runs
+        against the caller's tenant under RLS.
+        """
+        user_id = UUID(await self.current_user_id())
+        values: dict[str, Any] = {
+            "use_count": Skill.use_count + 1,
+            "last_used_at": func.now(),
+        }
+        if success is True:
+            values["success_count"] = Skill.success_count + 1
+        if error:
+            values["error_count"] = Skill.error_count + 1
+        stmt = update(Skill).where(
+            and_(
+                Skill.scope == "user",
+                Skill.user_id == user_id,
+                Skill.slug == slug,
+                Skill.is_current.is_(True),
+            )
+        ).values(**values)
+        await self.session.execute(stmt)
+
+    async def update_curator_state(self, slug: str, state: str) -> Skill | None:
+        """Flip ``curator_state`` on the caller's user-scope skill row."""
+        if state not in VALID_CURATOR_STATES:
+            raise ValueError(f"unknown curator_state: {state!r}")
+        user_id = UUID(await self.current_user_id())
+        stmt = (
+            update(Skill)
+            .where(
+                and_(
+                    Skill.scope == "user",
+                    Skill.user_id == user_id,
+                    Skill.slug == slug,
+                    Skill.is_current.is_(True),
+                )
+            )
+            .values(curator_state=state)
+            .returning(Skill)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def list_curator_targets_admin(
+        self, *, limit: int = 500
+    ) -> list[tuple[str, str]]:
+        """Cross-tenant scan: ``(user_id, agent_id)`` slices with user-scope skills.
+
+        Run from the scheduler tick without an ``app.user_id`` GUC.
+        Returns one row per unique ``(user_id, agent_id)`` that has at
+        least one current user-scope skill. ``agent_id`` may be NULL on
+        pre-Phase-41 rows; those are skipped so the curate worker can
+        always narrow RLS to a real agent.
+        """
+        stmt = (
+            select(Skill.user_id, Skill.agent_id)
+            .where(
+                and_(
+                    Skill.scope == "user",
+                    Skill.is_current.is_(True),
+                    Skill.agent_id.is_not(None),
+                )
+            )
+            .group_by(Skill.user_id, Skill.agent_id)
+            .order_by(Skill.user_id, Skill.agent_id)
+            .limit(int(limit))
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return [(str(r.user_id), str(r.agent_id)) for r in rows]
 
     # ---------- layered resolution ----------
 
