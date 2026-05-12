@@ -32,6 +32,7 @@ from lite_horse.repositories.memory_chunk_repo import (
 from lite_horse.repositories.memory_repo import (
     MEMORY_MD_CHAR_LIMIT,
     USER_MD_CHAR_LIMIT,
+    CompactionCandidate,
     MemoryFull,
     MemoryRepo,
     UnsafeMemoryContent,
@@ -45,6 +46,11 @@ from lite_horse.repositories.proposal_repo import (
     ProposalSkillSlugTakenError,
 )
 from lite_horse.repositories.session_repo import SessionRepo
+from lite_horse.repositories.session_summary_repo import (
+    IdleSession,
+    SessionSummaryRepo,
+    SummaryRow,
+)
 from lite_horse.repositories.skill_repo import SkillRepo
 from lite_horse.repositories.usage_repo import UsageRepo
 from lite_horse.repositories.user_repo import UserRepo
@@ -66,8 +72,10 @@ __all__ = [
     "ByoKeyStore",
     "ChunkRow",
     "CommandRepo",
+    "CompactionCandidate",
     "CronRepo",
     "EffectiveConfig",
+    "IdleSession",
     "InstructionRepo",
     "McpRepo",
     "MemoryChunkRepo",
@@ -85,7 +93,9 @@ __all__ = [
     "ResolvedSkill",
     "SearchHit",
     "SessionRepo",
+    "SessionSummaryRepo",
     "SkillRepo",
+    "SummaryRow",
     "UnsafeMemoryContent",
     "UsageRepo",
     "UserRepo",

@@ -116,6 +116,22 @@ class _FakeByo:
         return {"openai": "sk-byo-test", "github": "ghp_test"}.get(name)
 
 
+class _FakeSessionSummaryRepo:
+    def __init__(self, _session: Any) -> None:
+        pass
+
+    async def list_recent(self, **_kw: Any) -> list[Any]:
+        return []
+
+
+class _FakeSessionRepo:
+    def __init__(self, _session: Any) -> None:
+        pass
+
+    async def get_session_meta(self, _session_id: str) -> None:
+        return None
+
+
 class _FakeAgentRow:
     """Phase 41 stub for ``AgentRepo.ensure_default()`` returning a row."""
 
@@ -173,6 +189,8 @@ async def test_per_user_engine_invokes_build_agent_for_user(  # noqa: PLR0915
     monkeypatch.setattr(engine_mod, "UserSettingsRepo", _FakeUserSettingsRepo)
     monkeypatch.setattr(engine_mod, "ByoKeyStore", _FakeByo)
     monkeypatch.setattr(engine_mod, "AgentRepo", _FakeAgentRepo)
+    monkeypatch.setattr(engine_mod, "SessionSummaryRepo", _FakeSessionSummaryRepo)
+    monkeypatch.setattr(engine_mod, "SessionRepo", _FakeSessionRepo)
 
     fake_eff = SimpleNamespace(mcp_servers=[])
 

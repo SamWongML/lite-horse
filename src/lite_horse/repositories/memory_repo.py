@@ -8,6 +8,7 @@ invisible Unicode can never reach the system prompt.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
@@ -41,6 +42,14 @@ class MemoryFull(Exception):  # noqa: N818
 
 class UnsafeMemoryContent(UnsafeContent):
     """Raised when content contains invisible Unicode or injection patterns."""
+
+
+@dataclass(frozen=True)
+class CompactionCandidate:
+    """One ``(user_id, agent_id)`` whose ``memory.md`` is past the cutoff."""
+
+    user_id: str
+    agent_id: str | None
 
 
 class MemoryRepo(BaseRepo):
@@ -83,3 +92,32 @@ class MemoryRepo(BaseRepo):
             )
         )
         await self.session.execute(stmt)
+
+    async def find_compaction_candidates(
+        self,
+        *,
+        threshold: float = 0.8,
+        limit: int = 100,
+    ) -> list[CompactionCandidate]:
+        """Cross-tenant scan for ``memory.md`` rows past ``threshold`` utilisation.
+
+        The scheduler runs without ``app.user_id`` set so the RLS policy's
+        empty-string fallback admits the scan. Returns ``(user_id, agent_id)``
+        tuples the compact tick fans out to one ``CompactMessage`` each.
+        """
+        cutoff_chars = int(MEMORY_MD_CHAR_LIMIT * threshold)
+        stmt = (
+            select(UserDocument.user_id, UserDocument.agent_id)
+            .where(UserDocument.kind == "memory.md")
+            .where(func.length(UserDocument.content) > cutoff_chars)
+            .order_by(UserDocument.updated_at)
+            .limit(int(limit))
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return [
+            CompactionCandidate(
+                user_id=str(r.user_id),
+                agent_id=str(r.agent_id) if r.agent_id else None,
+            )
+            for r in rows
+        ]
