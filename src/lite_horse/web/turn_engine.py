@@ -26,11 +26,13 @@ from collections.abc import AsyncIterator
 
 from agents import Runner
 
+from lite_horse.agent.backends.recall_cloud import RecallCloudBackend
 from lite_horse.agent.factory import (
     build_agent_for_user,
     build_cloud_tenant_context,
     resolve_provider,
 )
+from lite_horse.agent.instructions import SessionSummaryBlock
 from lite_horse.agent.mcp_pool import McpPool
 from lite_horse.api import (
     RunResult,
@@ -43,7 +45,10 @@ from lite_horse.api import (
 from lite_horse.core.permission import PermissionPolicy, get_policy
 from lite_horse.repositories.agent_repo import AgentRepo
 from lite_horse.repositories.byo_repo import ByoKeyStore
+from lite_horse.providers.embedding import select_embedding_provider
 from lite_horse.repositories.memory_repo import MemoryRepo
+from lite_horse.repositories.session_repo import SessionRepo
+from lite_horse.repositories.session_summary_repo import SessionSummaryRepo
 from lite_horse.repositories.user_settings_repo import UserSettingsRepo
 from lite_horse.sessions.sdk_session import SDKSession
 from lite_horse.storage.db import db_session
@@ -103,6 +108,19 @@ async def run_turn_streaming_for_user(  # noqa: PLR0912, PLR0915
         memory_text = await memory_repo.get("memory.md")
         user_md_text = await memory_repo.get("user.md")
         user_settings = await UserSettingsRepo(session).get()
+        summary_repo = SessionSummaryRepo(session)
+        recent_rows = await summary_repo.list_recent(
+            agent_id=resolved_agent_id,
+            exclude_session_id=req.session_key,
+            limit=3,
+        )
+        recent_sessions = [
+            SessionSummaryBlock(topic=r.topic or "", summary=r.summary)
+            for r in recent_rows
+        ]
+        is_new_session = (
+            await SessionRepo(session).get_session_meta(req.session_key)
+        ) is None
 
         # Per-agent overrides shadow per-user defaults: persona / model /
         # permission_mode are agent-scoped.
@@ -140,6 +158,36 @@ async def run_turn_streaming_for_user(  # noqa: PLR0912, PLR0915
     else:
         mcp_servers = []
 
+    # Phase 43: on the first turn of a new session, semantic-recall past
+    # session summaries for the agent and inject them into the prompt.
+    relevant_sessions: list[SessionSummaryBlock] = []
+    if is_new_session and req.text.strip():
+        recall = RecallCloudBackend(
+            user_id=req.user_id,
+            agent_id=resolved_agent_id,
+            embedder=select_embedding_provider(),
+        )
+        try:
+            hits = await recall.search(req.text, k=3)
+        except Exception:
+            log.exception("relevant past sessions: recall search failed")
+            hits = []
+        seen_recent = {(r.topic, r.summary) for r in recent_sessions}
+        for hit in hits:
+            if hit.source_kind != "session_summary":
+                continue
+            content = hit.content.strip()
+            if not content:
+                continue
+            topic, _, summary = content.partition(": ")
+            block = SessionSummaryBlock(
+                topic=topic.strip() if summary else "",
+                summary=(summary or topic).strip(),
+            )
+            if (block.topic, block.summary) in seen_recent:
+                continue
+            relevant_sessions.append(block)
+
     policy = get_policy(req.session_key)
     if policy is None:
         # Per-agent permission_mode shadows users.permission_mode.
@@ -158,6 +206,8 @@ async def run_turn_streaming_for_user(  # noqa: PLR0912, PLR0915
         model_override=chosen_model,
         github_token=github_token,
         config=cfg,
+        recent_sessions=recent_sessions,
+        relevant_sessions=relevant_sessions,
     )
 
     sdk_session = SDKSession(

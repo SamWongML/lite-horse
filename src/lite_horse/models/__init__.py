@@ -17,6 +17,7 @@ from lite_horse.models.memory_chunk import MemoryChunk
 from lite_horse.models.message import Message
 from lite_horse.models.opt_out import UserOfficialOptOut
 from lite_horse.models.session import Session
+from lite_horse.models.session_summary import SessionSummary
 from lite_horse.models.skill import Skill
 from lite_horse.models.skill_proposal import SkillProposal
 from lite_horse.models.usage_event import UsageEvent
@@ -34,6 +35,7 @@ __all__ = [
     "MemoryChunk",
     "Message",
     "Session",
+    "SessionSummary",
     "Skill",
     "SkillProposal",
     "UsageEvent",

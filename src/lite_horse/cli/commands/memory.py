@@ -1,9 +1,13 @@
-"""`litehorse memory {show, clear}` — inspect MEMORY.md / USER.md.
+"""`litehorse memory {show, clear, compact}` — inspect MEMORY.md / USER.md.
 
 The `--user` flag switches from the agent's MEMORY.md to the USER.md profile
-store. Same two files the runtime reads at session start.
+store. Same two files the runtime reads at session start. `compact` runs the
+v0.4 :class:`Consolidator` against MEMORY.md when utilisation crosses 0.8
+(Phase 43).
 """
 from __future__ import annotations
+
+import asyncio
 
 import typer
 
@@ -72,6 +76,86 @@ def show_cmd(
     emit_result(
         f"{data['label']}: {data['total_chars']}/{data['char_limit']} chars, "
         f"{len(entries)} entries",
+        json_mode=False,
+    )
+
+
+async def _run_compact_async(*, model: str) -> dict[str, object]:
+    from lite_horse.agent.consolidator import Consolidator
+    from lite_horse.config import load_config
+    from lite_horse.constants import ENTRY_DELIMITER
+    from lite_horse.worker.compact import COMPACT_UTILIZATION_THRESHOLD
+
+    store = _store("memory")
+    before = store.entries()
+    if not before:
+        return {"status": "noop", "reason": "empty", "before_chars": 0}
+    chars_before = store.total_chars()
+    utilization = chars_before / store.char_limit
+    if utilization <= COMPACT_UTILIZATION_THRESHOLD:
+        return {
+            "status": "noop",
+            "reason": "under_threshold",
+            "utilization": utilization,
+            "before_chars": chars_before,
+        }
+    cfg = load_config()
+    chosen_model = model or cfg.model
+    consolidator = Consolidator(model=chosen_model)
+    trajectory = [{"role": "memory", "content": e} for e in before]
+    new_entries = await consolidator.run(turn_input=trajectory)
+    if not new_entries:
+        return {
+            "status": "noop",
+            "reason": "consolidator_empty",
+            "before_chars": chars_before,
+        }
+    new_body = ENTRY_DELIMITER.join(new_entries)
+    if len(new_body) >= chars_before:
+        return {
+            "status": "noop",
+            "reason": "not_shorter",
+            "before_chars": chars_before,
+            "after_chars": len(new_body),
+        }
+    store.path.write_text(new_body + "\n", encoding="utf-8")
+    return {
+        "status": "compacted",
+        "model": chosen_model,
+        "before_entries": len(before),
+        "after_entries": len(new_entries),
+        "before_chars": chars_before,
+        "after_chars": len(new_body),
+    }
+
+
+@app.command("compact")
+def compact_cmd(
+    model: str = typer.Option(
+        "", "--model", help="Override the model used by the Consolidator."
+    ),
+    json_mode: bool = typer.Option(False, "--json", help="Emit NDJSON."),
+) -> None:
+    """Merge similar entries in MEMORY.md when utilisation crosses 0.8."""
+    from lite_horse.cli._output import emit_result
+
+    result = asyncio.run(_run_compact_async(model=model))
+    if json_mode:
+        emit_result(result, json_mode=True)
+        return
+    status = result.get("status")
+    if status != "compacted":
+        emit_result(
+            f"memory compact: no-op ({result.get('reason')})", json_mode=False
+        )
+        return
+    emit_result(
+        "memory compact: {b}→{a} chars, {be}→{ae} entries".format(
+            b=result["before_chars"],
+            a=result["after_chars"],
+            be=result["before_entries"],
+            ae=result["after_entries"],
+        ),
         json_mode=False,
     )
 

@@ -196,7 +196,7 @@ rewritten around the cloud surface; ``docs/CLI.md`` flagged
 dev-only; ``docs/EMBEDDING.md`` deprecated in favour of new
 ``docs/HTTP-API.md``. v0.4 plan flipped to **SHIPPED**.
 
-## v0.5 — tenant-safe tools, multi-agent personas, evolution & recall — ☐ ACTIVE (2026-05-07; through Phase 42)
+## v0.5 — tenant-safe tools, multi-agent personas, evolution & recall — ☐ ACTIVE (2026-05-12; through Phase 43)
 
 **Active plan:** [plans/v0.5-tenant-evolve-recall.md](plans/v0.5-tenant-evolve-recall.md).
 **Predecessor:** v0.4. **Background:** [HERMES_GAP_ANALYSIS.md](HERMES_GAP_ANALYSIS.md).
@@ -224,6 +224,7 @@ asserts every backend Protocol has both impls.
 | 40 | Tool-backend abstraction + tenant-safe writes (BLOCKER)            | ✅ |
 | 41 | Per-agent personas + agent CRUD                                    | ✅ |
 | 42 | pgvector recall + ``memory_search`` tool                           | ✅ |
+| 43 | Session summaries + cross-session compaction                       | ✅ |
 
 ### Blocked / in progress
 Phase 40 shipped 2026-05-07: ``src/lite_horse/agent/backends/`` adds
@@ -343,8 +344,53 @@ includes ``recall`` so drift between ``recall_local`` /
 ``tests/providers/test_chunker.py``,
 ``tests/providers/test_embedding_select.py``,
 ``tests/worker/test_embed_dispatch.py``.
-**v0.5 Phase 43 next.**
-| 43 | Session summaries + cross-session compaction                       | ☐ |
+Phase 43 shipped 2026-05-12: ``alembic 0005_phase43_summaries``
+adds the ``session_summaries`` table (``user_id`` / ``agent_id``
+/ ``session_id`` FKs, ``topic`` / ``summary`` TEXT, ``generator``
+model + ``input_tokens`` / ``output_tokens`` / ``cost_usd_micro``
+counters, ``created_at`` / ``updated_at``, unique ``(user_id,
+session_id)``), enables RLS + ``FORCE ROW LEVEL SECURITY`` with
+the same compound user/agent ``tenant_isolation`` policy.
+``models/session_summary.py`` + ``repositories/session_summary_repo.py``
+own ``upsert`` / ``get`` / ``list_recent`` (with
+``exclude_session_id`` filter).
+``agent/summarizer.py`` is a 3-turn-budget side-agent that reads
+the last 20 messages and returns ``{topic, summary}`` JSON.
+``worker/summarize.py`` adds ``SummarizeMessage`` + ``run_summarize``
+(reads session messages → runs ``Summarizer`` → upserts the row →
+re-indexes via ``RecallCloudBackend`` with
+``source_kind='session_summary'``); ``worker/compact.py`` adds
+``CompactMessage`` + ``run_compact`` (reads ``memory.md``, gates
+on utilisation > 0.8, runs ``Consolidator``, writes back if the
+new body is shorter, re-indexes). The dispatcher in
+``worker/runner.py`` routes both ``kind="summarize"`` and
+``kind="compact"``. ``scheduler/summarize_tick.py`` (hourly) and
+``scheduler/compact_tick.py`` (daily) scan idle sessions > 24h
+and ``memory.md`` rows over the threshold respectively; both
+emit SQS messages per candidate. ``agent/instructions.py`` gains
+``SessionSummaryBlock`` and ``make_instructions_for_user(...,
+recent_sessions=, relevant_sessions=)``; the renderer threads
+``## Recent Sessions`` (last 3) and ``## Relevant Past Sessions``
+(top 3 vector hits, new-session-only) between memory and skills.
+``web/turn_engine.py`` loads the recent rows from
+``SessionSummaryRepo``, kicks off the cross-session recall when
+``SessionRepo.get_session_meta(session_key)`` is None, dedupes
+against recent, and parses the ``topic: summary`` payload back
+into blocks. ``agent/factory.py::build_agent_for_user`` exposes
+the two new kwargs and forwards them. CLI parity:
+``sessions/local.py`` gains a ``session_summaries`` SQLite table
++ ``upsert_summary`` / ``get_summary`` / ``list_recent_summaries``;
+``cli/repl/summarize_on_exit.py`` fires the summariser on Ctrl-D /
+``/exit`` / two-Ctrl-C and best-effort upserts;
+``cli/commands/memory.py`` gets a new ``compact`` subcommand
+gated on the same 0.8 utilisation threshold and joining new
+entries with ``ENTRY_DELIMITER``. New tests:
+``tests/models/test_phase43_migration_static.py``,
+``tests/test_summarizer.py``, ``tests/worker/test_summarize_dispatch.py``,
+``tests/agent/test_session_summary_injection.py``,
+``tests/sessions/test_local_session_summaries.py``,
+``tests/cli/test_memory_compact.py``.
+**v0.5 Phase 44 next.**
 | 44 | Curator background pass + outcome classifier                       | ☐ |
 | 45 | User-skill promotion + GEPA-style offline evolve                   | ☐ |
 | 46 | Hardening: GDPR delete, audit shipper, SDK bumps, CLI parity gate  | ☐ |

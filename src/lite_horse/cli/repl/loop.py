@@ -277,6 +277,7 @@ async def _interactive_loop(state: ReplState) -> int:
                 line = await session.prompt_async(">>> ")
         except (EOFError, KeyboardInterrupt):
             print("[exit]", file=sys.stderr)
+            await _summarize_on_exit(state)
             return 0
         line = line.rstrip()
         if not line:
@@ -287,6 +288,7 @@ async def _interactive_loop(state: ReplState) -> int:
             if err:
                 print(err, file=sys.stderr)
             if outcome is SlashOutcome.EXIT:
+                await _summarize_on_exit(state)
                 return 0
             if outcome is SlashOutcome.CLEAR:
                 # ANSI clear-screen; fall back to noop on dumb terminals.
@@ -295,7 +297,19 @@ async def _interactive_loop(state: ReplState) -> int:
         _auto_attach_from_line(state, line)
         if await _await_with_two_press_ctrl_c(state, line):
             print("[exit]", file=sys.stderr)
+            await _summarize_on_exit(state)
             return 0
+
+
+async def _summarize_on_exit(state: ReplState) -> None:
+    """Phase 43: run the summariser side-agent on the session we just left."""
+    try:
+        from lite_horse.cli.repl.summarize_on_exit import summarize_on_exit
+
+        await summarize_on_exit(session_key=state.session_key, model=state.model)
+    except Exception:
+        # REPL exit must never raise — summarisation is best-effort.
+        pass
 
 
 def _auto_attach_from_line(state: ReplState, line: str) -> None:

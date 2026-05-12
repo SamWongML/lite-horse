@@ -23,6 +23,7 @@ keeping this module free of ``litehorse_home`` / ``MemoryStore`` /
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -65,6 +66,7 @@ def _default_extras_loader() -> LocalPromptExtras:
 __all__ = [
     "InstructionsFn",
     "LocalPromptExtras",
+    "SessionSummaryBlock",
     "make_instructions",
     "make_instructions_for_user",
 ]
@@ -179,11 +181,21 @@ def make_instructions(
 # ---------- v0.4 cloud path ----------
 
 
+@dataclass(frozen=True)
+class SessionSummaryBlock:
+    """One ``(topic, summary)`` pair for the prompt's session blocks."""
+
+    topic: str
+    summary: str
+
+
 def make_instructions_for_user(
     eff: EffectiveConfig,
     *,
     memory_text: str,
     user_md_text: str,
+    recent_sessions: list[SessionSummaryBlock] | None = None,
+    relevant_sessions: list[SessionSummaryBlock] | None = None,
 ) -> InstructionsFn:
     """Build the per-turn system prompt from a resolved EffectiveConfig.
 
@@ -192,9 +204,11 @@ def make_instructions_for_user(
     1. Bundled+official instructions, in (priority, slug) order.
     2. ``user.md`` profile block.
     3. ``memory.md`` snapshot.
-    4. Skills index (activated subset).
-    5. Tool guidance.
-    6. Current time (last so cache-prefix bytes don't change per turn).
+    4. ``## Recent Sessions`` (Phase 43, most-recent-first).
+    5. ``## Relevant Past Sessions`` (Phase 43, semantic-recall on first turn).
+    6. Skills index (activated subset).
+    7. Tool guidance.
+    8. Current time (last so cache-prefix bytes don't change per turn).
     """
 
     instruction_blocks = [
@@ -202,6 +216,12 @@ def make_instructions_for_user(
     ]
     profile_block = _render_block("USER PROFILE", user_md_text)
     memory_block = _render_block("MEMORY", memory_text)
+    recent_block = _render_session_summaries(
+        "## Recent Sessions", recent_sessions or []
+    )
+    relevant_block = _render_session_summaries(
+        "## Relevant Past Sessions", relevant_sessions or []
+    )
 
     async def _instructions(
         ctx: RunContextWrapper[Any], agent: Agent[Any]
@@ -219,6 +239,10 @@ def make_instructions_for_user(
             parts.append(profile_block)
         if memory_block:
             parts.append(memory_block)
+        if recent_block:
+            parts.append(recent_block)
+        if relevant_block:
+            parts.append(relevant_block)
         if skills_index:
             parts.append(skills_index)
         parts.append(_TOOL_GUIDANCE)
@@ -226,6 +250,23 @@ def make_instructions_for_user(
         return "\n\n".join(parts)
 
     return _instructions
+
+
+def _render_session_summaries(
+    header: str, items: list[SessionSummaryBlock]
+) -> str:
+    if not items:
+        return ""
+    lines = [header]
+    for item in items:
+        topic = item.topic.strip() or "(untitled)"
+        summary = item.summary.strip()
+        if not summary:
+            continue
+        lines.append(f"- **{topic}** — {summary}")
+    if len(lines) == 1:
+        return ""
+    return "\n".join(lines)
 
 
 def _render_block(header: str, body: str) -> str:

@@ -39,6 +39,7 @@ from lite_horse.agent.consolidator import Consolidator
 from lite_horse.agent.evolution import EvolutionHook
 from lite_horse.agent.instructions import (
     make_instructions,
+    SessionSummaryBlock,
     make_instructions_for_user,
 )
 from lite_horse.config import Config, load_config
@@ -253,6 +254,8 @@ def build_agent_for_user(
     permission_policy: PermissionPolicy | None = None,
     model_override: str | None = None,
     github_token: str | None = None,
+    recent_sessions: list[SessionSummaryBlock] | None = None,
+    relevant_sessions: list[SessionSummaryBlock] | None = None,
 ) -> Agent[Any]:
     """Cloud-path agent factory. Reads everything from the resolver.
 
@@ -294,7 +297,11 @@ def build_agent_for_user(
         name=name,
         model=sdk_model,
         instructions=make_instructions_for_user(
-            eff, memory_text=memory_text, user_md_text=user_md_text
+            eff,
+            memory_text=memory_text,
+            user_md_text=user_md_text,
+            recent_sessions=recent_sessions,
+            relevant_sessions=relevant_sessions,
         ),
         model_settings=ModelSettings(
             reasoning=Reasoning(effort=cfg.model_settings.reasoning_effort),

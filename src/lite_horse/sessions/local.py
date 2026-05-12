@@ -59,6 +59,16 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, timestamp);
 
+CREATE TABLE IF NOT EXISTS session_summaries (
+    session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    topic TEXT,
+    summary TEXT NOT NULL,
+    generator TEXT NOT NULL,
+    generated_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_session_summaries_gen
+    ON session_summaries(generated_at DESC);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
     content, content=messages, content_rowid=id
 );
@@ -308,6 +318,65 @@ class LocalSessionRepo:
                 )
             self._conn.commit()
             return len(rows)
+
+    # ---------- session_summaries (Phase 43) ----------
+    def upsert_summary(
+        self,
+        *,
+        session_id: str,
+        topic: str | None,
+        summary: str,
+        generator: str,
+        now: float | None = None,
+    ) -> None:
+        ts = now if now is not None else time.time()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO session_summaries(session_id, topic, summary, "
+                "generator, generated_at) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(session_id) DO UPDATE SET "
+                "topic=excluded.topic, summary=excluded.summary, "
+                "generator=excluded.generator, generated_at=excluded.generated_at",
+                (session_id, topic, summary, generator, ts),
+            )
+            self._conn.commit()
+
+    def get_summary(self, session_id: str) -> dict[str, Any] | None:
+        row = self._conn.execute(
+            "SELECT * FROM session_summaries WHERE session_id=?",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "session_id": row["session_id"],
+            "topic": row["topic"],
+            "summary": row["summary"],
+            "generator": row["generator"],
+            "generated_at": float(row["generated_at"]),
+        }
+
+    def list_recent_summaries(
+        self, *, exclude_session_id: str | None = None, limit: int = 3
+    ) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM session_summaries"
+        params: list[Any] = []
+        if exclude_session_id is not None:
+            sql += " WHERE session_id != ?"
+            params.append(exclude_session_id)
+        sql += " ORDER BY generated_at DESC LIMIT ?"
+        params.append(int(limit))
+        rows = self._conn.execute(sql, params).fetchall()
+        return [
+            {
+                "session_id": r["session_id"],
+                "topic": r["topic"],
+                "summary": r["summary"],
+                "generator": r["generator"],
+                "generated_at": float(r["generated_at"]),
+            }
+            for r in rows
+        ]
 
     # ---------- FTS5 search ----------
     def search_messages(

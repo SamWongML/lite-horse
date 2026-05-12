@@ -20,7 +20,17 @@ from typing import Any
 from lite_horse.cron.scheduler import CronMessage
 from lite_horse.evolve.cloud import EvolveMessage, is_evolve_payload, run_evolve
 from lite_horse.storage.queue import QueueMessage
+from lite_horse.worker.compact import (
+    CompactMessage,
+    is_compact_payload,
+    run_compact,
+)
 from lite_horse.worker.embed import EmbedMessage, is_embed_payload, run_embed
+from lite_horse.worker.summarize import (
+    SummarizeMessage,
+    is_summarize_payload,
+    run_summarize,
+)
 
 log = logging.getLogger(__name__)
 
@@ -64,13 +74,15 @@ async def _default_deliver(
     await deliver_webhook(spec, text, session_key)
 
 
-async def dispatch_message(  # noqa: PLR0911 — flat per-kind dispatch is the readable shape
+async def dispatch_message(  # noqa: PLR0911, PLR0912 — flat per-kind dispatch is the readable shape
     raw: QueueMessage,
     *,
     run_turn_fn: RunTurnFn | None = None,
     deliver_fn: DeliverFn | None = None,
     evolve_fn: Callable[[EvolveMessage], Awaitable[bool]] | None = None,
     embed_fn: Callable[[EmbedMessage], Awaitable[bool]] | None = None,
+    summarize_fn: Callable[[SummarizeMessage], Awaitable[bool]] | None = None,
+    compact_fn: Callable[[CompactMessage], Awaitable[bool]] | None = None,
 ) -> bool:
     """Run one queue message end-to-end.
 
@@ -114,6 +126,42 @@ async def dispatch_message(  # noqa: PLR0911 — flat per-kind dispatch is the r
                 "worker: embed failed (user=%s agent=%s)",
                 embed_msg.user_id,
                 embed_msg.agent_id,
+            )
+            return False
+
+    if is_summarize_payload(raw.body):
+        try:
+            summarize_msg = SummarizeMessage.from_json(raw.body)
+        except (ValueError, KeyError, TypeError) as exc:
+            log.error(
+                "worker: dropping unparseable summarize message: %s", exc
+            )
+            return True
+        summarize = summarize_fn or run_summarize
+        try:
+            return await summarize(summarize_msg)
+        except Exception:
+            log.exception(
+                "worker: summarize failed (user=%s session=%s)",
+                summarize_msg.user_id,
+                summarize_msg.session_id,
+            )
+            return False
+
+    if is_compact_payload(raw.body):
+        try:
+            compact_msg = CompactMessage.from_json(raw.body)
+        except (ValueError, KeyError, TypeError) as exc:
+            log.error("worker: dropping unparseable compact message: %s", exc)
+            return True
+        compact = compact_fn or run_compact
+        try:
+            return await compact(compact_msg)
+        except Exception:
+            log.exception(
+                "worker: compact failed (user=%s agent=%s)",
+                compact_msg.user_id,
+                compact_msg.agent_id,
             )
             return False
 

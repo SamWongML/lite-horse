@@ -21,6 +21,7 @@ EXPECTED_TABLES = {
     "skill_proposals",
     "audit_log",
     "usage_events",
+    "session_summaries",
 }
 
 
