@@ -60,6 +60,9 @@ async def test_one_shot_streams_and_returns_zero(
 
     monkeypatch.setattr(api_mod, "run_turn_streaming", fake)
     # Force plain renderer (no rich.live) so capsys can read stdout cleanly.
+    # FORCE_COLOR takes precedence over NO_COLOR (see lite_horse.cli._tty),
+    # so unset it too — dev shells often have FORCE_COLOR exported.
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
     monkeypatch.setenv("NO_COLOR", "1")
     monkeypatch.setattr(loop_mod, "_load_model_name", lambda: "m-test")
 
@@ -84,6 +87,7 @@ async def test_one_shot_returns_one_on_error(
         raise RuntimeError("upstream blew up")
 
     monkeypatch.setattr(api_mod, "run_turn_streaming", boom)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
     monkeypatch.setenv("NO_COLOR", "1")
     monkeypatch.setattr(loop_mod, "_load_model_name", lambda: "m-test")
 
@@ -118,6 +122,7 @@ async def test_one_shot_accumulates_tokens(
 
     monkeypatch.setattr(api_mod, "run_turn_streaming", fake)
     monkeypatch.setattr(loop_mod, "_run_one_turn", spy)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
     monkeypatch.setenv("NO_COLOR", "1")
     monkeypatch.setattr(loop_mod, "_load_model_name", lambda: "m")
 

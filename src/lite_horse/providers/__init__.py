@@ -6,14 +6,16 @@ an SDK-compatible model client given a per-user API key (BYO) and how
 much a given (input, cached_input, output) token tuple costs.
 
 Selection happens via :func:`provider_for_model`: the first provider whose
-:meth:`ModelProvider.matches` returns True wins. Order is preserved
-(`OpenAI` before `Anthropic`) so wildcard fallbacks behave predictably.
+:meth:`ModelProvider.matches` returns True wins. The OpenAI-compatible
+passthrough (``oai/`` prefix) is registered first so its explicit prefix
+wins over the more permissive OpenAI ``o*`` matcher.
 """
 from __future__ import annotations
 
 from lite_horse.providers.anthropic import AnthropicProvider
 from lite_horse.providers.base import ModelProvider, ProviderName
 from lite_horse.providers.openai import OpenAIProvider
+from lite_horse.providers.openai_compat import OpenAICompatibleProvider
 from lite_horse.providers.pricing import (
     PricingTable,
     compute_cost_usd_micro,
@@ -23,6 +25,7 @@ from lite_horse.providers.pricing import (
 __all__ = [
     "AnthropicProvider",
     "ModelProvider",
+    "OpenAICompatibleProvider",
     "OpenAIProvider",
     "PricingTable",
     "ProviderName",
@@ -33,7 +36,11 @@ __all__ = [
 ]
 
 
-_REGISTRY: list[ModelProvider] = [OpenAIProvider(), AnthropicProvider()]
+_REGISTRY: list[ModelProvider] = [
+    OpenAICompatibleProvider(),
+    OpenAIProvider(),
+    AnthropicProvider(),
+]
 
 
 def registered_providers() -> list[ModelProvider]:

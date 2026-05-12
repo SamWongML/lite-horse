@@ -19,7 +19,7 @@ from agents.models.interface import Model
 
 from lite_horse.providers.pricing import ModelPricing
 
-ProviderName = Literal["openai", "anthropic"]
+ProviderName = Literal["openai", "anthropic", "openai_compat"]
 
 
 @runtime_checkable
