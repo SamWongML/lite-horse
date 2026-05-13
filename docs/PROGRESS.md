@@ -196,7 +196,7 @@ rewritten around the cloud surface; ``docs/CLI.md`` flagged
 dev-only; ``docs/EMBEDDING.md`` deprecated in favour of new
 ``docs/HTTP-API.md``. v0.4 plan flipped to **SHIPPED**.
 
-## v0.5 — tenant-safe tools, multi-agent personas, evolution & recall — ☐ ACTIVE (2026-05-12; through Phase 43)
+## v0.5 — tenant-safe tools, multi-agent personas, evolution & recall — ✅ SHIPPED (2026-05-14)
 
 **Active plan:** [plans/v0.5/](plans/v0.5/README.md).
 **Predecessor:** v0.4. **Background:** [research/hermes/](research/hermes/README.md).
@@ -525,10 +525,85 @@ and drops the bundle under ``.proposals/<slug>/``. New tests:
 ``tests/test_gepa_local.py``,
 ``tests/worker/test_evolve_gepa_dispatch.py``,
 ``tests/cli/test_skills_evolve_population.py``.
-**v0.5 Phase 46 next.**
+Phase 46 shipped 2026-05-14: ``alembic 0008_phase46_hardening``
+creates the ``gdpr_delete_requests`` table (``request_id`` UUID PK,
+``user_id`` FK with ``ON DELETE SET NULL`` so audit history survives
+the tombstone sweep, ``requested_at`` / ``scheduled_at``
+(``now() + interval '7 days'``) / ``cancelled_at`` / ``completed_at``,
+``archive_s3_key``, plus a partial unique index on ``(user_id) WHERE
+completed_at IS NULL AND cancelled_at IS NULL`` so one user can have
+at most one open request). ``web/routes/users.py`` mounts
+``POST /v1/users/me:request-delete`` and ``DELETE
+/v1/users/me:cancel-delete`` returning the new
+``GdprDeleteRequestOut`` (timestamps only, ``archive_s3_key``
+redacted); the post-route uses
+``GdprDeleteRepo.get_pending_for_user`` as a fast-path 409 and
+falls back to ``IntegrityError`` on the partial unique index for
+the race.
+``worker/gdpr.py::run_gdpr_delete`` opens an admin-context
+transaction, calls ``GdprDeleteRepo.dump_tenant_rows`` (the
+helper owns the raw ``SELECT *`` so the
+``test_no_session_execute_text_outside_repositories`` gate stays
+green), JSONL-uploads the export to
+``s3://$LITEHORSE_S3_BUCKET_AUDIT_ARCHIVE/gdpr/<request_id>.jsonl``,
+purges every tenant-scoped table in one tx, tombstones
+``audit_log.actor_id`` (FK is ``ON DELETE SET NULL``, not cascade —
+the comment was corrected in this phase), and stamps
+``completed_at`` + ``archive_s3_key``;
+``scheduler/gdpr_tick.py`` runs daily in admin context and emits
+one ``GdprDeleteMessage`` per due row. ``worker/audit_ship.py`` +
+``scheduler/audit_ship_tick.py`` add the daily audit shipper —
+the tick enqueues one ``AuditShipMessage`` (default
+``retention_days=90`` / ``limit=1000`` constants); the handler
+streams rows older than the cutoff to JSONL in S3 (NDJSON, not
+Parquet — chosen to avoid pulling pyarrow into the worker image)
+and ``DELETE``s them from PG. ``web/middleware/security_headers.py``
+adds the ``SecurityHeadersMiddleware`` (HSTS
+``max-age=31536000; includeSubDomains; preload``, CSP
+``default-src 'none'``, ``X-Frame-Options: DENY``,
+``Referrer-Policy: no-referrer``) plus the
+``install_security_headers(app, *, env)`` wire-in that no-ops when
+``env=='local'`` so CLI-served ``/debug/*`` keeps working;
+``create_app`` calls it from ``web/app.py``. SDK pins bumped:
+``openai>=2.5,<3`` (was ``>=2.0,<3``) and
+``openai-agents>=0.16,<0.18`` (was ``>=0.14.1,<0.15``, installed
+0.17.2); ``anthropic`` left at the existing ``>=0.30,<1.0`` pin.
+``constants/models.py`` (new) ships the canonical model-id
+constants ``MODEL_GPT_5_4`` / ``MODEL_GPT_5_4_MINI`` /
+``MODEL_GPT_5_2`` / ``MODEL_EMBEDDING_3_SMALL`` /
+``MODEL_CLAUDE_OPUS_4_7`` / ``MODEL_CLAUDE_SONNET_4_6`` /
+``MODEL_CLAUDE_HAIKU_4_5``, and ``config.py`` /
+``agent/evolution.py`` / ``providers/embedding_openai.py`` /
+``worker/{compact,curate,classify,summarize}.py`` /
+``web/routes/sessions.py`` now import from it instead of inlining
+string literals. ``agent/instructions.py`` adds the
+``LayeredInstructions`` dataclass + ``build_layered_instructions``
+seam that splits the system prompt into three Anthropic-cacheable
+layers (stable: bundled instructions + tool guidance; semi-stable:
+profile + memory + skills index; volatile: recent + relevant +
+``Current time: ...``); the legacy
+``make_instructions_for_user`` body is unchanged so the OpenAI
+interleaved-order tests still pass.
+``tests/lint/test_cli_parity.py`` is now a hard auto-discovery
+gate — it scans ``backends/*.py`` for the Protocol stem, requires
+a paired ``*_local.py`` + ``*_cloud.py``, and asserts both
+method-set parity and signature parity (arg names + async form),
+with explicit ``PROTOCOL_CLASS_OVERRIDES`` /
+``IMPL_CLASS_OVERRIDES`` for the ``feedback`` slice whose
+Protocol is named ``FeedbackSink``. ``README.md`` flipped from
+"v0.5 in flight" to "v0.5 shipped"; ``docs/HTTP-API.md`` gained
+the GDPR endpoints surface block; ``docs/research/hermes/``
+re-scored its prioritized punch list with v0.5-closed items
+ticked and a new "Deferred to v0.6" section listing what slipped.
+New tests: ``tests/web/test_security_headers.py``,
+``tests/worker/test_gdpr_dispatch.py``,
+``tests/worker/test_audit_ship_dispatch.py``,
+``tests/agent/test_layered_instructions.py``;
+``tests/models/test_models.py`` adds ``gdpr_delete_requests`` to
+``EXPECTED_TABLES``. v0.5 plan flipped to **SHIPPED**.
 | 44 | Curator background pass + outcome classifier                       | ✅ |
 | 45 | User-skill promotion + GEPA-style offline evolve                   | ✅ |
-| 46 | Hardening: GDPR delete, audit shipper, SDK bumps, CLI parity gate  | ☐ |
+| 46 | Hardening: GDPR delete, audit shipper, SDK bumps, CLI parity gate  | ✅ |
 
 ---
 

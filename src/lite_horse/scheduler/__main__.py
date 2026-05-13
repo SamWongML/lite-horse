@@ -26,9 +26,11 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from lite_horse.config import get_settings
 from lite_horse.observability import configure_logging, configure_tracing
+from lite_horse.scheduler.audit_ship_tick import audit_ship_tick
 from lite_horse.scheduler.compact_tick import compact_tick
 from lite_horse.scheduler.curator_tick import curator_tick
 from lite_horse.scheduler.evolve_tick import evolve_tick
+from lite_horse.scheduler.gdpr_tick import gdpr_tick
 from lite_horse.scheduler.summarize_tick import summarize_tick
 from lite_horse.scheduler.tick import tick
 from lite_horse.storage import make_message_queue
@@ -39,6 +41,8 @@ EVOLVE_TICK_SECONDS = 86400
 SUMMARIZE_TICK_SECONDS = 3600
 COMPACT_TICK_SECONDS = 86400
 CURATOR_TICK_SECONDS = 86400
+GDPR_TICK_SECONDS = 86400
+AUDIT_SHIP_TICK_SECONDS = 86400
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +97,26 @@ def _wrap_curator_tick(queue: MessageQueue) -> Any:
     return _job
 
 
+def _wrap_gdpr_tick(queue: MessageQueue) -> Any:
+    async def _job() -> None:
+        try:
+            await gdpr_tick(queue=queue)
+        except Exception:
+            log.exception("gdpr tick failed")
+
+    return _job
+
+
+def _wrap_audit_ship_tick(queue: MessageQueue) -> Any:
+    async def _job() -> None:
+        try:
+            await audit_ship_tick(queue=queue)
+        except Exception:
+            log.exception("audit_ship tick failed")
+
+    return _job
+
+
 async def run_scheduler() -> None:
     """Async entrypoint: schedule the tick, wait for SIGINT/SIGTERM."""
     settings = get_settings()
@@ -132,6 +156,20 @@ async def run_scheduler() -> None:
         _wrap_curator_tick(queue),
         trigger=IntervalTrigger(seconds=CURATOR_TICK_SECONDS),
         id="curator-tick",
+        replace_existing=True,
+        next_run_time=None,
+    )
+    sched.add_job(
+        _wrap_gdpr_tick(queue),
+        trigger=IntervalTrigger(seconds=GDPR_TICK_SECONDS),
+        id="gdpr-tick",
+        replace_existing=True,
+        next_run_time=None,
+    )
+    sched.add_job(
+        _wrap_audit_ship_tick(queue),
+        trigger=IntervalTrigger(seconds=AUDIT_SHIP_TICK_SECONDS),
+        id="audit-ship-tick",
         replace_existing=True,
         next_run_time=None,
     )

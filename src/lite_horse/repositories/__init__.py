@@ -23,6 +23,7 @@ from lite_horse.repositories.base import BaseRepo, audited
 from lite_horse.repositories.byo_repo import ByoKeyStore
 from lite_horse.repositories.command_repo import CommandRepo
 from lite_horse.repositories.cron_repo import CronRepo
+from lite_horse.repositories.gdpr_delete_repo import GdprDeleteRepo
 from lite_horse.repositories.instruction_repo import InstructionRepo
 from lite_horse.repositories.mcp_repo import McpRepo
 from lite_horse.repositories.memory_chunk_repo import (
@@ -80,6 +81,7 @@ __all__ = [
     "CompactionCandidate",
     "CronRepo",
     "EffectiveConfig",
+    "GdprDeleteRepo",
     "IdleSession",
     "InstructionRepo",
     "McpRepo",

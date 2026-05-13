@@ -11,11 +11,12 @@ from __future__ import annotations
 from openai import AsyncOpenAI
 
 from lite_horse.constants import EMBED_DIM
+from lite_horse.constants.models import MODEL_EMBEDDING_3_SMALL
 
 
 class OpenAIEmbeddingProvider:
     name: str = "openai"
-    model: str = "text-embedding-3-small"
+    model: str = MODEL_EMBEDDING_3_SMALL
     dim: int = EMBED_DIM
 
     def __init__(self, *, api_key: str, base_url: str | None = None) -> None:

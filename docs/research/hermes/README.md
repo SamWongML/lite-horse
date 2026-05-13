@@ -80,52 +80,93 @@ The deployment story is materially ahead of Hermes for the stated use case.
 
 ## 11. Prioritized punch list
 
-Top-down, rough effort estimates:
+Top-down, rough effort estimates. v0.5 status (shipped 2026-05-14)
+in line-leading tags.
 
 ### Tier 1 — required before any production deploy
 
-1. **§3** Fix the FS-vs-DB write asymmetry. Migrate `memory_tool`,
+1. ✅ **§3** Fix the FS-vs-DB write asymmetry. Migrate `memory_tool`,
    `skill_manage`, `cron_manage`, `BudgetHook._consolidate`, and
-   `EvolutionHook` skill IO to per-user repos. **(Blocker.)**
-2. **§5.3 + §9** Introduce `agents` table with persona, default model,
-   tool bundle. Add agent CRUD. Pivot session ownership by agent.
-3. **§6.1** Extend RLS coverage to `skills`, `cron_jobs`, `commands`,
-   `instructions`, `mcp_servers`, `usage_events`, `audit_log` (RLS
-   already on for `messages` / `sessions` / `user_documents` /
-   `skill_proposals`).
-
-> Tracked in [../../plans/v0.5/](../../plans/v0.5/README.md)
-> Phases 40 (#1) and 41 (#2 + new-table RLS for #3); legacy-table RLS
-> back-fill is a Tier-2 item.
+   `EvolutionHook` skill IO to per-user repos. — **Phase 40.**
+2. ✅ **§5.3 + §9** Introduce `agents` table with persona, default
+   model, tool bundle. Add agent CRUD. Pivot session ownership by
+   agent. — **Phase 41.**
+3. ◐ **§6.1** Extend RLS coverage to `skills`, `cron_jobs`,
+   `commands`, `instructions`, `mcp_servers`, `usage_events`,
+   `audit_log`. — **Phases 41–44** added RLS + FORCE + compound
+   `(user_id, agent_id)` policy on every new state-bearing table
+   (`agents` / `memory_chunks` / `session_summaries` /
+   `turn_outcomes`); legacy-table RLS back-fill on
+   `usage_events` / `audit_log` is **deferred to v0.6** (admin
+   surfaces still read them without an `app.user_id` GUC).
 
 ### Tier 2 — closes the Hermes-feature gap
 
-4. **§5.1** pgvector + `memory_chunks` + `memory_search` tool. Most
-   leverage per dollar of effort.
-5. **§4.1** Curator background job — daily per-user pass over skill
-   stats producing consolidation/archive/patch proposals.
-6. **§5.2** Per-session summaries with vector retrieval into prompt.
-7. **§4.4** Outcome classifier — small LLM grader at end-of-turn or a
-   feedback API the website calls.
+4. ✅ **§5.1** pgvector + `memory_chunks` + `memory_search` tool. —
+   **Phase 42.**
+5. ✅ **§4.1** Curator background job — daily per-user pass over
+   skill stats producing consolidation/archive/patch proposals. —
+   **Phase 44.**
+6. ✅ **§5.2** Per-session summaries with vector retrieval into
+   prompt. — **Phase 43.**
+7. ✅ **§4.4** Outcome classifier — small LLM grader at end-of-turn
+   plus the `POST /v1/turns/{turn_id}/feedback` API the website
+   calls. — **Phase 44.**
 
 ### Tier 3 — differentiation and polish
 
-8. **§4.2** Population-level (GEPA-style) offline evolve loop with a
-   real fitness eval set (§4.6).
-9. **§4.3** User-skill → official-skill promotion queue.
-10. **§7.3** Attachment ingestion, calendar tools, email tools.
-11. **§5.4** Cross-session memory compaction job.
-12. **§9** WebSocket alternative; replay endpoint; per-agent session
-    grouping in UI.
-13. **§6.4 / §6.5** Multi-axis quotas and tiered plans.
+8. ✅ **§4.2** Population-level (GEPA-style) offline evolve loop
+   with a real fitness eval set (§4.6). — **Phase 45.**
+9. ✅ **§4.3** User-skill → official-skill promotion queue. —
+   **Phase 45** (admin-only `/v1/admin/skill-candidates` + daily
+   tick aggregating cross-tenant by `frontmatter.name`).
+10. ☐ **§7.3** Attachment ingestion, calendar tools, email tools.
+    — **Deferred to v0.6.**
+11. ✅ **§5.4** Cross-session memory compaction job. — **Phase 43**
+    (worker `compact` tick gated on `memory.md` utilisation > 0.8).
+12. ☐ **§9** WebSocket alternative; replay endpoint; per-agent
+    session grouping in UI. — **Deferred to v0.6.**
+13. ☐ **§6.4 / §6.5** Multi-axis quotas and tiered plans. —
+    **Deferred to v0.6.** Phase 41 added the per-agent quota axis
+    but no `plan_tier` column.
 
 ### Tier 4 — operational hygiene
 
-14. **§8** Migration step in deploy pipeline; restore runbook; canary
-    rollouts; load tests + capacity model.
-15. **§6.3** GDPR delete pipeline.
-16. **§10** SDK pin bumps; model-id constants; HSTS/CSP middleware;
-    audit-archive shipper verification.
+14. ◐ **§8** Migration step in deploy pipeline (✅ v0.4 — `alembic
+    upgrade head` as a one-shot `ecs run-task` gated on exit 0);
+    restore runbook / canary / load + capacity tests — **deferred
+    to v0.6.**
+15. ✅ **§6.3** GDPR delete pipeline. — **Phase 46**
+    (`gdpr_delete_requests` table, `:request-delete` /
+    `:cancel-delete` routes, daily worker that exports to S3,
+    purges every tenant table in one tx, and tombstones
+    `audit_log.actor_id`).
+16. ✅ **§10** SDK pin bumps (`openai>=2.5,<3`,
+    `openai-agents>=0.16,<0.18`); model-id constants
+    (`constants/models.py`); HSTS/CSP middleware
+    (`web/middleware/security_headers.py`); audit-archive shipper
+    (daily worker uploads `audit_log` rows older than 90 days as
+    JSONL and `DELETE`s them from PG). — **Phase 46.**
+
+### Deferred to v0.6
+
+Items the v0.5 punch-list scored but did not close — re-graded out
+of Phase 46:
+
+- **§6.1 (legacy-table RLS back-fill)** for `usage_events` and
+  `audit_log`. Both are admin-read surfaces today; promoting them
+  to compound-policy RLS requires the admin layer to bind a
+  per-target `app.user_id` GUC or switch to an explicit
+  superuser role for the cross-tenant scans.
+- **§7.3** Attachment ingestion, calendar tools, email tools.
+- **§9** WebSocket transport, replay endpoint, per-agent session
+  grouping in the webapp UI.
+- **§6.4 / §6.5** `plan_tier` column + tiered per-tier quotas.
+- **§8 (operational hygiene tail)** restore runbook, canary
+  rollouts, scripted load tests + capacity model.
+- **§7** agent-loop refactors (planner / executor split,
+  attempt/repair loop, native shell sandbox).
+- **§8 (deploy tail)** PITR drill cadence, infra cost dashboard.
 
 ---
 

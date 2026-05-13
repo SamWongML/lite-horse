@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "session_summaries",
     "turn_outcomes",
     "skill_promotion_candidates",
+    "gdpr_delete_requests",
 }
 
 

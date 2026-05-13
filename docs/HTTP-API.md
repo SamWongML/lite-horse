@@ -87,6 +87,24 @@ scope only — the URL never carries a user id. Resources:
 * `cron-jobs/*` — scheduled jobs delivered via signed webhook.
 * `byo-keys/*` — BYO OpenAI / Anthropic / GitHub credentials.
 * `settings` — rate limit, cost budget, default provider.
+* `:request-delete` / `:cancel-delete` — GDPR account deletion.
+
+#### GDPR deletion
+
+* `POST /v1/users/me:request-delete` schedules a deletion at
+  `now() + interval '7 days'` and returns a
+  `GdprDeleteRequestOut` (`requested_at`, `scheduled_at`,
+  `cancelled_at`, `completed_at`). A second open request returns
+  `409 gdpr_delete_already_pending`.
+* `DELETE /v1/users/me:cancel-delete` cancels the open request if
+  before `scheduled_at` (returns the updated row); `404` if no
+  open request exists.
+* When `scheduled_at` is reached, the daily `gdpr_delete` worker
+  exports every tenant-scoped row to
+  `s3://$LITEHORSE_S3_BUCKET_AUDIT_ARCHIVE/gdpr/<request_id>.jsonl`,
+  deletes from every tenant table in one transaction, tombstones
+  `audit_log.actor_id` (FK is `ON DELETE SET NULL` so audit
+  history survives), and stamps `completed_at` + `archive_s3_key`.
 
 ### Admin
 
@@ -132,12 +150,29 @@ identical across surfaces.
 
 The api process does not run cron. A standalone `scheduler` service
 ticks every 60 s, expanding official-scope jobs into per-user
-`CronMessage` records, plus an evolve tick once per day enqueues
-`EvolveMessage` records for users with ≥10 trajectories since the last
-evolve. The `worker` service long-polls SQS; for `cron` payloads it
-runs the turn and signs the webhook delivery (HMAC-SHA256 with
-`LITEHORSE_WEBHOOK_SECRET`); for `evolve` payloads it produces a
-`pending` `skill_proposal` row for human review.
+`CronMessage` records. Daily ticks fan out `EvolveMessage` (users
+with ≥10 trajectories since the last evolve), `EvolveGepaMessage`
+(skills with `gepa: true` frontmatter), `GdprDeleteMessage` (due
+deletion requests), `AuditShipMessage` (rows older than 90 days),
+and `CurateMessage` (one per `(user, agent)` slice owning any
+skill); the hourly `summarize` tick scans idle sessions. The
+`worker` service long-polls SQS; for `cron` payloads it runs the
+turn and signs the webhook delivery (HMAC-SHA256 with
+`LITEHORSE_WEBHOOK_SECRET`); for `evolve` / `evolve_gepa` it
+produces a `pending` `skill_proposal` row for human review;
+for `gdpr_delete` it exports + purges + tombstones; for
+`audit_ship` it streams aged `audit_log` rows as JSONL to the
+audit-archive bucket and `DELETE`s them from PG.
+
+## Security headers
+
+Cloud responses carry HSTS
+(`max-age=31536000; includeSubDomains; preload`), CSP
+(`default-src 'none'`), `X-Frame-Options: DENY`, and
+`Referrer-Policy: no-referrer` via
+`web/middleware/security_headers.py`. The middleware is
+no-op when `LITEHORSE_ENV=local` so the CLI-served `/debug/*`
+surface stays unconstrained.
 
 ## Observability
 

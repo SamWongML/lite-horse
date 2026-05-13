@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lite_horse.agent.consolidator import Consolidator
+from lite_horse.constants.models import MODEL_GPT_5_2
 from lite_horse.repositories import (
     MemoryFull,
     MemoryRepo,
@@ -61,7 +62,7 @@ DbSession = Annotated[AsyncSession, Depends(get_db_session)]
 Ctx = Annotated[RequestContext, Depends(get_request_context)]
 BlobExports = Annotated[BlobStore, Depends(get_blob_store_exports)]
 
-_DEFAULT_COMPACT_MODEL = "gpt-5.2"
+_DEFAULT_COMPACT_MODEL = MODEL_GPT_5_2
 _EXPORT_URL_TTL_SECONDS = 900
 
 
