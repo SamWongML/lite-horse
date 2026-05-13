@@ -454,9 +454,80 @@ now covers ``feedback`` with explicit ``PROTOCOL_CLASS_OVERRIDES``
 ``tests/agent/test_evolution_feedback_gate.py``,
 ``tests/worker/test_classify_curate_dispatch.py``,
 ``tests/web/test_feedback_route.py``.
-**v0.5 Phase 45 next.**
+Phase 45 shipped 2026-05-14: ``alembic 0007_phase45_promotion``
+creates the admin-only ``skill_promotion_candidates`` table
+(``source_skill_id`` / ``frontmatter_name`` /
+``unique_user_count`` / ``use_count`` / ``success_rate`` /
+``status`` ∈ {``pending``, ``promoted``, ``rejected``} /
+``reason`` / ``decided_by`` / ``promoted_skill_id`` /
+``generated_at`` / ``decided_at``) with a partial unique index on
+``(frontmatter_name) WHERE status='pending'`` so the daily tick
+upserts idempotently while history rows stick around. RLS is
+intentionally **off** because the promotion sweep and the
+``/v1/admin/skill-candidates`` endpoints run without an
+``app.user_id`` GUC; source rows stay protected by the
+user-scope ``skills`` policy. ``models/skill_promotion.py`` +
+``repositories/skill_promotion_repo.py`` own
+``aggregate_candidates`` (cross-tenant scan grouping user-scope
+``skills`` by ``frontmatter.name`` and clamping to the locked
+thresholds: ``unique_user_count ≥ 3``, ``use_count ≥ 20``,
+``success_rate ≥ 0.8``), ``upsert_pending``,
+``mark_promoted`` / ``mark_rejected``, ``list_pending`` /
+``list_all`` / ``get`` / ``get_source_skill``.
+``scheduler/promotion_tick.py`` runs daily in admin context and
+materialises one pending row per
+``frontmatter.name``; ``web/routes/admin.py`` exposes
+``GET /v1/admin/skill-candidates`` plus
+``POST .../{id}:promote`` (clones the source body into the
+``official`` scope via ``SkillRepo.create_official`` /
+``update_official``, audit-logs with the source ``user_id`` /
+``skill_id`` redacted, fires ``publish_invalidation``) and
+``POST .../{id}:reject`` (records ``decided_by`` + reason).
+``evolve/gepa/`` is the new GEPA-style population loop —
+``eval_set.py`` (``mine_eval_set_from_outcomes`` + cloud-side
+``mine_eval_set`` joining ``turn_outcomes`` to the originating
+user message per ``session_id``), ``population.py``
+(``generate_population`` cycles a fixed mutation-hint set and
+keeps the baseline as the identity variant; ``diversity_prune``
+collapses pairs whose cosine ≥ :data:`GEPA_DIVERSITY_COSINE`),
+``fitness.py`` (per-variant replay through ``run_case`` + Phase
+44 classifier, ``VariantScore.dominates`` on (rating ↑, size
+↓), Pareto frontier with rating-then-size tiebreak),
+``runner.py`` (``run_gepa`` with pre-flight ``cost_estimate_usd``
+gate at :data:`GEPA_COST_GATE_USD` and ``min_cases`` gate at
+:data:`GEPA_MIN_TRAJECTORIES`; emits :class:`GepaResult` for
+the cloud sink and ``write_local_proposal`` for the CLI sink
+under ``<agent>/skills/.proposals/<slug>/<ts>.{md,json}``).
+``evolve/gepa/local.py`` ships deterministic
+character-frequency embedder + comment-appending generator +
+case-rating-echoing run_case + clamp-to-{-1,0,1} classifier so
+the CLI parity gate runs without any model SDK.
+``worker/gepa.py`` adds ``EvolveGepaMessage`` + the dispatch
+shim ``run_evolve_gepa`` that persists a ``skill_proposals``
+row even on aborted runs so the proposals timeline stays
+observable (production runner lands in Phase 46 with the SDK
+bumps); ``worker/runner.py`` routes ``kind="evolve_gepa"``
+ahead of the v0.4 ``evolve`` path. ``scheduler/gepa_tick.py``
+runs weekly in admin context, scans user-scope ``skills`` whose
+``frontmatter.gepa`` is ``"true"`` and emits one message per
+``(user, agent, slug)``. CLI parity:
+``cli/commands/skills.py`` extends ``evolve`` with
+``--population`` / ``--generations`` / ``--population-size`` /
+``--fixture`` so ``litehorse skills evolve <slug> --population
+--generations 1 --population-size 4 --fixture cases.json`` runs
+the full loop offline against the active agent's local SKILL.md
+and drops the bundle under ``.proposals/<slug>/``. New tests:
+``tests/models/test_phase45_migration_static.py``,
+``tests/test_gepa_population.py``,
+``tests/test_gepa_fitness.py``,
+``tests/test_gepa_runner.py``,
+``tests/test_gepa_eval_set.py``,
+``tests/test_gepa_local.py``,
+``tests/worker/test_evolve_gepa_dispatch.py``,
+``tests/cli/test_skills_evolve_population.py``.
+**v0.5 Phase 46 next.**
 | 44 | Curator background pass + outcome classifier                       | ✅ |
-| 45 | User-skill promotion + GEPA-style offline evolve                   | ☐ |
+| 45 | User-skill promotion + GEPA-style offline evolve                   | ✅ |
 | 46 | Hardening: GDPR delete, audit shipper, SDK bumps, CLI parity gate  | ☐ |
 
 ---

@@ -58,3 +58,22 @@ CURATOR_ARCHIVE_AFTER_DAYS = 90
 # proposes a consolidation. 0.85 was the Hermes-side default and matches
 # the regression test in ``tests/agent/test_curator_consolidate.py``.
 CURATOR_CONSOLIDATE_COSINE = 0.85
+
+# Phase 45 — skill promotion thresholds. The daily promotion tick groups
+# user-scope skills by ``frontmatter.name`` and surfaces ones that have
+# spread across enough independent users, been used enough times, and
+# have a high enough success rate. Admin-tunable via env in a follow-up;
+# the defaults match the v0.5 plan's "Hard contract".
+PROMOTION_MIN_UNIQUE_USERS = 3
+PROMOTION_MIN_USE_COUNT = 20
+PROMOTION_MIN_SUCCESS_RATE = 0.8
+
+# Phase 45 — GEPA cost gate. Aborts a run before any model call when
+# the estimated cost exceeds this ceiling (USD). Defaults to the v0.5
+# plan's $20 figure; opt-in via SKILL.md frontmatter ``gepa: true``.
+GEPA_COST_GATE_USD = 20.0
+GEPA_DEFAULT_POPULATION_SIZE = 8
+GEPA_DEFAULT_GENERATIONS = 3
+GEPA_DIVERSITY_COSINE = 0.95
+GEPA_MIN_TRAJECTORIES = 10
+GEPA_MAX_TRAJECTORIES = 50

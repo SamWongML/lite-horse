@@ -19,7 +19,9 @@ from lite_horse.models.opt_out import UserOfficialOptOut
 from lite_horse.models.session import Session
 from lite_horse.models.session_summary import SessionSummary
 from lite_horse.models.skill import Skill
+from lite_horse.models.skill_promotion import SkillPromotionCandidate
 from lite_horse.models.skill_proposal import SkillProposal
+from lite_horse.models.turn_outcome import TurnOutcome
 from lite_horse.models.usage_event import UsageEvent
 from lite_horse.models.user import User
 from lite_horse.models.user_document import UserDocument
@@ -37,7 +39,9 @@ __all__ = [
     "Session",
     "SessionSummary",
     "Skill",
+    "SkillPromotionCandidate",
     "SkillProposal",
+    "TurnOutcome",
     "UsageEvent",
     "User",
     "UserDocument",

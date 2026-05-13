@@ -51,6 +51,10 @@ from lite_horse.repositories.session_summary_repo import (
     SessionSummaryRepo,
     SummaryRow,
 )
+from lite_horse.repositories.skill_promotion_repo import (
+    CandidateAggregate,
+    SkillPromotionRepo,
+)
 from lite_horse.repositories.skill_repo import SkillRepo
 from lite_horse.repositories.usage_repo import UsageRepo
 from lite_horse.repositories.user_repo import UserRepo
@@ -70,6 +74,7 @@ __all__ = [
     "AuditRepo",
     "BaseRepo",
     "ByoKeyStore",
+    "CandidateAggregate",
     "ChunkRow",
     "CommandRepo",
     "CompactionCandidate",
@@ -94,6 +99,7 @@ __all__ = [
     "SearchHit",
     "SessionRepo",
     "SessionSummaryRepo",
+    "SkillPromotionRepo",
     "SkillRepo",
     "SummaryRow",
     "UnsafeMemoryContent",

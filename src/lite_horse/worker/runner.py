@@ -36,6 +36,11 @@ from lite_horse.worker.curate import (
     run_curate,
 )
 from lite_horse.worker.embed import EmbedMessage, is_embed_payload, run_embed
+from lite_horse.worker.gepa import (
+    EvolveGepaMessage,
+    is_evolve_gepa_payload,
+    run_evolve_gepa,
+)
 from lite_horse.worker.summarize import (
     SummarizeMessage,
     is_summarize_payload,
@@ -90,6 +95,7 @@ async def dispatch_message(  # noqa: PLR0911, PLR0912, PLR0915 — flat per-kind
     run_turn_fn: RunTurnFn | None = None,
     deliver_fn: DeliverFn | None = None,
     evolve_fn: Callable[[EvolveMessage], Awaitable[bool]] | None = None,
+    evolve_gepa_fn: Callable[[EvolveGepaMessage], Awaitable[bool]] | None = None,
     embed_fn: Callable[[EmbedMessage], Awaitable[bool]] | None = None,
     summarize_fn: Callable[[SummarizeMessage], Awaitable[bool]] | None = None,
     compact_fn: Callable[[CompactMessage], Awaitable[bool]] | None = None,
@@ -107,6 +113,26 @@ async def dispatch_message(  # noqa: PLR0911, PLR0912, PLR0915 — flat per-kind
     (default), the Phase-39 evolve path, and the Phase-42 embed-backfill
     path.
     """
+    if is_evolve_gepa_payload(raw.body):
+        try:
+            gepa_msg = EvolveGepaMessage.from_json(raw.body)
+        except (ValueError, KeyError, TypeError) as exc:
+            log.error(
+                "worker: dropping unparseable evolve_gepa message: %s", exc
+            )
+            return True
+        gepa = evolve_gepa_fn or run_evolve_gepa
+        try:
+            return await gepa(gepa_msg)
+        except Exception:
+            log.exception(
+                "worker: evolve_gepa failed (user=%s agent=%s slug=%s)",
+                gepa_msg.user_id,
+                gepa_msg.agent_id,
+                gepa_msg.skill_slug,
+            )
+            return False
+
     if is_evolve_payload(raw.body):
         try:
             evolve_msg = EvolveMessage.from_json(raw.body)
