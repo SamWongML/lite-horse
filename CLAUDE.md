@@ -30,14 +30,14 @@ Dev tools (pytest/ruff/mypy) live in `[project.optional-dependencies] dev`, so t
 
 - `src/lite_horse/` — runtime. Subpackages: `agent/`, `cli/`, `web/` (FastAPI), `worker/` (SQS), `scheduler/` (APScheduler), `repositories/`, `models/`, `storage/`, `providers/`, `sessions/`.
 - `tests/` mirrors `src/`. `asyncio_mode = auto` is set in `pyproject.toml`; just decorate with `@pytest.mark.asyncio` where the file isn't already module-async.
-- `docs/PROGRESS.md` — phase ledger; `docs/plans/v0.X-*.md` — active plan with acceptance gates.
+- `docs/PROGRESS.md` — phase ledger. `docs/plans/v0.5/` — active plan, split per-phase (`README.md` + `phase-NN-*.md` + shared `_*.md` refs). `docs/plans/archive/v0.1`–`v0.4-*.md` — shipped; do not read unless named. `docs/research/hermes/` — background research, sectioned by `§N`; load only the section your phase references.
 - Alembic migrations: `src/lite_horse/alembic/versions/NNNN_phaseN_*.py` (chain by `down_revision`).
 
 ## Project workflow
 
-- Work is phase-scoped. The current plan in `docs/plans/` defines the success criteria — read it before implementing.
-- Each phase ends by flipping its row in `docs/PROGRESS.md` from ☐ to ✅ with a one-paragraph shipped-summary in the same prose style as adjacent phases.
-- **Hard parity rule:** every cloud feature ships a `*_local` backend so the `litehorse` CLI keeps working against `~/.litehorse/`. Cloud tools must not import `litehorse_home` — `tests/lint/test_no_litehorse_home_in_tools.py` enforces this.
+- Phase-scoped. The active plan directory is named in the Repo map. To keep context small, load only its `README.md` + your `phase-N-*.md` + `_contract.md`; pull other `_*.md` (and anything they link to) on demand. Don't read sibling phase files or older `v0.X` plans unless cross-linked.
+- End a phase by flipping its `docs/PROGRESS.md` row ☐ → ✅ with a one-paragraph shipped-summary matching adjacent phases' prose.
+- **Hard parity rule:** every cloud feature ships a `*_local` backend so `litehorse` keeps working against `~/.litehorse/`. Cloud tools must not import `litehorse_home` (`tests/lint/test_no_litehorse_home_in_tools.py` enforces).
 
 ## Behavioral rules
 

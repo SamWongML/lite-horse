@@ -1,7 +1,7 @@
 """Fast-path contract for `litehorse --help`.
 
 `--help` must return quickly and without loading openai, prompt_toolkit,
-or rich — see docs/plans/v0.3-cli-entrypoint.md "--help fast-path". We
+or rich — see docs/plans/archive/v0.3-cli-entrypoint.md "--help fast-path". We
 run in a subprocess so this test does not see modules pulled in by
 sibling test files.
 """

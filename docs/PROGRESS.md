@@ -1,6 +1,6 @@
 # lite-horse — phase status
 
-**Active plan:** [plans/v0.5-tenant-evolve-recall.md](plans/v0.5-tenant-evolve-recall.md)
+**Active plan:** [plans/v0.5/](plans/v0.5/README.md)
 
 One row per phase. Flip ☐ → ✅ only when every acceptance checkbox in the
 plan file for that phase is green. Do not put plan detail here — it belongs
@@ -10,7 +10,7 @@ in the plan file.
 
 ## v0.1 — Hermes port on OpenAI Agents SDK — ✅ SHIPPED (2026-04-19)
 
-2,115 LOC runtime, 105 tests green. Detail: [plans/v0.1-hermes-port.md](plans/v0.1-hermes-port.md).
+2,115 LOC runtime, 105 tests green. Detail: [plans/archive/v0.1-hermes-port.md](plans/archive/v0.1-hermes-port.md).
 
 | # | Subject | Status |
 |---|---|---|
@@ -32,7 +32,7 @@ in the plan file.
 ## v0.2 — embed in webapp + strengthen self-evolution — ✅ SHIPPED (2026-04-23)
 
 ~2,720 runtime LOC + ~450 evolve LOC, 245 tests green. Detail:
-[plans/v0.2-embed-and-evolve.md](plans/v0.2-embed-and-evolve.md).
+[plans/archive/v0.2-embed-and-evolve.md](plans/archive/v0.2-embed-and-evolve.md).
 Webapp-side acceptance (round-trip + proposal merge UI) is verified
 out-of-band in the PM webapp repo.
 
@@ -56,7 +56,7 @@ out-of-band in the PM webapp repo.
 ## v0.3 — interactive-first `litehorse` CLI — ✅ SHIPPED (2026-04-25)
 
 476 tests green. Detail:
-[plans/v0.3-cli-entrypoint.md](plans/v0.3-cli-entrypoint.md).
+[plans/archive/v0.3-cli-entrypoint.md](plans/archive/v0.3-cli-entrypoint.md).
 Reverses v0.2's no-CLI stance. Bare `litehorse` drops into a persistent
 REPL with streaming markdown, slash commands, tool-call approval,
 session resume, and cost meter — same class of interaction as the
@@ -74,7 +74,7 @@ the secondary surface. Stack: prompt_toolkit + rich + click-default-group
 
 ## v0.4 — cloud multi-tenant service — ✅ SHIPPED (2026-04-30)
 
-Detail: [plans/v0.4-cloud-multi-tenant.md](plans/v0.4-cloud-multi-tenant.md).
+Detail: [plans/archive/v0.4-cloud-multi-tenant.md](plans/archive/v0.4-cloud-multi-tenant.md).
 Re-platforms the in-process Python library into a horizontally-scalable
 cloud service: Postgres + RLS for sessions/skills/memory/cron, layered
 config (official → org → user), admin/audit surface, streaming HTTP API
@@ -198,8 +198,8 @@ dev-only; ``docs/EMBEDDING.md`` deprecated in favour of new
 
 ## v0.5 — tenant-safe tools, multi-agent personas, evolution & recall — ☐ ACTIVE (2026-05-12; through Phase 43)
 
-**Active plan:** [plans/v0.5-tenant-evolve-recall.md](plans/v0.5-tenant-evolve-recall.md).
-**Predecessor:** v0.4. **Background:** [HERMES_GAP_ANALYSIS.md](HERMES_GAP_ANALYSIS.md).
+**Active plan:** [plans/v0.5/](plans/v0.5/README.md).
+**Predecessor:** v0.4. **Background:** [research/hermes/](research/hermes/README.md).
 
 Closes the four gaps that block lite-horse from being the website
 personal-assistant engine the product wants: (1) tenant-safe agent
