@@ -27,7 +27,7 @@ from lite_horse.core.session_key import build_session_key
 
 # Window in seconds during which a second Ctrl-C exits the REPL after the
 # first cancelled the in-flight turn. Matches the spec in
-# docs/plans/v0.3-cli-entrypoint.md.
+# docs/plans/archive/v0.3-cli-entrypoint.md.
 CTRL_C_EXIT_WINDOW_S = 2.0
 
 # Default context-window denominator for the toolbar. Per-model lookup

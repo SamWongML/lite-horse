@@ -2,7 +2,7 @@
 
 prompt_toolkit re-renders ``bottom_toolbar`` on each keystroke; we hand it a
 closure that reads the live :class:`ReplState`. Format mirrors the spec in
-``docs/plans/v0.3-cli-entrypoint.md``::
+``docs/plans/archive/v0.3-cli-entrypoint.md``::
 
     <model>  session:<key[:8]>  ctx:<used>/<max> (pct%)  $<cost>  [<mode>]
 
