@@ -36,6 +36,7 @@ from lite_horse.constants import (
     CURATOR_REFINE_MIN_OUTCOMES,
     SKILL_CREATION_MIN_TOOL_CALLS,
 )
+from lite_horse.constants.models import MODEL_GPT_5_4
 from lite_horse.skills.manage_tool import skill_manage
 
 _DISTILLER_INSTRUCTIONS = (
@@ -80,7 +81,7 @@ class EvolutionHook(AgentHooks[Any]):
     def __init__(
         self,
         *,
-        model: str = "gpt-5.4",
+        model: str = MODEL_GPT_5_4,
         min_tool_calls: int = SKILL_CREATION_MIN_TOOL_CALLS,
         distiller_max_turns: int = 4,
         refiner_max_turns: int = 4,

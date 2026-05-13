@@ -1,7 +1,8 @@
 # lite-horse v0.5 — tenant-safe tools, multi-agent personas, evolution & recall
 
-**Status:** ACTIVE
+**Status:** SHIPPED
 **Started:** 2026-05-07
+**Shipped:** 2026-05-14
 **Predecessor:** [v0.4-cloud-multi-tenant.md](../archive/v0.4-cloud-multi-tenant.md)
 **Status ledger:** [../../PROGRESS.md](../../PROGRESS.md)
 **Background research:** [../../research/hermes/](../../research/hermes/README.md)

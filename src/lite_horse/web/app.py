@@ -30,6 +30,7 @@ from lite_horse.storage import make_kms, make_session_lock
 from lite_horse.storage.db import dispose_engine, get_engine
 from lite_horse.storage.redis_client import make_redis_client
 from lite_horse.web.effective_invalidate import run_invalidation_subscriber
+from lite_horse.web.middleware import install_security_headers
 from lite_horse.web.permissions import PermissionBroker
 from lite_horse.web.routes.admin import router as admin_router
 from lite_horse.web.routes.agents import router as agents_router
@@ -38,6 +39,7 @@ from lite_horse.web.routes.ops import router as ops_router
 from lite_horse.web.routes.sessions import router as sessions_router
 from lite_horse.web.routes.turns import router as turns_router
 from lite_horse.web.routes.user_config import router as user_config_router
+from lite_horse.web.routes.users import router as users_router
 from lite_horse.web.turns import TurnRegistry
 
 
@@ -74,8 +76,10 @@ def create_app() -> FastAPI:
     configure_tracing(env=settings.env, service_name="lite-horse-api")
     app = FastAPI(title="lite-horse", lifespan=_lifespan)
     install_middleware(app)
+    install_security_headers(app, env=settings.env)
     app.include_router(ops_router)
     app.include_router(user_config_router)
+    app.include_router(users_router)
     app.include_router(agents_router)
     app.include_router(admin_router)
     app.include_router(turns_router)

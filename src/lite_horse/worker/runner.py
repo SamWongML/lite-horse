@@ -20,6 +20,11 @@ from typing import Any
 from lite_horse.cron.scheduler import CronMessage
 from lite_horse.evolve.cloud import EvolveMessage, is_evolve_payload, run_evolve
 from lite_horse.storage.queue import QueueMessage
+from lite_horse.worker.audit_ship import (
+    AuditShipMessage,
+    is_audit_ship_payload,
+    run_audit_ship,
+)
 from lite_horse.worker.classify import (
     ClassifyMessage,
     is_classify_payload,
@@ -36,6 +41,11 @@ from lite_horse.worker.curate import (
     run_curate,
 )
 from lite_horse.worker.embed import EmbedMessage, is_embed_payload, run_embed
+from lite_horse.worker.gdpr import (
+    GdprDeleteMessage,
+    is_gdpr_delete_payload,
+    run_gdpr_delete,
+)
 from lite_horse.worker.gepa import (
     EvolveGepaMessage,
     is_evolve_gepa_payload,
@@ -101,6 +111,8 @@ async def dispatch_message(  # noqa: PLR0911, PLR0912, PLR0915 — flat per-kind
     compact_fn: Callable[[CompactMessage], Awaitable[bool]] | None = None,
     classify_fn: Callable[[ClassifyMessage], Awaitable[bool]] | None = None,
     curate_fn: Callable[[CurateMessage], Awaitable[bool]] | None = None,
+    gdpr_delete_fn: Callable[[GdprDeleteMessage], Awaitable[bool]] | None = None,
+    audit_ship_fn: Callable[[AuditShipMessage], Awaitable[bool]] | None = None,
 ) -> bool:
     """Run one queue message end-to-end.
 
@@ -218,6 +230,39 @@ async def dispatch_message(  # noqa: PLR0911, PLR0912, PLR0915 — flat per-kind
                 classify_msg.user_id,
                 classify_msg.turn_id,
             )
+            return False
+
+    if is_gdpr_delete_payload(raw.body):
+        try:
+            gdpr_msg = GdprDeleteMessage.from_json(raw.body)
+        except (ValueError, KeyError, TypeError) as exc:
+            log.error(
+                "worker: dropping unparseable gdpr_delete message: %s", exc
+            )
+            return True
+        gdpr = gdpr_delete_fn or run_gdpr_delete
+        try:
+            return await gdpr(gdpr_msg)
+        except Exception:
+            log.exception(
+                "worker: gdpr_delete failed (request=%s)",
+                gdpr_msg.request_id,
+            )
+            return False
+
+    if is_audit_ship_payload(raw.body):
+        try:
+            ship_msg = AuditShipMessage.from_json(raw.body)
+        except (ValueError, KeyError, TypeError) as exc:
+            log.error(
+                "worker: dropping unparseable audit_ship message: %s", exc
+            )
+            return True
+        ship = audit_ship_fn or run_audit_ship
+        try:
+            return await ship(ship_msg)
+        except Exception:
+            log.exception("worker: audit_ship failed")
             return False
 
     if is_curate_payload(raw.body):

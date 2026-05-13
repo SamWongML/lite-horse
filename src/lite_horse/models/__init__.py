@@ -11,6 +11,7 @@ from lite_horse.models.audit_log import AuditLog
 from lite_horse.models.base import Base
 from lite_horse.models.command import Command
 from lite_horse.models.cron_job import CronJob
+from lite_horse.models.gdpr_delete_request import GdprDeleteRequest
 from lite_horse.models.instruction import Instruction
 from lite_horse.models.mcp_server import McpServer
 from lite_horse.models.memory_chunk import MemoryChunk
@@ -32,6 +33,7 @@ __all__ = [
     "Base",
     "Command",
     "CronJob",
+    "GdprDeleteRequest",
     "Instruction",
     "McpServer",
     "MemoryChunk",

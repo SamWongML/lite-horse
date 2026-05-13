@@ -31,10 +31,14 @@ The cloud HTTP API is the only deployed product surface. A standalone
 `litehorse` CLI runs the same agent loop locally against `~/.litehorse/`
 for skill / memory iteration.
 
-> **Status:** v0.4 shipped (cloud multi-tenant). v0.5 in flight — tenant-safe
-> tool backends, per-agent personas, and pgvector recall already landed
-> (phases 40 – 42). See [docs/PROGRESS.md](docs/PROGRESS.md) for the full
-> ledger and active plan.
+> **Status:** v0.5 shipped (2026-05-14). Tenant-safe tool backends
+> (Phase 40), per-agent personas (41), pgvector recall (42), session
+> summaries + cross-session compaction (43), curator + outcome
+> classifier (44), user-skill promotion + GEPA-style offline evolve
+> (45), and operational hardening — GDPR delete pipeline, audit-log
+> shipper, SDK bumps, security headers, CLI parity hard gate (46) —
+> all green. See [docs/PROGRESS.md](docs/PROGRESS.md) for the full
+> ledger.
 
 ## Architecture
 
@@ -242,6 +246,7 @@ src/lite_horse/
 ├── agent/            # factory, hooks (budget, evolution), MCP pool
 │   └── backends/     # tenant-safe Memory / Skill / Cron / Recall — local + cloud
 ├── alembic/versions/ # 0001 schema · 0002 limits · 0003 agents · 0004 pgvector
+│                    # 0005 summaries · 0006 curator · 0007 promotion · 0008 gdpr
 ├── cli/              # interactive REPL + scripted subcommands
 ├── memory/           # memory_tool, search_tool, consolidation
 ├── models/           # SQLAlchemy ORM

@@ -65,11 +65,45 @@ def _default_extras_loader() -> LocalPromptExtras:
 
 __all__ = [
     "InstructionsFn",
+    "LayeredInstructions",
     "LocalPromptExtras",
     "SessionSummaryBlock",
+    "build_layered_instructions",
     "make_instructions",
     "make_instructions_for_user",
 ]
+
+
+@dataclass(frozen=True)
+class LayeredInstructions:
+    """Three cache layers that compose the system prompt for Anthropic.
+
+    Phase 46 — Anthropic prompt-caching cuts the per-turn token cost
+    when the cacheable prefix matches a prior request. Cache_control
+    breakpoints require a contiguous cacheable prefix, so the Anthropic
+    adapter renders the prompt with this stability-first ordering:
+
+    * ``stable`` — bundled instructions + tool guidance. Identical
+      across every turn for a given ``EffectiveConfig`` etag.
+    * ``semi_stable`` — user profile + memory snapshot + skills index.
+      Identical for the duration of a session unless the user writes to
+      memory/user-doc or enables a new skill mid-session.
+    * ``volatile`` — recent sessions + relevant-past-sessions +
+      ``Current time``. Changes per turn; never cacheable.
+
+    The provider adapter attaches ``cache_control={"type": "ephemeral"}``
+    to the boundary after ``stable`` and after ``semi_stable``. OpenAI
+    providers keep using :func:`make_instructions_for_user`'s legacy
+    interleaved block order so the OpenAI cache (which keys on the full
+    prefix) behaves identically to v0.4.
+    """
+
+    stable: str
+    semi_stable: str
+    volatile: str
+
+    def as_text(self) -> str:
+        return "\n\n".join(p for p in (self.stable, self.semi_stable, self.volatile) if p)
 
 
 async def _entries_to_block(
@@ -250,6 +284,50 @@ def make_instructions_for_user(
         return "\n\n".join(parts)
 
     return _instructions
+
+
+def build_layered_instructions(
+    *,
+    instruction_blocks: list[str],
+    profile_block: str,
+    memory_block: str,
+    recent_block: str,
+    relevant_block: str,
+    skills_index: str,
+    tool_guidance: str,
+    now_iso: str,
+) -> LayeredInstructions:
+    """Split the rendered blocks into three Anthropic-cache layers.
+
+    See :class:`LayeredInstructions` for the cache-tier rationale. Pure
+    function so the provider adapter can call it from its own render
+    path when it needs the structured view, without re-running the
+    user / memory / skills fetches.
+    """
+    stable_parts: list[str] = []
+    stable_parts.extend(instruction_blocks)
+    stable_parts.append(tool_guidance)
+
+    semi_parts: list[str] = []
+    if profile_block:
+        semi_parts.append(profile_block)
+    if memory_block:
+        semi_parts.append(memory_block)
+    if skills_index:
+        semi_parts.append(skills_index)
+
+    volatile_parts: list[str] = []
+    if recent_block:
+        volatile_parts.append(recent_block)
+    if relevant_block:
+        volatile_parts.append(relevant_block)
+    volatile_parts.append(f"Current time: {now_iso}")
+
+    return LayeredInstructions(
+        stable="\n\n".join(stable_parts),
+        semi_stable="\n\n".join(semi_parts),
+        volatile="\n\n".join(volatile_parts),
+    )
 
 
 def _render_session_summaries(
