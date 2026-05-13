@@ -490,6 +490,28 @@ class McpHealthOut(BaseModel):
     rows: list[McpHealthRow]
 
 
+# ---------- skill promotion (Phase 45, admin-only) ----------
+
+
+class SkillCandidateOut(BaseModel):
+    """One ``skill_promotion_candidates`` row, anonymised."""
+
+    id: str
+    frontmatter_name: str
+    unique_user_count: int
+    use_count: int
+    success_rate: float
+    status: str
+    reason: str | None = None
+    promoted_skill_id: str | None = None
+    generated_at: datetime
+    decided_at: datetime | None = None
+
+
+class SkillCandidateRejectIn(BaseModel):
+    reason: str | None = None
+
+
 # ---------- sessions ----------
 
 

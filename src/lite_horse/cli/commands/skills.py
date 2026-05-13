@@ -293,6 +293,22 @@ def evolve_cmd(
         help="Immediately approve the proposal if every gate passes. "
              "Defaults off — auto-merge is forbidden by the v0.2 contract.",
     ),
+    population: bool = typer.Option(
+        False, "--population",
+        help="Phase 45 GEPA mode: evolve via an N-generation population "
+             "loop and emit a proposal under ``.proposals/<slug>/``. "
+             "Requires --fixture <path.json>.",
+    ),
+    generations: int = typer.Option(
+        3, "--generations", help="GEPA generations (--population only)."
+    ),
+    population_size: int = typer.Option(
+        8, "--population-size", help="Variants per generation (--population only)."
+    ),
+    fixture: str = typer.Option(
+        None, "--fixture",
+        help="Path to a JSON array of EvalCase dicts for --population.",
+    ),
     json_mode: bool = typer.Option(False, "--json", help="Emit NDJSON."),
 ) -> None:
     """Mine recent failures, propose a revised SKILL.md, gate it."""
@@ -300,6 +316,23 @@ def evolve_cmd(
 
     from lite_horse.cli._output import emit_error, emit_result
     from lite_horse.cli.exit_codes import ExitCode
+
+    if population:
+        try:
+            payload = _run_gepa_local(
+                slug=slug,
+                fixture=fixture,
+                generations=generations,
+                population_size=population_size,
+            )
+        except ValueError as exc:
+            emit_error(str(exc), code=int(ExitCode.USAGE), json_mode=json_mode)
+            raise typer.Exit(code=int(ExitCode.USAGE)) from None
+        emit_result(payload, json_mode=json_mode)
+        if not payload.get("accepted"):
+            raise typer.Exit(code=int(ExitCode.GENERIC))
+        return
+
     from lite_horse.evolve.runner import evolve as evolve_fn
 
     result = evolve_fn(slug, days=days)
@@ -319,6 +352,95 @@ def evolve_cmd(
     emit_result(payload, json_mode=json_mode)
     if not result.approved:
         raise typer.Exit(code=int(ExitCode.GENERIC))
+
+
+def _run_gepa_local(
+    *,
+    slug: str,
+    fixture: str | None,
+    generations: int,
+    population_size: int,
+) -> dict[str, Any]:
+    """Phase 45 GEPA local entry-point. Returns a JSON-safe summary dict.
+
+    Reads the baseline SKILL.md from the current agent's skills tree,
+    loads eval cases from ``--fixture`` JSON, runs the deterministic
+    local GEPA loop, and (on success) drops a proposal bundle under
+    ``<agent>/skills/.proposals/<slug>/<ts>.{md,json}``. The summary
+    mirrors :class:`GepaResult` plus the on-disk paths so callers can
+    print or assert against it.
+    """
+    import json
+    from dataclasses import asdict
+
+    from lite_horse.cli.commands.agent import agent_home, current_agent
+    from lite_horse.evolve.gepa.eval_set import mine_eval_set_from_outcomes
+    from lite_horse.evolve.gepa.local import (
+        local_classifier,
+        local_embedder,
+        local_generator,
+        local_run_case,
+    )
+    from lite_horse.evolve.gepa.runner import (
+        run_gepa,
+        write_local_proposal,
+    )
+    from lite_horse.skills._slug import _SLUG_RE
+
+    if not _SLUG_RE.match(slug):
+        raise ValueError(f"invalid skill slug: {slug!r}")
+    if not fixture:
+        raise ValueError(
+            "--population requires --fixture <path.json> "
+            "(a JSON array of EvalCase dicts)"
+        )
+
+    agent_slug = current_agent()
+    agent_skills_root = agent_home(agent_slug) / "skills"
+    baseline_path = agent_skills_root / slug / "SKILL.md"
+    if not baseline_path.is_file():
+        raise ValueError(f"no live SKILL.md for {slug!r} at {baseline_path}")
+    baseline = baseline_path.read_text(encoding="utf-8")
+
+    fixture_path = Path(fixture)
+    if not fixture_path.is_file():
+        raise ValueError(f"fixture not found: {fixture}")
+    try:
+        raw = json.loads(fixture_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"fixture is not valid JSON: {exc}") from None
+    if not isinstance(raw, list):
+        raise ValueError("fixture must be a JSON array of EvalCase dicts")
+    cases = mine_eval_set_from_outcomes(raw, min_cases=1, max_cases=len(raw))
+
+    result = run_gepa(
+        skill_slug=slug,
+        baseline=baseline,
+        cases=cases,
+        generator=local_generator(),
+        embedder=local_embedder(),
+        run_case=local_run_case(),
+        classifier=local_classifier(),
+        population_size=population_size,
+        generations=generations,
+        min_cases=1,
+    )
+
+    payload: dict[str, Any] = asdict(result)
+    payload["agent"] = agent_slug
+    written = write_local_proposal(
+        skill_slug=slug,
+        result=result,
+        agent_skills_root=agent_skills_root,
+    )
+    if written:
+        prop_md, side_json = written
+        payload["proposal_path"] = str(prop_md)
+        payload["proposal_sidecar"] = str(side_json)
+    else:
+        payload["proposal_path"] = None
+        payload["proposal_sidecar"] = None
+    return payload
 
 
 @app.command("curate")

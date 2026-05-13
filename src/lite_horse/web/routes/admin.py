@@ -30,6 +30,7 @@ from lite_horse.models.cron_job import CronJob as CronJobModel
 from lite_horse.models.instruction import Instruction as InstructionModel
 from lite_horse.models.mcp_server import McpServer as McpServerModel
 from lite_horse.models.skill import Skill as SkillModel
+from lite_horse.models.skill_promotion import SkillPromotionCandidate
 from lite_horse.models.usage_event import UsageEvent
 from lite_horse.models.user import User
 from lite_horse.repositories import (
@@ -38,6 +39,7 @@ from lite_horse.repositories import (
     CronRepo,
     InstructionRepo,
     McpRepo,
+    SkillPromotionRepo,
     SkillRepo,
 )
 from lite_horse.storage.kms import Kms
@@ -73,6 +75,8 @@ from lite_horse.web.schemas import (
     McpHealthOut,
     McpHealthRow,
     RollbackIn,
+    SkillCandidateOut,
+    SkillCandidateRejectIn,
     UsageRow,
     VersionView,
 )
@@ -952,6 +956,185 @@ async def list_audit_log(
         )
         for r in rows
     ]
+
+
+# ---------- skill promotion candidates (Phase 45) ----------
+
+
+def _candidate_to_out(c: SkillPromotionCandidate) -> SkillCandidateOut:
+    """Anonymise the source user/skill ids before returning to admin UI.
+
+    Per the Phase 45 contract, the source ``(user_id, skill_id)`` is
+    redacted unless the source user has opted in via
+    ``agents.share_skills=true``. The column does not exist yet, so we
+    always redact — the candidate row carries enough aggregate signal
+    (``unique_user_count``, ``use_count``, ``success_rate``) for admin
+    review without exposing PII.
+    """
+    return SkillCandidateOut(
+        id=str(c.id),
+        frontmatter_name=c.frontmatter_name,
+        unique_user_count=int(c.unique_user_count),
+        use_count=int(c.use_count),
+        success_rate=float(c.success_rate),
+        status=c.status,
+        reason=c.reason,
+        promoted_skill_id=(
+            str(c.promoted_skill_id) if c.promoted_skill_id else None
+        ),
+        generated_at=c.generated_at,
+        decided_at=c.decided_at,
+    )
+
+
+@router.get("/skill-candidates", response_model=list[SkillCandidateOut])
+async def list_skill_candidates(
+    session: DbSession,
+    _: AdminCtx,
+    status_filter: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[SkillCandidateOut]:
+    """List promotion candidates. Default ordering: newest first."""
+    repo = SkillPromotionRepo(session)
+    rows = await repo.list_all(status=status_filter, limit=limit, offset=offset)
+    return [_candidate_to_out(r) for r in rows]
+
+
+@router.post(
+    "/skill-candidates/{candidate_id}:promote",
+    response_model=SkillCandidateOut,
+)
+async def promote_skill_candidate(
+    candidate_id: str,
+    session: DbSession,
+    ctx: AdminCtx,
+    redis: RedisDep,
+) -> SkillCandidateOut:
+    """Clone the source user-scope skill into the ``official`` scope.
+
+    Bumps the official version if a row already exists for the slug;
+    otherwise inserts version 1. Writes an audit row with the source
+    ``(user_id, skill_id)`` **redacted** — only the candidate id and
+    the official skill id are recorded.
+    """
+    try:
+        cid = UUID(candidate_id)
+    except ValueError as exc:
+        raise http_error(ErrorKind.NOT_FOUND, "invalid candidate_id") from exc
+
+    promo = SkillPromotionRepo(session)
+    candidate = await promo.get(cid)
+    if candidate is None:
+        raise http_error(ErrorKind.NOT_FOUND, "candidate not found")
+    if candidate.status != "pending":
+        raise http_error(
+            ErrorKind.CONFLICT,
+            f"candidate already {candidate.status}",
+        )
+
+    source = await promo.get_source_skill(candidate.source_skill_id)
+    if source is None:
+        raise http_error(ErrorKind.NOT_FOUND, "source skill no longer exists")
+
+    skill_repo = SkillRepo(session)
+    existing = await skill_repo.get_official(source.slug)
+    admin_uuid = UUID(ctx.user_id)
+    if existing is None:
+        promoted = await skill_repo.create_official(
+            slug=source.slug,
+            frontmatter=dict(source.frontmatter),
+            body=source.body,
+            mandatory=False,
+            enabled_default=True,
+            created_by=admin_uuid,
+        )
+    else:
+        updated = await skill_repo.update_official(
+            source.slug,
+            frontmatter=dict(source.frontmatter),
+            body=source.body,
+            created_by=admin_uuid,
+        )
+        assert updated is not None
+        promoted = updated
+
+    decided = await promo.mark_promoted(
+        cid,
+        admin_user_id=admin_uuid,
+        promoted_skill_id=promoted.id,
+    )
+    assert decided is not None
+    await _audit(
+        session,
+        ctx,
+        action="skill_candidate.promote",
+        target={
+            "entity": "skill_candidate",
+            "candidate_id": str(cid),
+            "frontmatter_name": candidate.frontmatter_name,
+            "official_skill_slug": source.slug,
+            "official_skill_id": str(promoted.id),
+            "source_user_id": "[redacted]",
+            "source_skill_id": "[redacted]",
+        },
+        diff=_diff(
+            None,
+            {
+                "version": promoted.version,
+                "unique_user_count": candidate.unique_user_count,
+                "use_count": candidate.use_count,
+                "success_rate": candidate.success_rate,
+            },
+        ),
+    )
+    await publish_invalidation(redis)
+    return _candidate_to_out(decided)
+
+
+@router.post(
+    "/skill-candidates/{candidate_id}:reject",
+    response_model=SkillCandidateOut,
+)
+async def reject_skill_candidate(
+    candidate_id: str,
+    body: SkillCandidateRejectIn,
+    session: DbSession,
+    ctx: AdminCtx,
+) -> SkillCandidateOut:
+    try:
+        cid = UUID(candidate_id)
+    except ValueError as exc:
+        raise http_error(ErrorKind.NOT_FOUND, "invalid candidate_id") from exc
+    promo = SkillPromotionRepo(session)
+    candidate = await promo.get(cid)
+    if candidate is None:
+        raise http_error(ErrorKind.NOT_FOUND, "candidate not found")
+    if candidate.status != "pending":
+        raise http_error(
+            ErrorKind.CONFLICT,
+            f"candidate already {candidate.status}",
+        )
+    decided = await promo.mark_rejected(
+        cid,
+        admin_user_id=UUID(ctx.user_id),
+        reason=body.reason,
+    )
+    assert decided is not None
+    await _audit(
+        session,
+        ctx,
+        action="skill_candidate.reject",
+        target={
+            "entity": "skill_candidate",
+            "candidate_id": str(cid),
+            "frontmatter_name": candidate.frontmatter_name,
+            "source_user_id": "[redacted]",
+            "source_skill_id": "[redacted]",
+        },
+        diff={"reason": body.reason},
+    )
+    return _candidate_to_out(decided)
 
 
 # ---------- mcp health ----------

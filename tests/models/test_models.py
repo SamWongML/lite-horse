@@ -23,6 +23,7 @@ EXPECTED_TABLES = {
     "usage_events",
     "session_summaries",
     "turn_outcomes",
+    "skill_promotion_candidates",
 }
 
 
