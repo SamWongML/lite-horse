@@ -11,8 +11,7 @@ Per the v0.4 Hard Contract:
 `db_session(user_id)` is the canonical request-scoped dependency — it
 opens a transaction, sets the GUC for the duration of that transaction,
 yields the `AsyncSession`, and commits/rolls back in `finally`. The
-FastAPI wiring (which reads `user_id` from a `RequestContext` ContextVar)
-lands in Phase 31c.
+FastAPI wiring reads `user_id` from a `RequestContext` ContextVar.
 """
 from __future__ import annotations
 
@@ -93,7 +92,7 @@ async def db_session(
     ``current_setting('app.user_id', true)`` and treat NULL / "" as
     "no tenant".
 
-    Phase 41 added ``agent_id`` as the second tenant axis. When set, the
+    ``agent_id`` is the second tenant axis. When set, the
     ``app.agent_id`` GUC narrows RLS-extended tables (user_documents,
     sessions, skill_proposals, …) to that agent. The empty-string default
     keeps cross-agent admin queries (curator, GDPR delete) working.

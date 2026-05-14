@@ -1,4 +1,4 @@
-"""`litehorse feedback <turn_id> --rating ±1` — Phase 44.
+"""`litehorse feedback <turn_id> --rating ±1`.
 
 Writes one ``source='user_explicit'`` row to the local NDJSON feedback
 log via :class:`FeedbackLocalBackend`. Mirrors the cloud HTTP route

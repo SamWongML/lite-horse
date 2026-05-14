@@ -1,4 +1,4 @@
-"""Phase 40: tool / hook bodies must route durable state through backends.
+"""Tool / hook bodies must route durable state through backends.
 
 Asserts that no module under ``agent/`` (with the explicit
 ``agent/backends/`` exception) and no module among the named tool files
@@ -101,7 +101,7 @@ def test_no_forbidden_imports_in_scope() -> None:
                     f"{path.relative_to(REPO)} imports forbidden name {name!r}"
                 )
     assert offenders == [], (
-        "Phase 40 lint: tool/hook bodies must route through "
+        "Tool/hook bodies must route through "
         "agent/backends/, not import durable-state primitives directly. "
         "Offenders:\n  " + "\n  ".join(offenders)
     )

@@ -1,7 +1,7 @@
-"""phase 42 — pgvector recall: memory_chunks + ``vector`` extension
+"""pgvector recall: memory_chunks + ``vector`` extension
 
-Revision ID: 0004_phase42_pgvector
-Revises: 0003_phase41_agents
+Revision ID: 0004_pgvector
+Revises: 0003_agents
 Create Date: 2026-05-14
 
 Lifts the 2 400-char wholesale-injection ceiling. After this migration:
@@ -29,8 +29,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0004_phase42_pgvector"
-down_revision: str | None = "0003_phase41_agents"
+revision: str = "0004_pgvector"
+down_revision: str | None = "0003_agents"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -125,6 +125,6 @@ def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS memory_chunks_tsv")
     op.drop_index("memory_chunks_tenant", table_name="memory_chunks")
     op.drop_table("memory_chunks")
-    # The ``vector`` extension is left enabled — other phases / databases
-    # may rely on it. Dropping it on downgrade would be a data-loss
-    # surprise.
+    # The ``vector`` extension is left enabled — other migrations or
+    # databases may rely on it. Dropping it on downgrade would be a
+    # data-loss surprise.

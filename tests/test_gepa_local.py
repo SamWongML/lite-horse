@@ -1,4 +1,4 @@
-"""Phase 45: deterministic local stubs for the GEPA loop."""
+"""Deterministic local stubs for the GEPA loop."""
 from __future__ import annotations
 
 from lite_horse.evolve.gepa.eval_set import EvalCase

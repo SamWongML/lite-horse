@@ -1,10 +1,10 @@
-"""``turn_outcomes`` repository — Phase 44.
+"""``turn_outcomes`` repository.
 
 Owns the SQL paths into ``turn_outcomes``: ``record`` (the only writer),
 ``latest_for_turn`` (consulted by ``EvolutionHook`` when deciding whether
 to fire the refiner), and ``list_recent_for_skill`` / ``rating_stats``
-which the curator + Phase 45's GEPA loop use to read the per-skill
-outcome history.
+which the curator + the GEPA loop use to read the per-skill outcome
+history.
 
 The table is RLS-protected by the compound ``(user_id, agent_id)``
 ``tenant_isolation`` policy from the migration; ``BaseRepo`` is used as

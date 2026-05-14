@@ -1,4 +1,4 @@
-"""Memory.md compaction worker — Phase 43.
+"""Memory.md compaction worker.
 
 Runs the v0.4 :class:`Consolidator` against an over-full ``memory.md`` to
 merge similar entries and drop transient noise, then writes the compacted

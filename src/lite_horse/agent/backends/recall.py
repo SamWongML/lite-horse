@@ -1,7 +1,7 @@
 """``RecallBackend`` Protocol — semantic recall over the user's history.
 
-Phase 42 lifts the 2 400-char wholesale-injection ceiling. Instead of
-folding every byte of memory.md into the system prompt, the agent
+Lifts the 2 400-char wholesale-injection ceiling. Instead of folding
+every byte of memory.md into the system prompt, the agent
 queries this backend on demand via the ``memory_search`` tool. Two impls
 ship next to this file:
 

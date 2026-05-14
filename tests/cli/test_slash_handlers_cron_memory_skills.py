@@ -1,4 +1,4 @@
-"""Unit tests for Phase 29 slash handlers (cron / memory / skills).
+"""Unit tests for the cron / memory / skills slash handler groups.
 
 Each handler delegates to a helper in ``lite_horse.cli.commands.*`` so we
 only need to seed the on-disk state and dispatch the slash command through

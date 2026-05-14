@@ -460,8 +460,8 @@ async def probe_mcp(slug: str, session: DbSession) -> McpProbeResult:
 
     Issues an unauthenticated HTTP HEAD with a 5 s timeout. The encrypted
     auth header isn't decrypted here — callers want a quick liveness
-    signal, not a full handshake. The full MCP handshake probe lands in
-    Phase 34 under ``GET /v1/admin/health/mcp``.
+    signal, not a full handshake. The full MCP handshake probe lives at
+    ``GET /v1/admin/health/mcp``.
     """
     repo = McpRepo(session)
     row = await repo.get_user(slug)
@@ -629,11 +629,11 @@ async def github_oauth_callback(
 ) -> GithubOAuthCallbackOut:
     """Exchange a GitHub OAuth ``code`` for a token bundle and persist it.
 
-    Phase 37 §Open question 4: replaces the per-user-paste PAT design. The
-    webapp redirects the user to GitHub, GitHub bounces them back with a
-    short-lived ``code``; the webapp posts the code (plus optional CSRF
-    ``state`` it already verified) to this endpoint. We POST to GitHub's
-    token endpoint server-side, then encrypt the resulting bundle into
+    Replaces the per-user-paste PAT design. The webapp redirects the user
+    to GitHub, GitHub bounces them back with a short-lived ``code``; the
+    webapp posts the code (plus optional CSRF ``state`` it already
+    verified) to this endpoint. We POST to GitHub's token endpoint
+    server-side, then encrypt the resulting bundle into
     ``users.byo_provider_key_ct`` via :class:`ByoKeyStore`.
     """
     settings = get_settings()

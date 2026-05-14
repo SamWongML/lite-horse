@@ -1,7 +1,7 @@
 """Foundation + session-management slash commands.
 
 Foundation: ``/help``, ``/exit`` (+ aliases), ``/clear``.
-Session management (Phase 28): ``/new``, ``/resume``, ``/fork``, ``/compact``,
+Session management: ``/new``, ``/resume``, ``/fork``, ``/compact``,
 ``/share``.
 
 All session-management handlers keep their heavy imports inside the handler
@@ -213,13 +213,13 @@ async def _compact(args: list[str], state: Any) -> SlashOutcome:
 
 
 async def _share(args: list[str], state: Any) -> SlashOutcome:
-    """Stub: hand off to the Phase 30 ``debug share`` implementation.
+    """Stub: hand off to the ``debug share`` implementation.
 
     Wired now so ``/help`` shows it; flipping the body to the full bundler
-    happens in Phase 30 without touching callers.
+    happens later without touching callers.
     """
     printer = getattr(state, "print_line", print)
-    printer("[share] full session bundling arrives in Phase 30 "
+    printer("[share] full session bundling is not wired yet "
             "(see: `litehorse debug share`).")
     return SlashOutcome.CONTINUE
 
@@ -267,7 +267,7 @@ def build_default_registry() -> SlashRegistry:
     ))
     reg.register(SlashCommand(
         name="share",
-        summary="export this session for debug sharing (Phase 30)",
+        summary="export this session for debug sharing",
         handler=_share,
     ))
     _register_model_handlers(reg)
@@ -310,7 +310,7 @@ def _register_attachment_handlers(reg: SlashRegistry) -> None:
 
 
 def _register_scripted_parity_handlers(reg: SlashRegistry) -> None:
-    """Register Phase-29 slash handlers that mirror the scripted subtrees.
+    """Register slash handlers that mirror the scripted subtrees.
 
     Each helper imports its ``commands/*`` counterpart lazily so ``--help``
     on the root CLI never transitively loads them.

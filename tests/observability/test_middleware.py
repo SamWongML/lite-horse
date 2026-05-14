@@ -1,4 +1,4 @@
-"""Phase 38 — request-id + logging + metrics middleware behaviour."""
+"""Request-id + logging + metrics middleware behaviour."""
 from __future__ import annotations
 
 import io

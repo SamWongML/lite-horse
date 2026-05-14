@@ -27,8 +27,8 @@ from lite_horse.web.deps import get_kms, get_redis
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
-_SECRET = b"phase-34-mand-secret-do-not-use-in-prod"
-_KID = "phase-34-mand-kid"
+_SECRET = b"mandatory-enforcement-test-secret-do-not-use-in-prod"
+_KID = "mandatory-enforcement-kid"
 _AUDIENCE = "lite-horse"
 _ISSUER = "http://localhost:9999"
 

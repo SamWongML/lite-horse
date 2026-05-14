@@ -1,7 +1,7 @@
 """Local-FS implementation of skill_view.
 
-Used to live in ``skills/view_tool.py``; Phase 40 split it out so the
-tool body stays free of ``skills_root()`` per the lint contract.
+Used to live in ``skills/view_tool.py``; split out so the tool body
+stays free of ``skills_root()`` per the lint contract.
 The local :class:`SkillBackend` delegates here; the cloud impl
 re-implements the same shape against :class:`SkillRepo`.
 """

@@ -83,8 +83,8 @@ class Skill(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
 
-    # Phase 44 — curator counter columns. Defaults match the migration so
-    # existing rows survive without a backfill.
+    # Curator counter columns. Defaults match the migration so existing
+    # rows survive without a backfill.
     use_count: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )

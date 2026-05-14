@@ -1,9 +1,9 @@
-"""GEPA-style population-level skill evolution — Phase 45.
+"""GEPA-style population-level skill evolution.
 
 Replaces the single-shot reflection in :mod:`lite_horse.evolve.runner`
 with an N-generation loop over a K-member population of mutated
 ``SKILL.md`` variants. Each generation is scored by replaying a mined
-eval set through the agent and grading turn outcomes with the Phase 44
+eval set through the agent and grading turn outcomes with the outcome
 classifier. The winning variant on the rating x size Pareto frontier
 is emitted as a ``skill_proposals`` row.
 

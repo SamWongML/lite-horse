@@ -1,4 +1,4 @@
-"""Phase 42 — worker dispatcher routes embed payloads to ``run_embed``.
+"""Worker dispatcher routes embed payloads to ``run_embed``.
 
 Doesn't hit Postgres. Just verifies ``is_embed_payload`` shape + the
 worker dispatcher hands off to the registered ``embed_fn``.

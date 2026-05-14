@@ -1,7 +1,7 @@
-"""Phase 40 acceptance: tool writes route through the per-call backend.
+"""Tool writes route through the per-call backend.
 
-The pre-Phase-40 bug was that ``memory_tool`` / ``skill_manage`` /
-``cron_manage`` reached into ``litehorse_home()`` regardless of the
+The bug this gate prevents was ``memory_tool`` / ``skill_manage`` /
+``cron_manage`` reaching into ``litehorse_home()`` regardless of the
 caller's ``user_id``, so on a multi-task ECS deploy User A's writes
 either landed in a file User B read, or vanished on container restart.
 

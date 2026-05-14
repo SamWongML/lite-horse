@@ -1,4 +1,4 @@
-"""Phase 35 acceptance — same-`session_key` turns serialise via the wired lock.
+"""Acceptance — same-`session_key` turns serialise via the wired lock.
 
 This is the contract `web/app.py`'s lifespan must satisfy: two concurrent
 ``POST /v1/turns`` for the same user + session_key cannot both be inside
@@ -32,8 +32,8 @@ from lite_horse.web.turns import TurnRegistry, TurnRequest
 
 pytestmark = pytest.mark.asyncio
 
-_SECRET = b"phase35-lock-test-secret-do-not-use-in-prod"
-_KID = "phase35-lock-kid"
+_SECRET = b"session-lock-test-secret-do-not-use-in-prod"
+_KID = "session-lock-kid"
 _AUDIENCE = "lite-horse"
 _ISSUER = "http://localhost:9999"
 
@@ -68,7 +68,7 @@ def _jwks() -> dict[str, Any]:
     }
 
 
-def _mint(sub: str = "phase35-lock-user") -> str:
+def _mint(sub: str = "session-lock-user") -> str:
     return jwt.encode(
         {
             "sub": sub,

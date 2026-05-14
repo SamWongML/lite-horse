@@ -70,7 +70,7 @@ async def test_one_shot_streams_and_returns_zero(
     assert rc == 0
     captured = capsys.readouterr()
     assert "Hello, world!" in captured.out
-    # tool announce/output go to stderr only (Phase 28 ToolCallPanel)
+    # tool announce/output go to stderr only (ToolCallPanel)
     assert "→ memory" in captured.err
     assert "↩ memory" in captured.err
     assert "→ memory" not in captured.out

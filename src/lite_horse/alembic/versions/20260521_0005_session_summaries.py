@@ -1,17 +1,17 @@
-"""phase 43 — per-session summaries that survive into the next session
+"""per-session summaries that survive into the next session
 
-Revision ID: 0005_phase43_summaries
-Revises: 0004_phase42_pgvector
+Revision ID: 0005_session_summaries
+Revises: 0004_pgvector
 Create Date: 2026-05-21
 
 A side-agent summarises every completed session into a 1-3 sentence blurb
 that the prompt assembly path injects into the next session, plus the
-recall pgvector store from Phase 42 (``source_kind='session_summary'``).
+recall pgvector store (``source_kind='session_summary'``).
 This migration just creates the durable table; the worker + summarizer
 side-agent + injection live in code.
 
 The compound user/agent ``tenant_isolation`` policy + FORCE RLS match
-the rest of the v0.5 tables so admin / curator passes that don't set
+the rest of the tables so admin / curator passes that don't set
 ``app.agent_id`` still see the user's full slice via the empty-string
 fallback.
 """
@@ -23,8 +23,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0005_phase43_summaries"
-down_revision: str | None = "0004_phase42_pgvector"
+revision: str = "0005_session_summaries"
+down_revision: str | None = "0004_pgvector"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

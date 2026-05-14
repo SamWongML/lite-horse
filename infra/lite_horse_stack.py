@@ -1,6 +1,6 @@
 """Single-file CDK stack — networking, data, compute, observability.
 
-Provisions everything Phase 38 of v0.4 calls for:
+Provisions:
 
 * VPC with two AZs, public + private subnets, one NAT gateway
 * ALB → ECS service "api"
@@ -8,7 +8,7 @@ Provisions everything Phase 38 of v0.4 calls for:
   ADOT sidecar emitting OTLP traces to X-Ray
 * RDS Postgres Multi-AZ (gp3, autoscaling, Performance Insights,
   Enhanced Monitoring)
-* ElastiCache Redis (single node, cf. Phase 39 may resize)
+* ElastiCache Redis (single node)
 * SQS queue for cron / worker fanout
 * Four S3 buckets (attachments / evolve / exports / audit-archive)
   with SSE-KMS, versioning on audit-archive, lifecycle to Glacier
@@ -321,9 +321,9 @@ class LiteHorseStack(Stack):
         )
         self.queue.grant_consume_messages(self.worker_service.task_definition.task_role)
         self.queue.grant_send_messages(self.worker_service.task_definition.task_role)
-        # Step-scaling on queue depth is wired in Phase 39 once load-test
-        # numbers are in. We boot the worker at desired_count=scale_target[0]
-        # for now; manual scaling works through the CDK redeploy.
+        # Step-scaling on queue depth is deferred until load-test numbers
+        # are in. We boot the worker at desired_count=scale_target[0] for
+        # now; manual scaling works through the CDK redeploy.
 
         # Scheduler service: exactly one task
         self.scheduler_service = self._fargate_service(

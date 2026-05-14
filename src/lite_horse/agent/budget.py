@@ -16,9 +16,9 @@ side-agent once per run to distill durable facts out of the trajectory into
 MEMORY.md before truncation. Consolidation failures are swallowed — it must
 never break the user's run (same rule as :class:`EvolutionHook`).
 
-Phase 40: writes flow through ``ctx.context.memory`` (a
-:class:`MemoryBackend`) so consolidation stamps land in the right tenant's
-store regardless of which ECS task is hosting the agent.
+Writes flow through ``ctx.context.memory`` (a :class:`MemoryBackend`)
+so consolidation stamps land in the right tenant's store regardless of
+which ECS task is hosting the agent.
 """
 from __future__ import annotations
 

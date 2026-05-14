@@ -1,4 +1,4 @@
-"""Unit tests for :class:`Curator` helpers (Phase 44).
+"""Unit tests for :class:`Curator` helpers.
 
 The full ``run_for_agent`` integration is exercised by the migration +
 repository tests under ``tests/repositories``; here we pin the pure

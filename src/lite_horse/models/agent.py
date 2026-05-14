@@ -1,7 +1,7 @@
 """agents table — per-user persona + tool bundle + per-agent caps.
 
-Phase 41 introduces the multi-agent axis: each user owns one or more
-agents (``coder``, ``shopper``, ``writer``, ...). Existing per-user state
+The multi-agent axis: each user owns one or more agents (``coder``,
+``shopper``, ``writer``, ...). Existing per-user state
 (skills, cron jobs, memory, sessions) attaches to one agent via
 ``agent_id``; ``users.default_agent_id`` points at the user's "main"
 agent (auto-created on first login).

@@ -1,4 +1,4 @@
-"""Tests for the ``skill_view`` dispatch helper (Phase 14)."""
+"""Tests for the ``skill_view`` dispatch helper."""
 from __future__ import annotations
 
 from pathlib import Path

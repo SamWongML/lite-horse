@@ -1,4 +1,4 @@
-"""Phase 45: variant generation + diversity pruning."""
+"""Variant generation + diversity pruning."""
 from __future__ import annotations
 
 from lite_horse.evolve.gepa.population import (

@@ -3,12 +3,12 @@
 `create_app()` is the canonical entry-point used by `uvicorn` in
 `docker-compose` and by tests. The lifespan eagerly initialises the
 async DB engine + Redis client on startup and disposes them on shutdown
-so connection pooling is hot from the first request. Phase 34 also
+so connection pooling is hot from the first request. The lifespan also
 spawns the effective-config invalidation subscriber so admin writes in
 another ECS task evict this task's cache within ~1 s.
 
-Phase 38 bootstraps structured logs + OTel tracing here and installs
-the request-id / logging / metrics middleware on every app instance.
+Structured logs + OTel tracing are bootstrapped here and the request-id
+/ logging / metrics middleware is installed on every app instance.
 """
 from __future__ import annotations
 

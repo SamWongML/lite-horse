@@ -7,9 +7,8 @@ must hold.
 
 `@audited` is a stub here — it lets repository write methods declare
 *how* they should be audited (action name, target shape) without paying
-the audit-log write cost in Phase 32. Phase 34's admin layer fills in
-the body to write to `audit_log`. Until then the decorator is a no-op
-pass-through; tests that assert audit rows live in Phase 34.
+the audit-log write cost yet. The admin layer fills in the body to
+write to `audit_log`. Until then the decorator is a no-op pass-through.
 """
 from __future__ import annotations
 
@@ -57,8 +56,8 @@ class BaseRepo:
     async def current_agent_id(self) -> str | None:
         """Return the `app.agent_id` GUC, or ``None`` if unset.
 
-        Phase 41: not all callers run inside an agent scope (admin
-        queries, curator). An unset / empty GUC simply means "no agent
+        Not all callers run inside an agent scope (admin queries,
+        curator). An unset / empty GUC simply means "no agent
         narrowing" — distinct from an unset ``app.user_id`` which is a
         configuration error.
         """
@@ -74,14 +73,14 @@ class BaseRepo:
 def audited(
     action: str,
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
-    """Stub decorator — declares the action name; Phase 34 fills the body.
+    """Stub decorator — declares the action name; admin layer fills the body.
 
     Usage:
         @audited("skill.create")
         async def create(self, ...): ...
 
-    Phase 32 keeps it transparent so repositories already have the right
-    annotations when Phase 34 lands the audit-log write.
+    Kept transparent so repositories already have the right annotations
+    when the audit-log write lands.
     """
 
     def decorator(fn: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:

@@ -3,7 +3,7 @@
 Writes a plain-text bundle to a secure temp file and prints the path so
 the operator can attach it to an issue. **Does not** upload anywhere by
 default; ``--upload paste.rs`` is reserved for an explicit, documented
-opt-in (not wired in Phase 30 — the contract is "local file only").
+opt-in (not wired — the contract is "local file only").
 
 Redacts obvious secrets (``OPENAI_API_KEY``, any ``*_SECRET`` / ``*_TOKEN``
 / ``*_KEY`` env var, ``.env`` contents) before writing.

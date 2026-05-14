@@ -1,4 +1,4 @@
-"""Phase 39 per-user rate limit on POST /v1/turns."""
+"""Per-user rate limit on POST /v1/turns."""
 from __future__ import annotations
 
 import time

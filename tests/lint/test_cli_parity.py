@@ -1,10 +1,10 @@
-"""Phase 40: every backend Protocol ships both a local and a cloud impl.
+"""Every backend Protocol ships both a local and a cloud impl.
 
 For every Protocol under ``src/lite_horse/agent/backends/<name>.py`` there
 must be exactly one ``<name>_local.py`` and one ``<name>_cloud.py`` next
 to it, both exposing the full Protocol method set. Drift breaks CI so the
 CLI parity invariant from the v0.5 hard contract stays enforced as new
-backends land in later phases.
+backends land.
 """
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 BACKENDS_DIR = REPO / "src" / "lite_horse" / "agent" / "backends"
 
-# Phase 40 ships these three Protocols. Phase 42 adds ``recall``;
-# Phase 44 adds ``feedback`` (its Protocol is named ``FeedbackSink`` rather
-# than ``FeedbackBackend`` — semantically a write sink + projection — so
-# the parity check looks up the explicit class name from this map first).
+# The five Protocols enforced here. ``feedback`` uses the explicit class
+# name ``FeedbackSink`` rather than ``FeedbackBackend`` — semantically a
+# write sink + projection — so the parity check looks it up from the
+# override map first.
 EXPECTED_PROTOCOLS: tuple[str, ...] = (
     "memory", "skill", "cron", "recall", "feedback",
 )
@@ -71,7 +71,7 @@ def test_backends_have_local_and_cloud_impls() -> None:
             if not needed.is_file():
                 missing.append(str(needed.relative_to(REPO)))
     assert not missing, (
-        "Phase 40 CLI parity: missing backend impls:\n  "
+        "CLI parity: missing backend impls:\n  "
         + "\n  ".join(missing)
     )
 
@@ -98,6 +98,6 @@ def test_local_and_cloud_implement_full_protocol_method_set() -> None:
                     f"{name}_{impl_name} missing: {sorted(missing)}"
                 )
     assert not drift, (
-        "Phase 40 CLI parity: backend method-set drift between Protocol "
+        "CLI parity: backend method-set drift between Protocol "
         "and impls:\n  " + "\n  ".join(drift)
     )

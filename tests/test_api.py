@@ -1,4 +1,4 @@
-"""Tests for the public ``lite_horse.api`` surface (Phase 16)."""
+"""Tests for the public ``lite_horse.api`` surface."""
 from __future__ import annotations
 
 import asyncio
@@ -242,7 +242,7 @@ def test_search_sessions_requires_initialization(
         search_sessions("anything")
 
 
-# ---------- Phase 22: structured error classifier ----------
+# ---------- structured error classifier ----------
 
 
 def _rate_limit() -> openai.RateLimitError:

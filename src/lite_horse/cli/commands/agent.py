@@ -1,6 +1,6 @@
 """``litehorse agent {ls, create, use, show}`` — local multi-agent CLI.
 
-Phase 41 introduces the ``agents`` axis. On the cloud the source of
+The ``agents`` axis. On the cloud the source of
 truth is the Postgres ``agents`` table; the CLI mirror lives under
 ``~/.litehorse/agents/<slug>/`` so a Mac user can run
 ``litehorse --agent coder "..."`` next to ``litehorse --agent shopper

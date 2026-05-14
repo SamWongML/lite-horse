@@ -1,4 +1,4 @@
-"""turn_outcomes table — one row per classified or feedback-rated turn (Phase 44)."""
+"""turn_outcomes table — one row per classified or feedback-rated turn."""
 from __future__ import annotations
 
 import uuid

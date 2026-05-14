@@ -1,4 +1,4 @@
-"""Pure-Python sanity checks on the Phase 42 pgvector migration.
+"""Pure-Python sanity checks on the pgvector migration.
 
 Live round-trip lives in :mod:`tests.models.test_migration_roundtrip`.
 This file just inspects the migration text so a sloppy edit can't drop
@@ -15,9 +15,9 @@ def _migration_source() -> str:
     paths = [
         p
         for p in versions.iterdir()
-        if str(p).endswith("0004_phase42_pgvector.py")
+        if str(p).endswith("0004_pgvector.py")
     ]
-    assert paths, "phase 42 migration not found"
+    assert paths, "pgvector migration not found"
     return Path(str(paths[0])).read_text(encoding="utf-8")
 
 
@@ -43,7 +43,7 @@ def test_creates_memory_chunks_table() -> None:
 def test_adds_tsv_and_embedding_columns() -> None:
     src = _migration_source()
     assert "to_tsvector('simple', content)" in src
-    # 1536-dim vector column is the only supported shape this phase.
+    # 1536-dim vector column is the only supported shape.
     assert "vector(1536)" in src
 
 

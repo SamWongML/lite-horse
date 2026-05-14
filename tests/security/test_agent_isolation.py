@@ -1,11 +1,10 @@
-"""Phase 41 RLS leak gate — cross-agent isolation.
+"""RLS leak gate — cross-agent isolation.
 
-Phase 41 extended the tenant_isolation policy on ``user_documents``,
-``sessions``, and ``skill_proposals`` to require both ``app.user_id``
-**and** ``app.agent_id`` to match. This test pretends to be the audit
-team for the new axis: with one user, two agents (X and Y), inserting a
-row scoped to agent X must be invisible to a connection scoped to
-agent Y on the same user.
+The tenant_isolation policy on ``user_documents``, ``sessions``, and
+``skill_proposals`` requires both ``app.user_id`` **and** ``app.agent_id``
+to match. This test pretends to be the audit team for the agent axis:
+with one user, two agents (X and Y), inserting a row scoped to agent X
+must be invisible to a connection scoped to agent Y on the same user.
 
 Same role discipline as ``test_rls_leak`` — uses ``litehorse_app`` so
 the connection has neither ``SUPERUSER`` nor ``BYPASSRLS``. Skips when
@@ -200,7 +199,7 @@ async def test_sessions_are_isolated_per_agent(
                 "started_at) "
                 "VALUES (:sid, :uid, :aid, 'web', now())"
             ),
-            {"sid": "phase41-sess-x", "uid": user_id, "aid": agent_x},
+            {"sid": "agent-iso-sess-x", "uid": user_id, "aid": agent_x},
         )
         await sess_x.commit()
     finally:

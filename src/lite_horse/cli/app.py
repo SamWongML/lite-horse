@@ -2,7 +2,7 @@
 
 `DefaultGroup` routes bare `litehorse` (no args) and `litehorse "prompt"`
 (positional arg) to the `repl` command. Named subcommands (`version`,
-`doctor`, `config`, `completion`, `debug`, and in later phases
+`doctor`, `config`, `completion`, `debug`, plus the later
 `sessions`/`skills`/`cron`/`memory`/`logs`) attach as Typer subtrees via
 `typer.main.get_command`.
 

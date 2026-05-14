@@ -46,10 +46,9 @@ async def check_and_consume(
     Redis (tests / local dev with disabled cache) the call is a no-op
     success.
 
-    Phase 41: when ``agent_id`` is supplied the bucket key becomes
+    When ``agent_id`` is supplied the bucket key becomes
     ``rate:turn:{user_id}:{agent_id}:{epoch_min}`` so per-agent caps are
-    independent. Omitting ``agent_id`` keeps the v0.4 user-only key for
-    legacy callers.
+    independent. Omitting ``agent_id`` keeps the user-only key.
     """
     if redis is None:
         return True

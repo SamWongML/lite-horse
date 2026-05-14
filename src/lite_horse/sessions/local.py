@@ -319,7 +319,7 @@ class LocalSessionRepo:
             self._conn.commit()
             return len(rows)
 
-    # ---------- session_summaries (Phase 43) ----------
+    # ---------- session_summaries ----------
     def upsert_summary(
         self,
         *,

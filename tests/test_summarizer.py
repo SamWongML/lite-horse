@@ -1,4 +1,4 @@
-"""Phase 43 summarizer side-agent tests."""
+"""Summarizer side-agent tests."""
 from __future__ import annotations
 
 import json

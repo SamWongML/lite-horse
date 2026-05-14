@@ -31,8 +31,8 @@ from lite_horse.core.session_key import build_session_key
 CTRL_C_EXIT_WINDOW_S = 2.0
 
 # Default context-window denominator for the toolbar. Per-model lookup
-# arrives in a follow-up phase; the displayed pct is honest about being a
-# rough cap, not a hard model truth.
+# arrives later; the displayed pct is honest about being a rough cap,
+# not a hard model truth.
 DEFAULT_CTX_MAX = 200_000
 
 
@@ -302,7 +302,7 @@ async def _interactive_loop(state: ReplState) -> int:
 
 
 async def _summarize_on_exit(state: ReplState) -> None:
-    """Phase 43: run the summariser side-agent on the session we just left."""
+    """Run the summariser side-agent on the session we just left."""
     try:
         from lite_horse.cli.repl.summarize_on_exit import summarize_on_exit
 

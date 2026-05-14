@@ -1,8 +1,8 @@
 """Score GEPA variants against the eval set.
 
 For each variant, replay every :class:`EvalCase` through an injected
-``run_case`` callable, score the response via the Phase 44 outcome
-classifier, and aggregate into ``(mean_rating, variance, body_bytes)``.
+``run_case`` callable, score the response via the outcome classifier,
+and aggregate into ``(mean_rating, variance, body_bytes)``.
 
 ``run_case`` is intentionally injectable: in production the worker
 plumbs in :class:`lite_horse.agent.factory.build_agent_for_user` →
@@ -71,8 +71,8 @@ def score_variants(
 
     Empty case list -> every variant scores ``0.0`` and the baseline
     wins by size. The classifier is expected to map noisy text to a
-    rating in ``{-1, 0, 1}``; the implementation typically wraps Phase
-    44's :class:`OutcomeClassifier`.
+    rating in ``{-1, 0, 1}``; the implementation typically wraps
+    :class:`OutcomeClassifier`.
     """
     if not variants:
         raise ValueError("score_variants requires at least one variant")

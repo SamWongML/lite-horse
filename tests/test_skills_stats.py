@@ -1,8 +1,8 @@
-"""Tests for the per-skill usage statistics sidecar (Phase 20).
+"""Tests for the per-skill usage statistics sidecar.
 
-Phase 40 made the stats API path-based — every call takes the skill
-directory (a :class:`Path`). Tests pass paths explicitly; production
-callers compute paths via :class:`SkillLocalBackend` /
+The stats API is path-based — every call takes the skill directory
+(a :class:`Path`). Tests pass paths explicitly; production callers
+compute paths via :class:`SkillLocalBackend` /
 :func:`render_local_skills_index_block`.
 """
 from __future__ import annotations
@@ -135,7 +135,7 @@ def test_mark_optimized_stamps_timestamp(litehorse_home: Path) -> None:
 
 
 def test_hundred_sequential_views_hit_acceptance(litehorse_home: Path) -> None:
-    """Phase 20 acceptance: 100 sequential runs yield usage_count == 100."""
+    """Acceptance: 100 sequential runs yield usage_count == 100."""
     _write_skill(litehorse_home, "acceptance")
     sd = _skill_dir(litehorse_home, "acceptance")
     for _ in range(100):

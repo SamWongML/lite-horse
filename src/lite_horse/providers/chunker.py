@@ -1,7 +1,7 @@
 """Fixed-window text chunking for memory recall.
 
-Phase 42 indexes one chunk per ``memory_chunks`` row. We chunk on
-whitespace boundaries with a 256-token window and 32-token overlap; the
+One chunk is indexed per ``memory_chunks`` row. We chunk on whitespace
+boundaries with a 256-token window and 32-token overlap; the
 ``tiktoken`` adapter is preferred when present so the window matches the
 embedding model's tokeniser, and a character-based fallback covers
 environments where ``tiktoken`` isn't installed.

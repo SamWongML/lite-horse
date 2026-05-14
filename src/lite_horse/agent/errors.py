@@ -1,4 +1,4 @@
-"""Structured error classification (Phase 22).
+"""Structured error classification.
 
 ``except Exception: log.exception(...)`` loses the signal — rate limits look
 the same as tool bugs as context overflows. Callers that want to retry, bail,

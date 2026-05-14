@@ -1,8 +1,8 @@
 """Redis cache wrapper around :func:`compute_effective_config`.
 
 Per the v0.4 Hard Contract, ``effective-config`` is computed per turn and
-cached in Redis with a 60 s TTL. Phase 34 wires pub/sub invalidation on
-admin writes; until then the TTL alone bounds staleness.
+cached in Redis with a 60 s TTL. Pub/sub invalidation evicts on admin
+writes; the TTL is a backstop that bounds staleness on its own.
 
 Cache layout:
 
@@ -57,5 +57,5 @@ async def get_or_compute_effective_config(
 
 
 async def invalidate_effective_config(redis: Redis, user_id: str) -> None:
-    """Drop the cache entry for ``user_id`` — used by Phase 34 pub/sub."""
+    """Drop the cache entry for ``user_id`` — used by the pub/sub subscriber."""
     await redis.delete(_cache_key(user_id))

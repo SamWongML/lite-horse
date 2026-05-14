@@ -1,6 +1,6 @@
 """Layered instructions repository — user-scope CRUD + ``list_effective``.
 
-User rows mutable in place, official rows read-only here (Phase 34 admin
+User rows mutable in place, official rows read-only here (the admin
 layer is the writer). ``list_effective`` returns the resolved list,
 ordered by ``(priority ASC, slug ASC)`` for stable system-prompt
 composition.

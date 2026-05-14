@@ -1,11 +1,11 @@
 """``skill_manage`` @function_tool — agent-managed CRUD over skills.
 
-Phase 40 made the tool body a thin async dispatcher routed through
+The tool body is a thin async dispatcher routed through
 :class:`TenantContext.skill` from ``RunContextWrapper.context``. Cloud
 calls land in Postgres via :class:`SkillRepo`; CLI calls land on the
 local filesystem via the legacy :func:`dispatch` helper, now hosted in
 :mod:`lite_horse.skills.local_dispatch` so this file stays free of
-``skills_root`` imports per the Phase 40 lint contract.
+``skills_root`` imports per the lint contract.
 
 The ``dispatch`` symbol is re-exported here for backward compatibility
 with existing tests; new code should call into the relevant

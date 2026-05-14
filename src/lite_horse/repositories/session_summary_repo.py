@@ -1,4 +1,4 @@
-"""``session_summaries`` repository — Phase 43.
+"""``session_summaries`` repository.
 
 Persists the side-agent's per-session blurb plus the per-tenant lookup
 helpers the prompt-assembly path needs:

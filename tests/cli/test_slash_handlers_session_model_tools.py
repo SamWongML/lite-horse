@@ -1,4 +1,4 @@
-"""Unit tests for Phase 28 slash handlers — session / model / tools groups.
+"""Unit tests for the session / model / tools slash handler groups.
 
 We stub ``lite_horse.api._ensure_ready`` out of these tests so the handlers
 exercise their branches without spinning up a real Agent / SessionDB.

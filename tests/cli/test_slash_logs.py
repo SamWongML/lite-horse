@@ -1,4 +1,4 @@
-"""Phase 30 ``/logs`` slash-command behavior."""
+"""``/logs`` slash-command behavior."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field

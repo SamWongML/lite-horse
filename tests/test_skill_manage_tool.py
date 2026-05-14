@@ -1,4 +1,4 @@
-"""Tests for the skill_manage dispatch logic + bundled skill sync (Phase 3)."""
+"""Tests for the skill_manage dispatch logic + bundled skill sync."""
 from __future__ import annotations
 
 from pathlib import Path

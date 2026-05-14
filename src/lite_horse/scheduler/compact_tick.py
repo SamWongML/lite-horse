@@ -1,4 +1,4 @@
-"""Daily compact-enqueue tick — Phase 43.
+"""Daily compact-enqueue tick.
 
 Scans :meth:`MemoryRepo.find_compaction_candidates` for ``(user, agent)``
 pairs whose ``memory.md`` has crossed 80% utilisation, and posts one

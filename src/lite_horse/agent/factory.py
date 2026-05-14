@@ -4,7 +4,7 @@ Wires together the dynamic instructions, model settings, tool bundle, and the
 composite :class:`LiteHorseHooks` (budget + evolution). Used by the CLI,
 gateway, and cron entrypoints so everyone talks to the same agent shape.
 
-Phase 40 split tenant state out of the agent itself: the factory exposes
+Tenant state is held outside the agent: the factory exposes
 :func:`build_local_tenant_context` (CLI / single-user) and
 :func:`build_cloud_tenant_context_for_user` (multi-tenant API). Callers
 pass the resulting :class:`TenantContext` through
@@ -217,11 +217,12 @@ def build_cloud_tenant_context(
     agent_id)`` transaction per call so the request connection isn't
     pinned for the duration of the agent run. ``eff`` (when provided)
     lets the :class:`SkillCloudBackend` short-circuit ``list_resolved``
-    from the already-resolved config rather than re-querying. Phase 41
-    threads ``agent_id`` so RLS narrows tenant-scoped reads to one agent.
+    from the already-resolved config rather than re-querying.
+    ``agent_id`` is threaded so RLS narrows tenant-scoped reads to one
+    agent.
 
-    Phase 42: ``embedder`` (when provided) drives the recall backend's
-    semantic indexing + query path; if omitted, one is selected from
+    ``embedder`` (when provided) drives the recall backend's semantic
+    indexing + query path; if omitted, one is selected from
     ``LITEHORSE_EMBEDDING_PROVIDER`` + the ambient API key. ``recall``
     is always populated — the agent's ``memory_search`` tool can't be
     optional without a wire-shape change.

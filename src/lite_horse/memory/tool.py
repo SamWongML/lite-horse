@@ -1,15 +1,15 @@
 """``memory`` @function_tool — agent-facing add/replace/remove for MEMORY.md and USER.md.
 
-Phase 40 routes every read/write through the per-turn
-:class:`TenantContext.memory` backend on ``RunContextWrapper.context``.
-Cloud calls land in Postgres via ``MemoryRepo``; CLI calls land on the
-local filesystem via :class:`MemoryStore` — both behind the same
-``MemoryBackend`` Protocol so the JSON wire shape is identical.
+Every read/write routes through the per-turn :class:`TenantContext.memory`
+backend on ``RunContextWrapper.context``. Cloud calls land in Postgres via
+``MemoryRepo``; CLI calls land on the local filesystem via
+:class:`MemoryStore` — both behind the same ``MemoryBackend`` Protocol so
+the JSON wire shape is identical.
 
-Phase 42 layers a best-effort recall re-index on top of every successful
-write so the new ``memory_search`` tool can surface freshly-stored
-entries the next time the agent asks. Indexing failures are swallowed
-— the caller's write already succeeded and recall is auxiliary.
+A best-effort recall re-index runs on top of every successful write so
+the ``memory_search`` tool can surface freshly-stored entries the next
+time the agent asks. Indexing failures are swallowed — the caller's
+write already succeeded and recall is auxiliary.
 """
 from __future__ import annotations
 

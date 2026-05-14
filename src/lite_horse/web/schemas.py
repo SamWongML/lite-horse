@@ -490,7 +490,7 @@ class McpHealthOut(BaseModel):
     rows: list[McpHealthRow]
 
 
-# ---------- skill promotion (Phase 45, admin-only) ----------
+# ---------- skill promotion (admin-only) ----------
 
 
 class SkillCandidateOut(BaseModel):

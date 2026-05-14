@@ -2,8 +2,7 @@
 
 The `--user` flag switches from the agent's MEMORY.md to the USER.md profile
 store. Same two files the runtime reads at session start. `compact` runs the
-v0.4 :class:`Consolidator` against MEMORY.md when utilisation crosses 0.8
-(Phase 43).
+v0.4 :class:`Consolidator` against MEMORY.md when utilisation crosses 0.8.
 """
 from __future__ import annotations
 

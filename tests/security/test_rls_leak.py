@@ -1,4 +1,4 @@
-"""Phase 39 RLS leak gate.
+"""RLS leak gate.
 
 The Hard Contract guarantees tenant isolation by setting ``app.user_id``
 on every Postgres connection and pairing it with RLS policies on every

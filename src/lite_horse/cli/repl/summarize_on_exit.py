@@ -1,4 +1,4 @@
-"""Run the Phase 43 :class:`Summarizer` against the just-ended CLI session.
+"""Run the :class:`Summarizer` against the just-ended CLI session.
 
 Invoked from the REPL loop when the user exits with Ctrl-D / ``/exit``.
 Reads the session's messages from :class:`LocalSessionRepo`, runs the

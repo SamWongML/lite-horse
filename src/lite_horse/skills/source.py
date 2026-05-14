@@ -2,7 +2,7 @@
 
 The SDK's ``Skills`` capability was explored in v0.1 but never wired into
 ``Agent(...)`` (the SDK has no ``capabilities`` kwarg on ``Agent.__init__``).
-v0.2 Phase 14 replaces that dead path with an explicit ``skill_view`` tool.
+v0.2 replaces that dead path with an explicit ``skill_view`` tool.
 """
 from __future__ import annotations
 

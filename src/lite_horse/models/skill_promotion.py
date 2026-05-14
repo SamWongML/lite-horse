@@ -1,4 +1,4 @@
-"""skill_promotion_candidates — admin-only promotion queue (Phase 45)."""
+"""skill_promotion_candidates — admin-only promotion queue."""
 from __future__ import annotations
 
 import uuid

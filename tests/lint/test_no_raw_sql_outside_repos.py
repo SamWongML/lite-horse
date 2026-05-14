@@ -12,8 +12,7 @@ helpers. That pattern is allowed only in:
 * `storage/db.py` — sets/reads the `app.user_id` GUC, plus a tiny
   readiness ping.
 * `alembic/` — migrations are inherently raw DDL.
-* `repositories/` — handful of FTS expressions that ORM can't model
-  (lands in Phase 32+).
+* `repositories/` — handful of FTS expressions that ORM can't model.
 """
 from __future__ import annotations
 

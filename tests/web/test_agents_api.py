@@ -1,4 +1,4 @@
-"""``/v1/users/me/agents/*`` HTTP round-trip tests (Phase 41).
+"""``/v1/users/me/agents/*`` HTTP round-trip tests.
 
 Reuses the JWT + Postgres harness from ``test_user_config.py``: each
 ``_auth_headers()`` call mints a fresh JWT for an isolated user. The
@@ -29,8 +29,8 @@ from lite_horse.web.deps import get_kms, get_redis
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
-_SECRET = b"phase-41-test-secret-do-not-use-in-prod"
-_KID = "phase-41-kid"
+_SECRET = b"agents-api-test-secret-do-not-use-in-prod"
+_KID = "agents-api-kid"
 _AUDIENCE = "lite-horse"
 _ISSUER = "http://localhost:9999"
 
@@ -148,7 +148,7 @@ async def client(
 
 
 def _auth_headers() -> dict[str, str]:
-    sub = f"phase41-{uuid4()}"
+    sub = f"agents-api-{uuid4()}"
     token = _mint_token(sub)
     return {"Authorization": f"Bearer {token}"}
 

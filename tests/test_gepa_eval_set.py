@@ -1,4 +1,4 @@
-"""Phase 45: hermetic mine_eval_set_from_outcomes shape tests."""
+"""Hermetic mine_eval_set_from_outcomes shape tests."""
 from __future__ import annotations
 
 from lite_horse.evolve.gepa.eval_set import (

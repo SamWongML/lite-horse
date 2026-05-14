@@ -1,4 +1,4 @@
-"""Phase 45: run_gepa pre-flight gates + happy-path loop."""
+"""run_gepa pre-flight gates + happy-path loop."""
 from __future__ import annotations
 
 from pathlib import Path

@@ -169,7 +169,7 @@ class Settings(BaseSettings):
     jwt_issuer: str = "http://localhost:9999"
     jwt_audience: str = "lite-horse"
 
-    # SQS — Phase 36 scheduler/worker fan-out queue.
+    # SQS — scheduler/worker fan-out queue.
     # `LITEHORSE_ENV=local` defaults to the in-memory queue regardless of
     # this setting. Anything else uses SQS and requires sqs_queue_url.
     sqs_queue_url: str | None = None
@@ -179,7 +179,7 @@ class Settings(BaseSettings):
     # cloud envs; falls back to LITEHORSE_WEBHOOK_SECRET for local.
     webhook_secret_name: str = "litehorse/webhook-secret"
 
-    # GitHub OAuth App (Phase 37) — used by the callback route to swap a
+    # GitHub OAuth App — used by the callback route to swap a
     # `code` for a token bundle that lands in users.byo_provider_key_ct.
     github_oauth_client_id: str | None = None
     github_oauth_client_secret: str | None = None

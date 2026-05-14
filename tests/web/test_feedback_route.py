@@ -1,4 +1,4 @@
-"""Smoke test for ``POST /v1/turns/{turn_id}/feedback`` (Phase 44).
+"""Smoke test for ``POST /v1/turns/{turn_id}/feedback``.
 
 Heavy plumbing (Redis, JWT, DB) is stubbed via dependency overrides so
 the test only exercises the route's request-validation + response shape.

@@ -1,4 +1,4 @@
-"""``EvolutionHook._should_refine`` honors ``FeedbackSink`` stats (Phase 44).
+"""``EvolutionHook._should_refine`` honors ``FeedbackSink`` stats.
 
 Marker-only behaviour stays the prior default; once a viewed skill has
 crossed ``CURATOR_REFINE_MIN_OUTCOMES`` we let aggregate ratings flip

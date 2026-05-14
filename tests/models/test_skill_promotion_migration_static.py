@@ -1,4 +1,4 @@
-"""Pure-Python sanity checks on the Phase 45 promotion migration.
+"""Pure-Python sanity checks on the skill_promotion migration.
 
 The live round-trip lives in :mod:`tests.models.test_migration_roundtrip`.
 This file just inspects the migration text so a sloppy edit can't drop
@@ -16,9 +16,9 @@ def _migration_source() -> str:
     paths = [
         p
         for p in versions.iterdir()
-        if str(p).endswith("0007_phase45_promotion.py")
+        if str(p).endswith("0007_skill_promotion.py")
     ]
-    assert paths, "phase 45 migration not found"
+    assert paths, "skill_promotion migration not found"
     return Path(str(paths[0])).read_text(encoding="utf-8")
 
 
@@ -41,10 +41,10 @@ def test_creates_skill_promotion_candidates_table() -> None:
         assert col in src, f"missing column {col!r}"
 
 
-def test_chains_off_phase44() -> None:
+def test_chains_off_curator() -> None:
     src = _migration_source()
-    assert 'revision: str = "0007_phase45_promotion"' in src
-    assert 'down_revision: str | None = "0006_phase44_curator"' in src
+    assert 'revision: str = "0007_skill_promotion"' in src
+    assert 'down_revision: str | None = "0006_curator"' in src
 
 
 def test_status_check_constraint() -> None:

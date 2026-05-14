@@ -1,7 +1,7 @@
-"""phase 45 — skill promotion candidates + opt-in GEPA flag
+"""skill promotion candidates + opt-in GEPA flag
 
-Revision ID: 0007_phase45_promotion
-Revises: 0006_phase44_curator
+Revision ID: 0007_skill_promotion
+Revises: 0006_curator
 Create Date: 2026-06-04
 
 Adds ``skill_promotion_candidates`` so a high-quality user-scope skill
@@ -27,8 +27,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0007_phase45_promotion"
-down_revision: str | None = "0006_phase44_curator"
+revision: str = "0007_skill_promotion"
+down_revision: str | None = "0006_curator"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

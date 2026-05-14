@@ -1,10 +1,10 @@
 """Rich panels for tool calls + y/n/A/N approval prompt.
 
 The approval prompt is a standalone function used by any code path that
-wants to gate a tool invocation on user consent. Phase 28 wires it to
-``/permission`` state and exposes it from the REPL; actually blocking the
-SDK's tool execution at the pre-dispatch boundary is scoped to a later
-phase (see ``docs/plans/archive/v0.3-cli-entrypoint.md``).
+wants to gate a tool invocation on user consent. It is wired to
+``/permission`` state and exposed from the REPL; actually blocking the
+SDK's tool execution at the pre-dispatch boundary is deferred to a
+later iteration (see ``docs/plans/archive/v0.3-cli-entrypoint.md``).
 
 Heavy imports (``rich``, ``prompt_toolkit``) stay inside function bodies so
 ``litehorse --help`` remains under the fast-path budget.

@@ -1,4 +1,4 @@
-"""Unit tests for :class:`OutcomeClassifier` (Phase 44).
+"""Unit tests for :class:`OutcomeClassifier`.
 
 The SDK round-trip is stubbed via ``Runner.run`` monkey-patch so we
 exercise the prompt-building + JSON-parsing layers without burning

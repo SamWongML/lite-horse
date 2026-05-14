@@ -1,4 +1,4 @@
-"""Phase 42 — :class:`RecallLocalBackend` round-trip.
+""":class:`RecallLocalBackend` round-trip.
 
 The local backend uses a small SQLite store under
 ``~/.litehorse/embeddings/recall.sqlite``. The tests here exercise:

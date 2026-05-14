@@ -30,8 +30,8 @@ from lite_horse.web.deps import get_kms, get_redis
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
-_SECRET = b"phase-34-test-secret-do-not-use-in-prod"
-_KID = "phase-34-kid"
+_SECRET = b"admin-routes-test-secret-do-not-use-in-prod"
+_KID = "admin-routes-kid"
 _AUDIENCE = "lite-horse"
 _ISSUER = "http://localhost:9999"
 
@@ -149,13 +149,13 @@ async def client(
 
 
 def _admin_headers() -> dict[str, str]:
-    sub = f"phase34-admin-{uuid4()}"
+    sub = f"admin-routes-admin-{uuid4()}"
     token = _mint_token(sub, role="admin")
     return {"Authorization": f"Bearer {token}"}
 
 
 def _user_headers() -> dict[str, str]:
-    sub = f"phase34-user-{uuid4()}"
+    sub = f"admin-routes-user-{uuid4()}"
     token = _mint_token(sub, role="user")
     return {"Authorization": f"Bearer {token}"}
 

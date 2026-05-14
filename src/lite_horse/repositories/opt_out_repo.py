@@ -1,7 +1,7 @@
 """Per-user opt-outs against non-mandatory official entities.
 
 Mandatory officials cannot be opted out (the route layer rejects with
-422 in Phase 34); this repo holds only the storage primitives.
+422); this repo holds only the storage primitives.
 """
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for conditional skill activation (Phase 21)."""
+"""Tests for conditional skill activation."""
 from __future__ import annotations
 
 from pathlib import Path

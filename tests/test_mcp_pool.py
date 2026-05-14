@@ -1,4 +1,4 @@
-"""Phase 39 per-tenant MCP connection pool — TTL + LRU + isolation."""
+"""Per-tenant MCP connection pool — TTL + LRU + isolation."""
 from __future__ import annotations
 
 import pytest

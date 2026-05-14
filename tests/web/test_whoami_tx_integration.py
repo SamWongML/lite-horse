@@ -1,6 +1,5 @@
-"""Phase 31 acceptance: a JWT request lands a `users` row, populates
-`RequestContext`, and sets `current_setting('app.user_id')` inside the
-request transaction.
+"""A JWT request lands a `users` row, populates `RequestContext`, and
+sets `current_setting('app.user_id')` inside the request transaction.
 
 Skipped if Docker isn't reachable; full coverage runs under `make test-int`
 or in CI.

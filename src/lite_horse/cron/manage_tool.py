@@ -1,6 +1,6 @@
 """``cron_manage`` @function_tool — agent-driven CRUD over scheduled jobs.
 
-Phase 40 routes every read/write through ``ctx.context.cron`` (a
+Every read/write routes through ``ctx.context.cron`` (a
 :class:`CronBackend`) so cloud calls land on the tenant-scoped
 :class:`CronRepo` and CLI calls hit ``~/.litehorse/jobs.json`` via the
 local :class:`JobStore`. The wire shape is frozen: ``add`` / ``list`` /

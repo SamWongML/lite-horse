@@ -1,8 +1,8 @@
 """Mine an eval set for one skill from ``turn_outcomes``.
 
-Phase 45's GEPA loop needs concrete ``(user_request, expected_signal)``
-cases to score variants against. The Phase 44 ``turn_outcomes`` table
-already records ``(turn_id, skill_slug, rating, reason)`` for every
+The GEPA loop needs concrete ``(user_request, expected_signal)``
+cases to score variants against. The ``turn_outcomes`` table already
+records ``(turn_id, skill_slug, rating, reason)`` for every
 classified or user-flagged turn; this module materialises that into
 the eval shape.
 
@@ -25,7 +25,7 @@ class EvalCase:
     """One scored trajectory we want the variant to replicate or beat.
 
     ``user_request`` is the prompt that opened the turn; ``rating`` is
-    the Phase 44 classifier or explicit-feedback verdict (-1 / 0 / 1).
+    the outcome classifier or explicit-feedback verdict (-1 / 0 / 1).
     ``reason`` is the free-text classifier rationale, used as a target
     signal for variants to surface.
     """

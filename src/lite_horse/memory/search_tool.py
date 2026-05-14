@@ -1,9 +1,9 @@
 """``memory_search`` @function_tool — semantic recall over user history.
 
-Phase 42 lifts the wholesale-injection ceiling on the system prompt.
-Instead of folding every byte of memory.md into the prompt, the agent
-reaches for ``memory_search`` whenever it needs to recall something not
-visible in MEMORY.md.
+Lifts the wholesale-injection ceiling on the system prompt: instead of
+folding every byte of memory.md into the prompt, the agent reaches for
+``memory_search`` whenever it needs to recall something not visible in
+MEMORY.md.
 
 The tool routes through :class:`TenantContext.recall` so cloud calls land
 in pgvector via :class:`MemoryChunkRepo` and CLI calls land in the local

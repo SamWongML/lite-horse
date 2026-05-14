@@ -110,8 +110,7 @@ async def dispatch_message(  # noqa: PLR0911, PLR0912, PLR0915 — flat per-kind
     parse correctly and shouldn't poison the queue.
 
     The body's ``kind`` discriminator routes between the cron path
-    (default), the Phase-39 evolve path, and the Phase-42 embed-backfill
-    path.
+    (default), the evolve path, and the embed-backfill path.
     """
     if is_evolve_gepa_payload(raw.body):
         try:

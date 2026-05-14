@@ -1,4 +1,4 @@
-"""Tests for the Phase 30 logging bootstrap in ``lite_horse.cli._logging``."""
+"""Tests for the logging bootstrap in ``lite_horse.cli._logging``."""
 from __future__ import annotations
 
 import json

@@ -1,6 +1,6 @@
 """Embed backfill worker — fills NULL embeddings on memory_chunks rows.
 
-Phase 42 inserts ``memory_chunks`` rows synchronously on every memory /
+``memory_chunks`` rows are inserted synchronously on every memory /
 skill write. Embedding the chunk text takes one HTTP round-trip to the
 embedding provider, so when the provider is slow / down the row is
 inserted with ``embedding=NULL`` and BM25 alone serves recall until

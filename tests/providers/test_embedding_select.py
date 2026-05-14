@@ -1,4 +1,4 @@
-"""Phase 42 — embedding provider selection."""
+"""Embedding provider selection."""
 from __future__ import annotations
 
 import pytest

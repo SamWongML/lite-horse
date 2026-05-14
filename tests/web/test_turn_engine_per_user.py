@@ -1,4 +1,4 @@
-"""Phase 33 acceptance — per-user agent build path.
+"""Acceptance — per-user agent build path.
 
 Drives ``run_turn_streaming_for_user`` with the surrounding moving
 parts (``db_session`` / ``_ensure_ready`` / ``Runner.run_streamed`` /
@@ -133,7 +133,7 @@ class _FakeSessionRepo:
 
 
 class _FakeAgentRow:
-    """Phase 41 stub for ``AgentRepo.ensure_default()`` returning a row."""
+    """Stub for ``AgentRepo.ensure_default()`` returning a row."""
 
     id = "00000000-0000-0000-0000-0000000000aa"
     slug = "default"

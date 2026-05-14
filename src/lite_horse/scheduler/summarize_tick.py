@@ -1,4 +1,4 @@
-"""Hourly summarize-enqueue tick — Phase 43.
+"""Hourly summarize-enqueue tick.
 
 Scans :meth:`SessionSummaryRepo.find_idle_sessions` cross-tenant, then
 posts one :class:`SummarizeMessage` per idle session to the worker

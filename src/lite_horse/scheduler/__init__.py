@@ -1,4 +1,4 @@
-"""Phase 36 cloud scheduler service — separate ECS task.
+"""Cloud scheduler service — separate ECS task.
 
 A long-running process that wakes every 60 s, scans ``cron_jobs`` for
 rows whose next fire boundary has elapsed, and enqueues a

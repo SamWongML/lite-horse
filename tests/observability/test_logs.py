@@ -1,4 +1,4 @@
-"""Phase 38 — assert structured log shape.
+"""Assert structured log shape.
 
 We force-reconfigure ``structlog`` for each test so the JSON renderer
 captures everything ``configure_logging(env="prod")`` produces, then

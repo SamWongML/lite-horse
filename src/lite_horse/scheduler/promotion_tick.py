@@ -1,4 +1,4 @@
-"""Daily skill-promotion candidate tick — Phase 45.
+"""Daily skill-promotion candidate tick.
 
 Runs in admin context (no ``app.user_id`` GUC). Asks
 :meth:`SkillPromotionRepo.aggregate_candidates` for every

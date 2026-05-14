@@ -1,4 +1,4 @@
-"""Tests for the agent factory + composite hooks (Phase 7)."""
+"""Tests for the agent factory + composite hooks."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field

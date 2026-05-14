@@ -1,8 +1,8 @@
 """Local-only debug endpoints — mounted when `LITEHORSE_ENV=local`.
 
-Used by the Phase 31 acceptance test that asserts a request's JWT is
-turned into a `users` row, populates `RequestContext`, and sets
-`app.user_id` on the in-flight transaction.
+Used by the acceptance test that asserts a request's JWT is turned into
+a `users` row, populates `RequestContext`, and sets `app.user_id` on the
+in-flight transaction.
 """
 from __future__ import annotations
 

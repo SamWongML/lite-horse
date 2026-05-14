@@ -1,7 +1,7 @@
 """Layered commands repository — slash-command templates with sandboxed render.
 
 User-scope rows are mutable in place; official rows are read-only here
-(Phase 34 admin layer writes them). ``expand(slug, args)`` renders the
+(the admin layer writes them). ``expand(slug, args)`` renders the
 ``prompt_tpl`` against ``args`` through a ``SandboxedEnvironment`` —
 arbitrary attribute traversal, ``__class__`` access, and IO are blocked
 so a malicious template body or arg cannot escape the prompt.

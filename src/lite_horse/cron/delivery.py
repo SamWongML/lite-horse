@@ -1,16 +1,15 @@
 """Webhook delivery for scheduled cron jobs.
 
-Phase 17 routes cron output into the embedding webapp. The body is a signed
+Routes cron output into the embedding webapp. The body is a signed
 JSON POST — ``{"text": ..., "session_key": ...}`` with an HMAC-SHA256 of the
 raw body under the webhook secret in the ``X-LiteHorse-Signature`` header.
 Transient failures (5xx, connection errors) retry with exponential
 backoff; 4xx aborts immediately because replay won't help.
 
-Phase 36: in cloud envs (``LITEHORSE_ENV != local``) the HMAC key
-resolves through :class:`SecretsProvider` against
-``Settings.webhook_secret_name``. Local dev keeps reading
-``LITEHORSE_WEBHOOK_SECRET`` direct from env so unit tests don't need a
-secrets backend.
+In cloud envs (``LITEHORSE_ENV != local``) the HMAC key resolves through
+:class:`SecretsProvider` against ``Settings.webhook_secret_name``. Local
+dev keeps reading ``LITEHORSE_WEBHOOK_SECRET`` direct from env so unit
+tests don't need a secrets backend.
 """
 from __future__ import annotations
 
