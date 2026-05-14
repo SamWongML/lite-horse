@@ -4,8 +4,8 @@ The skills index in the system prompt lists only name + description. When
 the agent decides a skill is relevant to the current task, it calls this
 tool to pull the full SKILL.md body into its context on demand.
 
-Phase 40: the tool body delegates to ``ctx.context.skill.view(slug)``
-(the per-tenant :class:`SkillBackend`); cloud calls land on
+The tool body delegates to ``ctx.context.skill.view(slug)`` (the
+per-tenant :class:`SkillBackend`); cloud calls land on
 :class:`SkillRepo` and CLI calls hit the local skills tree.
 """
 from __future__ import annotations

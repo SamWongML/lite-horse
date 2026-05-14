@@ -1,7 +1,7 @@
-"""phase 44 — curator background pass + outcome classifier
+"""curator background pass + outcome classifier
 
-Revision ID: 0006_phase44_curator
-Revises: 0005_phase43_summaries
+Revision ID: 0006_curator
+Revises: 0005_session_summaries
 Create Date: 2026-05-28
 
 Adds the durable surface the curator + outcome classifier need:
@@ -10,9 +10,9 @@ Adds the durable surface the curator + outcome classifier need:
   scoped to ``(user_id, agent_id, session_id, turn_id)`` with a
   ``source ∈ {classifier, user_explicit, regex_marker}`` discriminator
   and a ``rating ∈ {-1, 0, 1}`` signal. RLS + FORCE applies the same
-  compound user/agent ``tenant_isolation`` policy as the rest of v0.5
-  so admin / curator passes that don't set ``app.agent_id`` still see
-  the user's full slice via the empty-string fallback.
+  compound user/agent ``tenant_isolation`` policy as the rest of the
+  tables so admin / curator passes that don't set ``app.agent_id``
+  still see the user's full slice via the empty-string fallback.
 * ``skills`` gains ``use_count`` / ``success_count`` / ``error_count`` /
   ``last_used_at`` / ``curator_state`` columns so the curator's daily
   transition pass (``active → stale → archived``) has somewhere to write.
@@ -29,8 +29,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0006_phase44_curator"
-down_revision: str | None = "0005_phase43_summaries"
+revision: str = "0006_curator"
+down_revision: str | None = "0005_session_summaries"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

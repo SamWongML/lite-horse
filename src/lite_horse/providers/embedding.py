@@ -1,10 +1,10 @@
 """``EmbeddingProvider`` Protocol — text → 1536-dim float vector.
 
-Phase 42 introduces semantic recall. Two impls ship with v0.5:
-:class:`OpenAIEmbeddingProvider` (``text-embedding-3-small``, native
-1536-dim) and :class:`VoyageEmbeddingProvider` (``voyage-3``, 1024-dim
-padded to 1536). Selection is driven by the ``LITEHORSE_EMBEDDING_PROVIDER``
-env var; the registry returns the configured provider.
+Two impls ship: :class:`OpenAIEmbeddingProvider`
+(``text-embedding-3-small``, native 1536-dim) and
+:class:`VoyageEmbeddingProvider` (``voyage-3``, 1024-dim padded to
+1536). Selection is driven by the ``LITEHORSE_EMBEDDING_PROVIDER`` env
+var; the registry returns the configured provider.
 
 The Protocol is async because cloud impls go over HTTP. A no-op
 ``NullEmbeddingProvider`` is also available for the CLI ``no-embed``

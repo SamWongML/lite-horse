@@ -66,7 +66,7 @@ class TurnIn(BaseModel):
     attachments: list[dict[str, Any]] | None = None
     command: str | None = None
     model: str | None = None
-    # Phase 41: optional override; falls back to users.default_agent_id.
+    # Optional override; falls back to users.default_agent_id.
     agent_id: str | None = None
 
 
@@ -90,7 +90,7 @@ class AbortOut(BaseModel):
 
 
 class FeedbackIn(BaseModel):
-    """User-explicit outcome for one turn (Phase 44)."""
+    """User-explicit outcome for one turn."""
 
     session_key: str = Field(min_length=1, max_length=200)
     rating: Literal[-1, 0, 1]

@@ -1,4 +1,4 @@
-"""Daily audit-archive shipper tick — Phase 46.
+"""Daily audit-archive shipper tick.
 
 Enqueues one :class:`AuditShipMessage` per tick run. The worker handler
 selects ``audit_log`` rows older than ``retention_days`` (default 90),

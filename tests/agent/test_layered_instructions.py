@@ -1,4 +1,4 @@
-"""Phase 46 — :func:`build_layered_instructions` splits the prompt for caching."""
+""":func:`build_layered_instructions` splits the prompt for caching."""
 from __future__ import annotations
 
 from lite_horse.agent.instructions import (

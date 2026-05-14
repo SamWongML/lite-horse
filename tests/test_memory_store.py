@@ -1,4 +1,4 @@
-"""Tests for the char-bounded memory store (Phase 2)."""
+"""Tests for the char-bounded memory store."""
 from __future__ import annotations
 
 from pathlib import Path

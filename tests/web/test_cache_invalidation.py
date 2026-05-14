@@ -1,4 +1,4 @@
-"""Phase 34 cross-process cache invalidation.
+"""Cross-process cache invalidation.
 
 Two parallel ``run_invalidation_subscriber`` listeners simulate two ECS
 tasks bound to the same Redis. An admin write in process A must evict
@@ -179,7 +179,7 @@ def _mint_admin_token(secret: bytes, kid: str) -> str:
 
     return jwt.encode(
         {
-            "sub": f"phase34-cache-admin-{uuid4()}",
+            "sub": f"cache-admin-{uuid4()}",
             "role": "admin",
             "aud": "lite-horse",
             "iss": "http://localhost:9999",
@@ -228,8 +228,8 @@ async def test_admin_write_publishes_invalidation_seen_by_other_subscriber(
     from lite_horse.storage.kms_local import LocalKms
     from lite_horse.web.deps import get_kms, get_redis
 
-    secret = b"phase-34-cache-secret"
-    kid = "phase-34-cache-kid"
+    secret = b"cache-invalidation-test-secret"
+    kid = "cache-invalidation-kid"
 
     monkeypatch.setenv("LITEHORSE_DATABASE_URL", _migrated_pg)
     monkeypatch.setenv("LITEHORSE_REDIS_URL", _redis_url)

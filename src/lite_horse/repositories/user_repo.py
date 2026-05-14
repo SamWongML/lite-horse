@@ -5,8 +5,8 @@ user's row. The scheduler service runs **without** an ``app.user_id``
 GUC (admin-bypass path) and needs to enumerate users to fan an
 official-scope cron job out, so it gets its own narrow repository.
 
-"Active" today means ``role='user'`` and the row exists. Phase 39
-hardening tightens this with a last-seen filter.
+"Active" today means ``role='user'`` and the row exists. A future
+last-seen filter will tighten this.
 """
 from __future__ import annotations
 

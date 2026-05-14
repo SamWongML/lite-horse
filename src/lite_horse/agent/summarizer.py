@@ -1,4 +1,4 @@
-"""Per-session summariser side-agent — Phase 43.
+"""Per-session summariser side-agent.
 
 A small side-agent that reads the last N messages of a finished session
 and emits a ``{topic, summary}`` JSON record. The summary survives into

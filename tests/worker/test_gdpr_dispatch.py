@@ -1,4 +1,4 @@
-"""Phase 46 — worker dispatcher routes gdpr_delete payloads."""
+"""Worker dispatcher routes gdpr_delete payloads."""
 from __future__ import annotations
 
 import json

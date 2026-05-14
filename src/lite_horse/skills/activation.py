@@ -1,4 +1,4 @@
-"""Conditional skill activation (Phase 21).
+"""Conditional skill activation.
 
 Filters the on-disk skill library down to a small top-K list per turn so the
 prompt only lists skills that are plausibly relevant to the current user

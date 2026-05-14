@@ -1,4 +1,4 @@
-"""Weekly GEPA-enqueue tick — Phase 45.
+"""Weekly GEPA-enqueue tick.
 
 Scans every current user-scope skill whose ``frontmatter.gepa`` is
 truthy and posts one :class:`EvolveGepaMessage` per ``(user, agent,

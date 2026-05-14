@@ -1,9 +1,9 @@
-"""Session-summariser worker — Phase 43.
+"""Session-summariser worker.
 
 Runs the :class:`Summarizer` side-agent over one finished session, writes
 the resulting ``(topic, summary)`` to :class:`SessionSummaryRepo`, and
-re-indexes the summary into the recall store (Phase 42) so future
-sessions can retrieve it semantically.
+re-indexes the summary into the recall store so future sessions can
+retrieve it semantically.
 
 The queue contract:
 

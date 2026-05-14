@@ -1,4 +1,4 @@
-"""Phase 43 — worker dispatcher routes summarize/compact payloads."""
+"""Worker dispatcher routes summarize/compact payloads."""
 from __future__ import annotations
 
 import json

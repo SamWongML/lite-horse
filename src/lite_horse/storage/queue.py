@@ -4,7 +4,7 @@ Cloud impl (`queue_sqs.py`) wraps SQS via `aioboto3`. Local impl
 (`queue_memory.py`) is an in-process asyncio queue used by tests and
 ``LITEHORSE_ENV=local`` runs without LocalStack.
 
-The Phase 36 scheduler enqueues; the Phase 36 worker consumes. A queue
+The cloud scheduler enqueues; the cloud worker consumes. A queue
 message body is a JSON document — see ``cron.scheduler.CronMessage`` for
 the canonical shape.
 """

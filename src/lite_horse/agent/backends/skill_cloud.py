@@ -3,10 +3,10 @@
 User-scope skills only — official-scope skills come through the resolver
 (``EffectiveConfig.skills``) and are read-only from the agent's
 perspective. The cloud impl does not maintain a per-skill stats sidecar:
-Phase 44 lifts that into the ``skills`` table via curator columns. Until
-then ``record_view`` / ``record_outcome`` / ``fragile_suffix`` are
-no-ops in cloud mode, which matches the v0.4 behaviour where there was
-no DB-backed sidecar at all.
+the ``skills`` table holds the curator counter columns instead. Until
+those are wired through, ``record_view`` / ``record_outcome`` /
+``fragile_suffix`` are no-ops in cloud mode, which matches the v0.4
+behaviour where there was no DB-backed sidecar at all.
 """
 from __future__ import annotations
 
@@ -222,7 +222,7 @@ class SkillCloudBackend(SkillBackend):
             "success": False,
             "error": (
                 "write_file is not supported in cloud mode; supporting "
-                "files lands in a future phase"
+                "files lands in a future iteration"
             ),
         }
 
@@ -234,7 +234,7 @@ class SkillCloudBackend(SkillBackend):
             "success": False,
             "error": (
                 "remove_file is not supported in cloud mode; supporting "
-                "files lands in a future phase"
+                "files lands in a future iteration"
             ),
         }
 

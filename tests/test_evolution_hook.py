@@ -1,4 +1,4 @@
-"""Tests for the autonomous skill-creation hook (Phase 4 + Phase 20 refiner)."""
+"""Tests for the autonomous skill-creation hook + refiner."""
 from __future__ import annotations
 
 import json
@@ -190,7 +190,7 @@ async def test_missing_user_request_is_none_not_crash(
     assert payload["tool_calls_used"] == 2
 
 
-# --- Phase 20: in-use skill refinement -------------------------------------
+# --- in-use skill refinement -----------------------------------------------
 
 
 @pytest.mark.asyncio

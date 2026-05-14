@@ -76,9 +76,9 @@ class ResolvedMcpServer:
 class EffectiveConfig:
     """The full resolved config for one user at one moment.
 
-    ``etag`` is a content hash over the lists; cache invalidation in
-    Phase 34 keys off it. Stable across equal documents so two parallel
-    builds for the same user collapse to one cache entry.
+    ``etag`` is a content hash over the lists; cache invalidation keys
+    off it. Stable across equal documents so two parallel builds for the
+    same user collapse to one cache entry.
     """
 
     skills: list[ResolvedSkill]

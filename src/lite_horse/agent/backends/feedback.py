@@ -1,7 +1,7 @@
 """``FeedbackSink`` Protocol — tenant-safe outcome / feedback writes.
 
-Phase 44 introduces a per-turn channel for the outcome classifier, the
-HTTP feedback endpoint, and the regex-marker fallback in
+A per-turn channel for the outcome classifier, the HTTP feedback
+endpoint, and the regex-marker fallback in
 ``EvolutionHook`` to land structured rows that the curator + GEPA loop
 read back. The shape is intentionally narrow: one write method
 (``record``) and two reads (``latest_for_turn``, ``rating_stats``) so

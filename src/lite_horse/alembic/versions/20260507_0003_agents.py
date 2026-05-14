@@ -1,7 +1,7 @@
-"""phase 41 — multi-agent: agents table + agent_id on tenant-scoped rows
+"""multi-agent: agents table + agent_id on tenant-scoped rows
 
-Revision ID: 0003_phase41_agents
-Revises: 0002_phase39_user_limits
+Revision ID: 0003_agents
+Revises: 0002_user_limits
 Create Date: 2026-05-07
 
 Introduces the per-user multi-agent axis. After this migration:
@@ -24,8 +24,8 @@ Introduces the per-user multi-agent axis. After this migration:
   column on that table).
 
 The migration is non-disruptive: callers that don't yet set the
-``app.agent_id`` GUC (admin tasks, the v0.4 turn path before Phase 41
-wiring) keep seeing all rows for the user via the empty-string fallback.
+``app.agent_id`` GUC (admin tasks) keep seeing all rows for the user
+via the empty-string fallback.
 """
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0003_phase41_agents"
-down_revision: str | None = "0002_phase39_user_limits"
+revision: str = "0003_agents"
+down_revision: str | None = "0002_user_limits"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

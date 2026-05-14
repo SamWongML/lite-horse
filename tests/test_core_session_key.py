@@ -1,4 +1,4 @@
-"""Tests for ``build_session_key`` (moved from gateway → core in Phase 15)."""
+"""Tests for ``build_session_key`` (lives in core, not gateway)."""
 from __future__ import annotations
 
 from lite_horse.core.session_key import build_session_key

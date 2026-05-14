@@ -490,7 +490,7 @@ class McpHealthOut(BaseModel):
     rows: list[McpHealthRow]
 
 
-# ---------- skill promotion (Phase 45, admin-only) ----------
+# ---------- skill promotion (admin-only) ----------
 
 
 class SkillCandidateOut(BaseModel):
@@ -611,7 +611,7 @@ class GithubOAuthCallbackOut(BaseModel):
     expires_at: int | None = None
 
 
-# ---------- GDPR delete (Phase 46) ----------
+# ---------- GDPR delete ----------
 
 
 class GdprDeleteRequestOut(BaseModel):

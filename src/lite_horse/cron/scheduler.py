@@ -2,12 +2,12 @@
 
 One ``AsyncIOScheduler`` runs on the main event loop; each firing builds a
 fresh agent + session (source ``"cron"``) and hands the final output to a
-delivery handler. Phase 15 dropped Telegram delivery; Phase 17 wires the
-webhook handler so cron output reaches the embedding webapp. Shutdown is
-signal-driven — SIGINT / SIGTERM stop the scheduler and remove ``cron.pid``.
+delivery handler. The webhook delivery handler routes cron output to the
+embedding webapp. Shutdown is signal-driven — SIGINT / SIGTERM stop the
+scheduler and remove ``cron.pid``.
 
-Phase 36 adds the fan-out shape (:class:`CronMessage` +
-:func:`expand_official_to_user_messages`) consumed by the cloud
+The fan-out shape (:class:`CronMessage` +
+:func:`expand_official_to_user_messages`) is consumed by the cloud
 ``scheduler/`` and ``worker/`` services. The legacy in-process path
 above stays for the v0.3 single-user CLI; the cloud path enqueues
 :class:`CronMessage` JSON onto SQS and drains it from the worker.
@@ -99,7 +99,7 @@ def make_fire(
     scheduler. ``build_agent`` is imported lazily to avoid a cron ↔ factory
     import cycle (``factory`` pulls in ``cron_manage``).
 
-    ``store`` enables the Phase-22 strike-based auto-disable. When None
+    ``store`` enables the strike-based auto-disable. When None
     (older callers, tests that only exercise the happy path), refusals are
     still classified and logged but never disable the job.
     """
@@ -221,7 +221,7 @@ def run_scheduler_blocking() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 36 cloud fan-out
+# Cloud fan-out
 # ---------------------------------------------------------------------------
 
 

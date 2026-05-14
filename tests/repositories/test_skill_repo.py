@@ -79,7 +79,7 @@ async def test_list_official_sees_seeded_official_rows(
 ) -> None:
     """User-scope list never returns officials, even with same slug."""
     repo = SkillRepo(pg_session)
-    # Seed an official row directly (Phase 34 owns the admin write path;
+    # Seed an official row directly (admin write path lives elsewhere;
     # here we just verify read-side scope filtering).
     await pg_session.execute(
         text(

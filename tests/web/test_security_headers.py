@@ -1,4 +1,4 @@
-"""Phase 46 — security-headers middleware stamps the v0.5 hardening set."""
+"""Security-headers middleware stamps the v0.5 hardening set."""
 from __future__ import annotations
 
 import os

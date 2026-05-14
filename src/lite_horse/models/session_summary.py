@@ -1,4 +1,4 @@
-"""session_summaries table — one summary per completed session (Phase 43)."""
+"""session_summaries table — one summary per completed session."""
 from __future__ import annotations
 
 import uuid

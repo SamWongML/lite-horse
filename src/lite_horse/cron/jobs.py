@@ -27,7 +27,7 @@ class Job:
 
     ``disabled_reason`` is set by the scheduler when it auto-disables a job —
     currently the only path is three consecutive ``MODEL_REFUSAL`` firings
-    (Phase 22). Empty on jobs the user disabled manually.
+    Empty on jobs the user disabled manually.
     """
 
     id: str

@@ -1,4 +1,4 @@
-"""Daily evolve enqueue tick — Phase 39.
+"""Daily evolve enqueue tick.
 
 Distinct from :mod:`lite_horse.scheduler.tick` (which scans
 ``cron_jobs`` once a minute). The evolve tick fires once a day, asks

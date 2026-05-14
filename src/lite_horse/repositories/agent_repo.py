@@ -1,9 +1,9 @@
 """agents table CRUD — per-user persona / model / tool-bundle / caps.
 
-Phase 41 introduced this table. Every user-scope row in the layered
-config (skills / instructions / commands / mcp_servers / cron_jobs) and
-every per-user row in user_documents / sessions / skill_proposals carries
-an ``agent_id`` FK so writes are scoped to one persona at a time.
+Every user-scope row in the layered config (skills / instructions /
+commands / mcp_servers / cron_jobs) and every per-user row in
+user_documents / sessions / skill_proposals carries an ``agent_id`` FK
+so writes are scoped to one persona at a time.
 
 The repo stays thin: list / get / create / update / soft-delete and
 ``set_default``. Cross-tenant reads are intentionally absent — admin

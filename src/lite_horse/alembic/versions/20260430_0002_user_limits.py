@@ -1,6 +1,6 @@
-"""phase 39 — per-user rate limit + daily cost budget columns
+"""per-user rate limit + daily cost budget columns
 
-Revision ID: 0002_phase39_user_limits
+Revision ID: 0002_user_limits
 Revises: 0001_initial
 Create Date: 2026-04-30
 
@@ -10,7 +10,7 @@ cost budget enforced in Redis (``cost_budget_usd_micro``). NULL keeps
 the existing default behaviour, so the migration is non-disruptive on
 upgrade.
 
-Phase 39 also locks RLS as defence-in-depth — RLS was enabled in
+Also locks RLS as defence-in-depth — RLS was enabled in
 ``0001_initial`` already; this revision additionally calls ``ALTER
 TABLE ... FORCE ROW LEVEL SECURITY`` on the four tenant-scoped tables
 so the RLS policy fires even when the connection role owns the table.
@@ -22,7 +22,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0002_phase39_user_limits"
+revision: str = "0002_user_limits"
 down_revision: str | None = "0001_initial"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

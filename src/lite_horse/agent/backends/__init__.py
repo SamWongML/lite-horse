@@ -1,10 +1,10 @@
 """Backend Protocols + ``TenantContext`` carrier.
 
-Phase 40 introduces a per-turn dependency injection seam between the agent
-runtime and durable state. Every tool that touches memory, skills, or cron
-goes through one of the Protocols here; the SDK delivers the bundle via
-``RunContextWrapper.context``. Phase 42 adds :class:`RecallBackend` for
-semantic recall via the new ``memory_search`` tool.
+A per-turn dependency injection seam between the agent runtime and
+durable state. Every tool that touches memory, skills, or cron goes
+through one of the Protocols here; the SDK delivers the bundle via
+``RunContextWrapper.context``. :class:`RecallBackend` provides semantic
+recall via the ``memory_search`` tool.
 
 Two impls per Protocol live next to it:
 - ``*_local.py`` wraps the v0.4 filesystem code under ``~/.litehorse/``.
@@ -47,12 +47,11 @@ class TenantContext:
     """Per-turn tenant bundle threaded through ``RunContextWrapper.context``.
 
     ``user_id`` / ``agent_id`` are ``None`` in the CLI / single-user path
-    where there is no authenticated tenant. Phase 41 lifts ``agent_id`` to
-    a populated value once the multi-agent table lands.
+    where there is no authenticated tenant. ``agent_id`` is populated
+    once the multi-agent table is in play.
 
-    ``recall`` (Phase 42) provides semantic recall over the user's
-    memory + summary + skill history; the agent reaches it via the
-    ``memory_search`` tool.
+    ``recall`` provides semantic recall over the user's memory + summary
+    + skill history; the agent reaches it via the ``memory_search`` tool.
     """
 
     user_id: str | None

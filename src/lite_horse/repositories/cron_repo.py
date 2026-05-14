@@ -1,7 +1,7 @@
 """Layered cron-job repository — user-scope CRUD + scope-agnostic read.
 
-Same shape as ``skill_repo`` / ``instruction_repo``. The scheduler
-(Phase 36) is the consumer of the resolved cron list; this repo only
+Same shape as ``skill_repo`` / ``instruction_repo``. The cloud
+scheduler is the consumer of the resolved cron list; this repo only
 owns persistence.
 """
 from __future__ import annotations
@@ -255,7 +255,7 @@ class CronRepo(BaseRepo):
         Resets ``strikes`` to 0 on the assumption the fan-out succeeded.
         Failure paths handled per-message by the worker; if delivery
         fails the strike count is bumped on the user-scope job by a
-        targeted call (Phase 39 wires this).
+        targeted call.
         """
         stmt = (
             update(CronJob)

@@ -2,8 +2,8 @@
 
 The ``users`` row is created lazily in ``web.auth`` on first JWT sight; this
 repo exposes the safe-to-edit settings columns. ``byo_provider_key_*`` is
-intentionally NOT in scope here — KMS-encrypted BYO keys land in Phase 37
-with their own write path.
+intentionally NOT in scope here — KMS-encrypted BYO keys have their own
+write path in :class:`ByoKeyStore`.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ class UserSettings:
 
 
 class UserSettingsRepo(BaseRepo):
-    """users.default_model + users.permission_mode + Phase 39 limits."""
+    """users.default_model + users.permission_mode + per-user rate/cost limits."""
 
     async def get(self) -> UserSettings:
         user_id = UUID(await self.current_user_id())

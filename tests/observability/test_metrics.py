@@ -1,4 +1,4 @@
-"""Phase 38 — EMF metric line shape."""
+"""EMF metric line shape."""
 from __future__ import annotations
 
 import io

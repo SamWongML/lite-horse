@@ -97,7 +97,7 @@ class ByoKeyStore(BaseRepo):
         refresh_token: str | None = None,
         expires_at: int | None = None,
     ) -> None:
-        """Persist a GitHub OAuth-app token bundle (Phase 37 §Open question 4)."""
+        """Persist a GitHub OAuth-app token bundle."""
         user_id = await self.current_user_id()
         doc = await self._load_doc(user_id)
         bundle: dict[str, Any] = {"access_token": access_token}

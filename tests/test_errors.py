@@ -1,4 +1,4 @@
-"""Tests for the structured error classifier (Phase 22)."""
+"""Tests for the structured error classifier."""
 from __future__ import annotations
 
 import dataclasses

@@ -1,11 +1,11 @@
-"""Phase 40 + 46 hard gate: every backend Protocol ships local + cloud impls.
+"""Every backend Protocol ships both a local and a cloud impl.
 
 For every Protocol under ``src/lite_horse/agent/backends/<name>.py`` there
 must be exactly one ``<name>_local.py`` and one ``<name>_cloud.py`` next
 to it, both implementing the full Protocol method set with matching
 signatures. The CLI parity invariant from the v0.5 hard contract stays
-enforced as new backends land — Phase 46 makes the discovery automatic so
-adding a new Protocol can't slip past the gate.
+enforced as new backends land — discovery is automatic so adding a new
+Protocol can't slip past the gate.
 
 The signature check compares positional + keyword arg names and the
 ``async def`` / ``def`` form. Return-type drift is not flagged here
@@ -120,7 +120,7 @@ def test_backends_have_local_and_cloud_impls() -> None:
             if not needed.is_file():
                 missing.append(str(needed.relative_to(REPO)))
     assert not missing, (
-        "CLI parity (Phase 40/46 hard gate): missing backend impls:\n  "
+        "CLI parity: missing backend impls:\n  "
         + "\n  ".join(missing)
     )
 
@@ -147,13 +147,13 @@ def test_local_and_cloud_implement_full_protocol_method_set() -> None:
                     f"{name}_{impl_label} missing methods: {sorted(missing)}"
                 )
     assert not drift, (
-        "CLI parity (Phase 40/46 hard gate): backend method-set drift "
-        "between Protocol and impls:\n  " + "\n  ".join(drift)
+        "CLI parity: backend method-set drift between Protocol "
+        "and impls:\n  " + "\n  ".join(drift)
     )
 
 
 def test_local_and_cloud_have_matching_signatures() -> None:
-    """Hard-gate Phase 46: arg names + ``async`` form must match Protocol.
+    """Arg names + ``async`` form must match Protocol.
 
     A new arg added to one impl but not the other is a CLI/cloud parity
     break — the Protocol is the contract, both impls must mirror it.
@@ -180,6 +180,6 @@ def test_local_and_cloud_have_matching_signatures() -> None:
                         f"{impl_sig} != Protocol {proto_sig}"
                     )
     assert not drift, (
-        "CLI parity (Phase 46 hard gate): backend signature drift "
-        "between Protocol and impls:\n  " + "\n  ".join(drift)
+        "CLI parity: backend signature drift between Protocol "
+        "and impls:\n  " + "\n  ".join(drift)
     )

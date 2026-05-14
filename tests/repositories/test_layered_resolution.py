@@ -1,9 +1,9 @@
 """Layered config resolution rules — bundled + official + user.
 
-Phase 33b ships ``list_effective`` on each repo plus a top-level
+Each repo ships ``list_effective`` plus a top-level
 ``compute_effective_config`` that fans them out. The matrix below covers
-every rule in the plan: mandatory officials, opt-outs, slug shadowing,
-bundled inclusion, MCP-specific behaviours.
+every rule: mandatory officials, opt-outs, slug shadowing, bundled
+inclusion, MCP-specific behaviours.
 """
 from __future__ import annotations
 

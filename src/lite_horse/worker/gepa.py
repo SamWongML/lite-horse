@@ -1,4 +1,4 @@
-"""GEPA worker entry-point — Phase 45.
+"""GEPA worker entry-point.
 
 Drains one ``evolve_gepa`` queue message: mine the eval set, run the
 population loop, persist the winner as a ``skill_proposals`` row.
@@ -83,11 +83,11 @@ GepaRunFn = Callable[[EvolveGepaMessage], Awaitable[GepaResult]]
 
 
 async def _default_run_fn(message: EvolveGepaMessage) -> GepaResult:
-    """Production GEPA run — kept as a stub here, wired in Phase 46.
+    """Production GEPA run — kept as a stub here, wired in later.
 
     The real implementation depends on Anthropic/OpenAI SDK bumps that
-    Phase 46 lands. Until then this entry-point records that a run was
-    attempted so the proposals timeline stays observable; the actual
+    have not landed yet. Until then this entry-point records that a run
+    was attempted so the proposals timeline stays observable; the actual
     population loop is exercised end-to-end via the CLI parity gate.
     """
     return GepaResult(

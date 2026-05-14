@@ -1,4 +1,4 @@
-"""Phase 43 — ``make_instructions_for_user`` injects the session blocks."""
+"""``make_instructions_for_user`` injects the session blocks."""
 from __future__ import annotations
 
 import pytest

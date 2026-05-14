@@ -1,4 +1,4 @@
-"""Security-headers middleware — Phase 46.
+"""Security-headers middleware.
 
 Stamps every response with the four headers the v0.5 hardening gate
 requires:

@@ -1,4 +1,4 @@
-"""Phase 40 acceptance: local writes land at the v0.4 paths byte-for-byte.
+"""Local writes land at the v0.4 paths byte-for-byte.
 
 The contract from the v0.5 plan is "the ``litehorse`` CLI keeps booting
 against ``~/.litehorse/`` with zero migrations and the same byte-level

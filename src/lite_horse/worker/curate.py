@@ -1,4 +1,4 @@
-"""Curate worker — Phase 44.
+"""Curate worker.
 
 Runs the :class:`Curator` daily over one ``(user_id, agent_id)`` slice
 of ``skills``. State transitions live in :mod:`lite_horse.curator`

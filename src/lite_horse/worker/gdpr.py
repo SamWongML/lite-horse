@@ -1,4 +1,4 @@
-"""GDPR delete worker — Phase 46.
+"""GDPR delete worker.
 
 Daily tick + dispatcher route ``kind="gdpr_delete"`` messages here. Each
 message names one due :class:`GdprDeleteRequest`; the handler:
@@ -80,7 +80,7 @@ async def _collect_export(user_id: str) -> dict[str, list[dict[str, object]]]:
     Runs inside one tenant-scoped transaction so RLS narrows reads to
     the target user. The raw-SQL ``SELECT *`` lives on
     :meth:`GdprDeleteRepo.dump_tenant_rows` so the worker stays free of
-    raw SQL (Phase 32+ lint rule).
+    raw SQL (enforced by the no-raw-sql-outside-repos lint rule).
     """
     async with db_session(user_id) as session:
         return await GdprDeleteRepo(session).dump_tenant_rows()

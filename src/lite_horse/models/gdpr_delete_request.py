@@ -1,4 +1,4 @@
-"""gdpr_delete_requests — queued user-initiated GDPR delete (Phase 46).
+"""gdpr_delete_requests — queued user-initiated GDPR delete.
 
 One row per outstanding "delete my account" request. The HTTP route
 writes ``requested_at = now()`` and ``scheduled_at = now() + 7 days``;

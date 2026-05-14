@@ -1,6 +1,6 @@
 """Pub/sub cache invalidation for ``effective-config``.
 
-Admin writes (Phase 34) propagate to other ECS tasks through Redis
+Admin writes propagate to other ECS tasks through Redis
 pub/sub on the channel ``effective-config-invalidate``. Payload shape:
 
 * ``{"all": true}`` — invalidate every cached user (used when an admin

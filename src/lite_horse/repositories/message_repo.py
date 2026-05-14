@@ -9,9 +9,9 @@ Mirrors the v0.3 `SessionDB` message surface:
   the existing tool prompt teaches the model) plus `ts_headline` for
   the `>>>match<<<` snippet shape callers already render.
 
-`tsv` is a generated column on `messages` (DDL in Phase 31). We never
-write to it directly; the GIN index `messages_tsv` makes the FTS lookup
-fast.
+`tsv` is a generated column on `messages` (DDL in the initial schema
+migration). We never write to it directly; the GIN index `messages_tsv`
+makes the FTS lookup fast.
 """
 from __future__ import annotations
 

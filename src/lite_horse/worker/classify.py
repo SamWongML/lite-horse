@@ -1,4 +1,4 @@
-"""Classify worker — Phase 44.
+"""Classify worker.
 
 Runs the :class:`OutcomeClassifier` side-agent over one finished turn
 and writes a ``turn_outcomes`` row with ``source='classifier'`` via

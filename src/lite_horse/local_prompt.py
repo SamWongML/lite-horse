@@ -1,6 +1,6 @@
 """CLI-only prompt extras: SOUL persona + project AGENTS.md.
 
-Lives at the package root so the agent layer (which is bound by Phase 40's
+Lives at the package root so the agent layer (which is bound by the
 "no ``litehorse_home`` import" rule) can stay clean. The CLI factory passes
 :func:`load_local_prompt_extras` into ``make_instructions(extras_loader=...)``;
 cloud mode skips this module entirely.

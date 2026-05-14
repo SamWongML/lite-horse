@@ -1,4 +1,4 @@
-"""Pure-Python sanity checks on the Phase 44 curator migration.
+"""Pure-Python sanity checks on the curator migration.
 
 The live round-trip lives in :mod:`tests.models.test_migration_roundtrip`.
 This file just inspects the migration text so a sloppy edit can't drop
@@ -15,9 +15,9 @@ def _migration_source() -> str:
     paths = [
         p
         for p in versions.iterdir()
-        if str(p).endswith("0006_phase44_curator.py")
+        if str(p).endswith("0006_curator.py")
     ]
-    assert paths, "phase 44 migration not found"
+    assert paths, "curator migration not found"
     return Path(str(paths[0])).read_text(encoding="utf-8")
 
 
@@ -38,10 +38,10 @@ def test_creates_turn_outcomes_table() -> None:
         assert col in src, f"missing column {col!r}"
 
 
-def test_chains_off_phase43() -> None:
+def test_chains_off_session_summaries() -> None:
     src = _migration_source()
-    assert 'revision: str = "0006_phase44_curator"' in src
-    assert 'down_revision: str | None = "0005_phase43_summaries"' in src
+    assert 'revision: str = "0006_curator"' in src
+    assert 'down_revision: str | None = "0005_session_summaries"' in src
 
 
 def test_source_and_rating_check_constraints() -> None:

@@ -1,4 +1,4 @@
-"""Phase 42 — ``memory_search`` tool wire-shape + recall round-trip.
+"""``memory_search`` tool wire-shape + recall round-trip.
 
 The tool body is JSON-in / JSON-out: this exercise drives it through a
 ``ToolContext`` carrying a fake :class:`TenantContext`, asserts the

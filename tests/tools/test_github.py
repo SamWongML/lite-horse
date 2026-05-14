@@ -160,7 +160,7 @@ async def test_diff_view_uses_diff_accept_header(
 )
 @pytest.mark.asyncio
 async def test_real_github_smoke() -> None:
-    """Phase 37 acceptance gate (4): hits live api.github.com with a PAT."""
+    """Live smoke gate: hits api.github.com with a PAT."""
     import os
 
     token = os.environ["GITHUB_TEST_TOKEN"]

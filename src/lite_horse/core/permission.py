@@ -9,8 +9,7 @@ Three modes:
 - ``auto`` — every tool is offered to the model.
 - ``ask``  — every tool call is visible; ``allowed_tools`` / ``denied_tools``
   memoize per-session decisions. (Inline y/n/A/N prompting during a live
-  stream is intentionally left for a follow-up phase; mode is a data
-  contract here.)
+  stream is not wired here; mode is a data contract.)
 - ``ro``   — write tools are filtered out at agent-build time so the model
   cannot invoke them at all.
 """
@@ -47,8 +46,7 @@ class PermissionPolicy:
         """Decide whether to offer ``tool_name`` to the model.
 
         Only ``ro`` filters at build time; ``ask`` leaves tools enabled so
-        the model still sees them — the decision happens at call time in
-        a later phase.
+        the model still sees them — the call-time prompt is the consumer.
         """
         if self.mode == "ro":
             return tool_name not in WRITE_TOOL_NAMES

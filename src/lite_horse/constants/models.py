@@ -1,4 +1,4 @@
-"""Canonical model-id constants — Phase 46.
+"""Canonical model-id constants.
 
 Every place in the codebase that refers to a vendor model id by string
 literal should import from here instead. Centralising the strings stops

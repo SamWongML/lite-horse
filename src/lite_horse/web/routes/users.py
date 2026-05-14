@@ -1,4 +1,4 @@
-"""``/v1/users/me:*`` — account-level lifecycle endpoints (Phase 46).
+"""``/v1/users/me:*`` — account-level lifecycle endpoints.
 
 Two surfaces:
 

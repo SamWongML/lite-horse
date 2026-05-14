@@ -1,4 +1,4 @@
-"""Tests for the APScheduler cron wiring (Phase 10)."""
+"""Tests for the APScheduler cron wiring."""
 from __future__ import annotations
 
 import asyncio
@@ -163,7 +163,7 @@ async def test_fire_ends_session_after_run(
     assert ended[0][1] == "cron_done"
 
 
-# ---------- Phase 22: error classifier + strike-based disable ----------
+# ---------- error classifier + strike-based disable ----------
 
 
 def _rate_limit_exc() -> openai.RateLimitError:

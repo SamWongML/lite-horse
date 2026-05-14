@@ -1,4 +1,4 @@
-"""Phase 44 — worker dispatcher routes classify + curate payloads."""
+"""Worker dispatcher routes classify + curate payloads."""
 from __future__ import annotations
 
 import pytest

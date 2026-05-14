@@ -1,6 +1,6 @@
 """JWT verification + lazy user provisioning.
 
-Per the v0.4 Hard Contract (Phase 31):
+Per the v0.4 Hard Contract:
 
 * JWT signed by the webapp, verified locally against the issuer's JWKS.
 * JWKS is fetched once per process and refreshed every hour.

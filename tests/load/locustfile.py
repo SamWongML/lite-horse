@@ -1,4 +1,4 @@
-"""Locust load profile — Phase 39 staging gate.
+"""Locust load profile — staging gate.
 
 Run against staging:
 

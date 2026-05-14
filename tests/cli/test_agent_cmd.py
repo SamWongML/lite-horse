@@ -1,4 +1,4 @@
-"""Phase 41 CLI parity gate — ``litehorse agent {ls, create, use, show}``.
+"""CLI parity gate — ``litehorse agent {ls, create, use, show}``.
 
 Drives the helpers in :mod:`lite_horse.cli.commands.agent` directly so
 the test stays fast and LLM-free. Asserts the local layout

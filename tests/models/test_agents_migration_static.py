@@ -1,4 +1,4 @@
-"""Pure-Python sanity checks on the Phase 41 migration.
+"""Pure-Python sanity checks on the agents migration.
 
 Runs without Docker — the live round-trip is in
 ``test_migration_roundtrip.py``. These checks make sure the migration
@@ -16,9 +16,9 @@ def _migration_source() -> str:
     paths = [
         p
         for p in versions.iterdir()
-        if str(p).endswith("0003_phase41_agents.py")
+        if str(p).endswith("0003_agents.py")
     ]
-    assert paths, "phase 41 migration not found"
+    assert paths, "agents migration not found"
     return Path(str(paths[0])).read_text(encoding="utf-8")
 
 

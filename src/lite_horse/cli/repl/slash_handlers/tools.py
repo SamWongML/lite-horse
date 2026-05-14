@@ -1,11 +1,11 @@
 """General REPL slash commands.
 
 - ``/verbose [off|new|all]`` — tool-call display level (consumed by the
-  renderer in Phase 29).
+  renderer).
 - ``/usage`` / ``/cost`` — token + cost meter for the current session.
 - ``/abort`` — cancel the in-flight agent turn (equivalent to Ctrl-C #1).
-- ``/logs`` — stub that points at ``litehorse logs`` for now; Phase 30
-  wires the in-REPL pager.
+- ``/logs`` — stub that points at ``litehorse logs`` for now; the
+  in-REPL pager is wired separately.
 - ``/editor`` — compose the next prompt in ``$EDITOR`` and stash it on
   ``state.pending_attachments`` until the next turn.
 """
@@ -67,7 +67,7 @@ _DEFAULT_LOG_TAIL = 50
 
 
 async def _logs(args: list[str], state: Any) -> SlashOutcome:
-    """Tail the stderr log file into a pager overlay (Phase 30).
+    """Tail the stderr log file into a pager overlay.
 
     ``/logs`` tails the default 50 lines; ``/logs N`` tails ``N`` (1-5000).
     Output is piped through ``rich.Console.pager`` when stdout is a TTY

@@ -1,4 +1,4 @@
-"""Phase 43 — :class:`LocalSessionRepo` summarises sessions on REPL exit.
+""":class:`LocalSessionRepo` summarises sessions on REPL exit.
 
 Covers the local SQLite parity store the cloud `session_summaries` table
 mirrors, plus the ``summarize_on_exit`` helper that the REPL fires on

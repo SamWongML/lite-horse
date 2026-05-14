@@ -1,4 +1,4 @@
-"""Curator background pass — Phase 44.
+"""Curator background pass.
 
 The curator runs once a day per ``(user_id, agent_id)`` slice and is the
 slow-loop counterpart to the per-turn :class:`EvolutionHook`. Its

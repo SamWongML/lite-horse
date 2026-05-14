@@ -1,7 +1,7 @@
 """Deterministic local stubs for the GEPA loop — CLI parity backend.
 
 The cloud GEPA path plugs an OpenAI/Anthropic generator, an embedding
-model, an :class:`Agent` replay, and the Phase 44 classifier into
+model, an :class:`Agent` replay, and the outcome classifier into
 :func:`lite_horse.evolve.gepa.runner.run_gepa`. The CLI parity gate
 needs the same loop to *run* offline without booting any of those, so
 this module supplies model-free stand-ins:

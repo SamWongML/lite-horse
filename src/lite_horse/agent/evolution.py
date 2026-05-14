@@ -6,21 +6,21 @@ evolution must never break the user's run.
 
 Two side-agents, one hook:
 
-- **Distiller** (Phase 4): on a non-trivial *successful* trajectory, decide
+- **Distiller**: on a non-trivial *successful* trajectory, decide
   whether to materialise a new SKILL.md via ``skill_manage(action='create')``.
-- **Refiner** (Phase 20): on a *failed* trajectory that viewed an existing
-  skill, propose ONE ``skill_manage(action='patch')`` call against that skill
+- **Refiner**: on a *failed* trajectory that viewed an existing skill,
+  propose ONE ``skill_manage(action='patch')`` call against that skill
   so a future run avoids the same failure mode.
 
 Only one of the two fires per run. Failure with a viewed skill takes
 precedence over the creation path — distilling a new skill from a known-bad
 trajectory is the wrong signal.
 
-Phase 40: skill reads + counter writes route through
-``ctx.context.skill`` (a :class:`SkillBackend`) so a side-agent firing on
-an ECS task always lands writes against the right tenant. The same
-:class:`TenantContext` is propagated into the distiller / refiner runs
-via ``Runner.run(..., context=tenant)`` so their tool calls see the same
+Skill reads + counter writes route through ``ctx.context.skill`` (a
+:class:`SkillBackend`) so a side-agent firing on an ECS task always
+lands writes against the right tenant. The same :class:`TenantContext`
+is propagated into the distiller / refiner runs via
+``Runner.run(..., context=tenant)`` so their tool calls see the same
 backends.
 """
 from __future__ import annotations
@@ -145,7 +145,7 @@ class EvolutionHook(AgentHooks[Any]):
         """Decide whether to invoke the refiner side-agent.
 
         In-trajectory error markers remain the primary trigger. The
-        Phase-44 feedback path adds two gates:
+        feedback path adds two gates:
 
         * once the most-recently viewed skill has accumulated
           ``CURATOR_REFINE_MIN_OUTCOMES`` rated turns, the aggregate

@@ -1,4 +1,4 @@
-"""Per-user streaming turn engine — Phase 33 cloud path.
+"""Per-user streaming turn engine — cloud path.
 
 The v0.3 ``lite_horse.api.run_turn_streaming`` builds a process-global
 ``Agent`` once and serves every request through it. Under multi-tenant
@@ -14,9 +14,8 @@ The agent is run via ``Runner.run_streamed`` and the events are
 translated to the same :mod:`lite_horse.api` ``StreamEvent`` shapes the
 SSE driver already understands.
 
-Session message storage still goes through the v0.3 ``LocalSessionRepo``
-for now — replacing that with a Postgres-backed ``SDKSession`` is a
-separate Phase 33 deliverable kept out of this PR's scope.
+Session message storage still goes through the v0.3 ``LocalSessionRepo``;
+a Postgres-backed ``SDKSession`` replacement is tracked separately.
 """
 from __future__ import annotations
 
@@ -158,8 +157,8 @@ async def run_turn_streaming_for_user(  # noqa: PLR0912, PLR0915
     else:
         mcp_servers = []
 
-    # Phase 43: on the first turn of a new session, semantic-recall past
-    # session summaries for the agent and inject them into the prompt.
+    # On the first turn of a new session, semantic-recall past session
+    # summaries for the agent and inject them into the prompt.
     relevant_sessions: list[SessionSummaryBlock] = []
     if is_new_session and req.text.strip():
         recall = RecallCloudBackend(

@@ -1,4 +1,4 @@
-"""Tests for ``run_turn_streaming`` (Phase 27)."""
+"""Tests for ``run_turn_streaming``."""
 from __future__ import annotations
 
 from collections.abc import AsyncIterator

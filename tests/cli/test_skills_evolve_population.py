@@ -1,9 +1,8 @@
-"""Phase 45: ``litehorse skills evolve --population`` writes a proposal.
+"""``litehorse skills evolve --population`` writes a proposal.
 
-Phase acceptance gate: the GEPA loop runs end-to-end against a
-fixture-backed eval set and drops a proposal bundle under the active
-agent's ``skills/.proposals/<slug>/`` directory in less than two
-minutes.
+Acceptance gate: the GEPA loop runs end-to-end against a fixture-backed
+eval set and drops a proposal bundle under the active agent's
+``skills/.proposals/<slug>/`` directory in less than two minutes.
 """
 from __future__ import annotations
 
@@ -25,7 +24,7 @@ def _write_baseline(slug: str = "demo") -> Path:
         f"""---
 name: {slug}
 version: 1
-description: phase 45 baseline
+description: gepa baseline
 ---
 
 # {slug}

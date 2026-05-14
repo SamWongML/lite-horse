@@ -1,4 +1,4 @@
-"""Cloud-shaped evolve enqueue + dispatch — Phase 39.
+"""Cloud-shaped evolve enqueue + dispatch.
 
 The v0.3 ``evolve.runner`` walks ``~/.litehorse/skills/`` and writes
 proposals to disk. The cloud port keeps the same gate logic but its
@@ -99,9 +99,9 @@ async def find_evolve_candidates(
     """Scan recent activity for (user, skill) pairs eligible for evolve.
 
     Returns an empty list until the message store carries a
-    ``skill_slug`` discriminator (introduced in a follow-up to Phase
-    39). The framework — queue contract, worker dispatch, scheduler
-    wiring — is fully in place; only the eligibility query is deferred.
+    ``skill_slug`` discriminator (introduced in a follow-up). The
+    framework — queue contract, worker dispatch, scheduler wiring — is
+    fully in place; only the eligibility query is deferred.
     """
     del threshold, cooldown_days, now
     return []

@@ -12,13 +12,13 @@ The SDK evaluates ``instructions`` once per ``Runner.run``, so each of these
 reads is a frozen snapshot for the duration of the run. Writes that happen
 during the run land on disk but won't enter the prompt until the next run.
 
-Phase 40: memory reads route through ``ctx.context.memory`` (a
+Memory reads route through ``ctx.context.memory`` (a
 :class:`MemoryBackend`) so cloud calls land in Postgres and CLI calls hit
 the local FS — both via the same Protocol seam. The CLI skill index +
 SOUL / AGENTS.md reads come through opt-in helpers from
 :mod:`lite_horse.skills.activation` and :mod:`lite_horse.local_prompt`,
 keeping this module free of ``litehorse_home`` / ``MemoryStore`` /
-``skills_root`` imports per the Phase 40 lint contract.
+``skills_root`` imports per the lint contract.
 """
 from __future__ import annotations
 
@@ -78,9 +78,9 @@ __all__ = [
 class LayeredInstructions:
     """Three cache layers that compose the system prompt for Anthropic.
 
-    Phase 46 — Anthropic prompt-caching cuts the per-turn token cost
-    when the cacheable prefix matches a prior request. Cache_control
-    breakpoints require a contiguous cacheable prefix, so the Anthropic
+    Anthropic prompt-caching cuts the per-turn token cost when the
+    cacheable prefix matches a prior request. Cache_control breakpoints
+    require a contiguous cacheable prefix, so the Anthropic
     adapter renders the prompt with this stability-first ordering:
 
     * ``stable`` — bundled instructions + tool guidance. Identical
@@ -238,8 +238,8 @@ def make_instructions_for_user(
     1. Bundled+official instructions, in (priority, slug) order.
     2. ``user.md`` profile block.
     3. ``memory.md`` snapshot.
-    4. ``## Recent Sessions`` (Phase 43, most-recent-first).
-    5. ``## Relevant Past Sessions`` (Phase 43, semantic-recall on first turn).
+    4. ``## Recent Sessions`` (most-recent-first).
+    5. ``## Relevant Past Sessions`` (semantic-recall on first turn).
     6. Skills index (activated subset).
     7. Tool guidance.
     8. Current time (last so cache-prefix bytes don't change per turn).

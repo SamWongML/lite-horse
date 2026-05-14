@@ -70,8 +70,7 @@ class RunResult:
     """The webapp-facing summary of one completed turn.
 
     ``input_tokens`` / ``output_tokens`` / ``total_tokens`` are populated by
-    the streaming path (Phase 27). The scripted ``run_turn`` keeps them at
-    ``None`` until a follow-up phase wires the same extraction over there.
+    the streaming path. The scripted ``run_turn`` keeps them at ``None``.
     """
 
     final_output: str

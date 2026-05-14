@@ -1,4 +1,4 @@
-"""Tests for webhook cron delivery (Phase 17)."""
+"""Tests for webhook cron delivery."""
 from __future__ import annotations
 
 import hashlib

@@ -1,4 +1,4 @@
-"""Tests for the dynamic instructions assembler (Phase 6)."""
+"""Tests for the dynamic instructions assembler."""
 from __future__ import annotations
 
 from pathlib import Path

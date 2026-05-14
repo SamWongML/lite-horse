@@ -1,7 +1,7 @@
 """`litehorse logs {tail, path}` — inspect the stderr log file.
 
-Phase 29 lays the surface. Phase 30 wires a ``RichHandler`` that actually
-populates ``~/.litehorse/litehorse.log``; until then the file may be empty
+Lays the surface; a ``RichHandler`` wired separately populates
+``~/.litehorse/litehorse.log``. Until that lands the file may be empty
 or absent, and ``tail`` simply reports nothing. ``path`` always resolves.
 """
 from __future__ import annotations

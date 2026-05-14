@@ -1,10 +1,10 @@
-"""Per-skill usage statistics sidecar (Phase 20).
+"""Per-skill usage statistics sidecar.
 
-Phase 40 made the API path-based: callers pass the skill directory
-(``Path``) explicitly so this module stays free of any ``skills_root()``
-or ``litehorse_home()`` access. The local skill backend resolves the
-path; the cloud backend skips this module entirely (Phase 44 will lift
-counters into the ``skills`` table).
+The API is path-based: callers pass the skill directory (``Path``)
+explicitly so this module stays free of any ``skills_root()`` or
+``litehorse_home()`` access. The local skill backend resolves the path;
+the cloud backend skips this module entirely (counters live on the
+``skills`` table there).
 
 Each skill owns a ``.stats.json`` sidecar inside its skill directory. The
 file is touched on every successful ``skill_view`` (``record_view``) and
@@ -14,7 +14,7 @@ consumers:
 
 - ``instructions._skills_index`` appends a *fragile* decay tag when a
   skill's success ratio drops below 50 % with at least 3 recorded errors.
-- Phase 24's offline evolve pipeline uses the counts to prioritise which
+- The offline evolve pipeline uses the counts to prioritise which
   skills to mutate.
 
 Writes are guarded by an ``fcntl`` advisory lock so the hook and the view
@@ -157,7 +157,7 @@ def record_outcome(
 
 
 def mark_optimized(skill_dir: Path) -> None:
-    """Stamp ``last_optimized_at`` (used by the Phase 24 approval flow)."""
+    """Stamp ``last_optimized_at`` (used by the evolve approval flow)."""
     sidecar = _sidecar(skill_dir)
     try:
         with _locked(sidecar) as fd:

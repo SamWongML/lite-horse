@@ -1,4 +1,4 @@
-"""Tests for the JSON-backed cron job store (Phase 10)."""
+"""Tests for the JSON-backed cron job store."""
 from __future__ import annotations
 
 import json

@@ -1,8 +1,8 @@
 """Slash command registry, alias map, parser, and dispatcher.
 
 Slash handlers are async callables receiving ``(args: list[str], state)`` where
-``state`` is the mutable :class:`ReplState` (added in commit 3). For the
-foundation phase, state is typed as ``Any`` to avoid a circular import.
+``state`` is the mutable :class:`ReplState` (added in commit 3). State is
+typed as ``Any`` here to avoid a circular import.
 
 A handler returns one of the :class:`SlashOutcome` values to signal what the
 loop should do next:

@@ -1,4 +1,4 @@
-"""Phase 45: score_variants + Pareto frontier."""
+"""score_variants + Pareto frontier."""
 from __future__ import annotations
 
 import pytest

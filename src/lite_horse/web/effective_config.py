@@ -7,9 +7,9 @@ be tested in isolation; this module's only job is to fan out the
 opt-out lookup, run the four ``list_effective`` calls, and pack the
 result.
 
-Redis caching (60 s TTL, pub/sub invalidation) lands in Phase 33c when
-the HTTP route surface is wired up — the route is the natural cache
-boundary because that's where ``user_id`` enters the system.
+Redis caching (60 s TTL, pub/sub invalidation) lives at the HTTP route
+surface — the route is the natural cache boundary because that's where
+``user_id`` enters the system.
 """
 from __future__ import annotations
 

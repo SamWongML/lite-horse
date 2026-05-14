@@ -30,8 +30,8 @@ from lite_horse.web.deps import get_kms, get_redis
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
-_SECRET = b"phase-33c-test-secret-do-not-use-in-prod"
-_KID = "phase-33c-kid"
+_SECRET = b"user-config-test-secret-do-not-use-in-prod"
+_KID = "user-config-kid"
 _AUDIENCE = "lite-horse"
 _ISSUER = "http://localhost:9999"
 
@@ -158,7 +158,7 @@ def _auth_headers() -> dict[str, str]:
     yields an isolated tenant. Tests should call this once and reuse the
     headers for every request in that test so they hit the same user.
     """
-    sub = f"phase33c-{uuid4()}"
+    sub = f"user-config-{uuid4()}"
     token = _mint_token(sub)
     return {"Authorization": f"Bearer {token}"}
 

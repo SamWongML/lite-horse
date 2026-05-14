@@ -1,4 +1,4 @@
-"""Outcome classifier side-agent — Phase 44.
+"""Outcome classifier side-agent.
 
 Reads the tail of a finished turn (final assistant text + last few tool
 outputs) and produces a ``{rating, reason}`` JSON record. The caller —

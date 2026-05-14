@@ -93,8 +93,7 @@ def build_github_tools(*, token_provider: TokenProvider) -> list[Tool]:
     """Return the GitHub tool list bound to a per-turn token resolver.
 
     ``token_provider`` is invoked at every tool call so a refreshed
-    OAuth token (Phase 39 hardening) is picked up without rebuilding
-    the agent.
+    OAuth token is picked up without rebuilding the agent.
     """
 
     @function_tool(

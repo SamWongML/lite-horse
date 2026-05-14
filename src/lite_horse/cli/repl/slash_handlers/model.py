@@ -102,7 +102,7 @@ def _explain_mode(printer: Any, mode: str) -> None:
                 "cron_manage) are filtered out at agent-build time")
     elif mode == "ask":
         printer("[permission] ask — tool calls are surfaced verbosely; "
-                "inline y/n/A/N approval arrives in a follow-up phase")
+                "inline y/n/A/N approval is not wired yet")
 
 
 async def _debug(args: list[str], state: Any) -> SlashOutcome:

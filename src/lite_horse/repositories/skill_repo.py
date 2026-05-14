@@ -1,7 +1,7 @@
 """Layered skills repository — user-scope CRUD + ``list_effective`` resolver.
 
 User-scope rows are mutable in place — no version bump on edit. Official
-rows are versioned, but only Phase 34's admin layer writes them; here we
+rows are versioned, but only the admin layer writes them; here we
 expose them read-only so the resolver can see what's there.
 """
 from __future__ import annotations
@@ -70,7 +70,7 @@ class SkillRepo(BaseRepo):
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
-    # ---------- write (user scope only — official lands in Phase 34) ----------
+    # ---------- write (user scope only — official scope owned by admin) ----------
 
     async def create_user(
         self,
@@ -267,7 +267,7 @@ class SkillRepo(BaseRepo):
         await self.session.refresh(target)
         return target
 
-    # ---------- curator (Phase 44) ----------
+    # ---------- curator ----------
 
     async def bump_use(
         self,
@@ -329,8 +329,8 @@ class SkillRepo(BaseRepo):
         Run from the scheduler tick without an ``app.user_id`` GUC.
         Returns one row per unique ``(user_id, agent_id)`` that has at
         least one current user-scope skill. ``agent_id`` may be NULL on
-        pre-Phase-41 rows; those are skipped so the curate worker can
-        always narrow RLS to a real agent.
+        legacy rows; those are skipped so the curate worker can always
+        narrow RLS to a real agent.
         """
         stmt = (
             select(Skill.user_id, Skill.agent_id)

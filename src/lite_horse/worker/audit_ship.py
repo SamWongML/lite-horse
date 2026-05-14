@@ -1,4 +1,4 @@
-"""Audit-archive shipper — Phase 46.
+"""Audit-archive shipper.
 
 A worker tick uploads ``audit_log`` rows older than 90 days into the
 audit-archive bucket as JSONL, then deletes them from Postgres. The

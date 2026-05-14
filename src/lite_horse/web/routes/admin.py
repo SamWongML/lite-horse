@@ -958,14 +958,14 @@ async def list_audit_log(
     ]
 
 
-# ---------- skill promotion candidates (Phase 45) ----------
+# ---------- skill promotion candidates ----------
 
 
 def _candidate_to_out(c: SkillPromotionCandidate) -> SkillCandidateOut:
     """Anonymise the source user/skill ids before returning to admin UI.
 
-    Per the Phase 45 contract, the source ``(user_id, skill_id)`` is
-    redacted unless the source user has opted in via
+    The source ``(user_id, skill_id)`` is redacted unless the source
+    user has opted in via
     ``agents.share_skills=true``. The column does not exist yet, so we
     always redact — the candidate row carries enough aggregate signal
     (``unique_user_count``, ``use_count``, ``success_rate``) for admin
@@ -1144,8 +1144,7 @@ async def reject_skill_candidate(
 async def mcp_health(session: DbSession, _: AdminCtx) -> McpHealthOut:
     """Best-effort HEAD probe across every official MCP server.
 
-    A 5 s timeout per server keeps the route bounded under failure; the
-    full handshake-level probe lands in a future phase.
+    A 5 s timeout per server keeps the route bounded under failure.
     """
     rows = await McpRepo(session).list_official()
     out: list[McpHealthRow] = []

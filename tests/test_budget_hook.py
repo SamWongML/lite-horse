@@ -1,4 +1,4 @@
-"""Tests for the iteration-budget pressure hook (Phase 5)."""
+"""Tests for the iteration-budget pressure hook."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field

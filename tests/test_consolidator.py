@@ -1,4 +1,4 @@
-"""Tests for the compression-as-consolidation side-agent (Phase 18)."""
+"""Tests for the compression-as-consolidation side-agent."""
 from __future__ import annotations
 
 import json

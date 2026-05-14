@@ -1,4 +1,4 @@
-"""Phase 42 — fixed-window chunker behaviour."""
+"""Fixed-window chunker behaviour."""
 from __future__ import annotations
 
 from lite_horse.providers.chunker import (

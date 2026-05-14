@@ -1,4 +1,4 @@
-"""``gdpr_delete_requests`` repository — Phase 46.
+"""``gdpr_delete_requests`` repository.
 
 One row per user-initiated delete. Two surfaces:
 

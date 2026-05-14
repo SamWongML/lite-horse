@@ -6,9 +6,9 @@ compatibility"). This lets us reuse the SDK's
 :class:`OpenAIChatCompletionsModel` without writing a second model
 adapter.
 
-The full Anthropic-native client lives in this same module so future
-phases can swap to a richer adapter (prompt caching headers,
-beta-features) without changing the Protocol.
+The full Anthropic-native client lives in this same module so a richer
+adapter (prompt caching headers, beta-features) can swap in without
+changing the Protocol.
 """
 from __future__ import annotations
 

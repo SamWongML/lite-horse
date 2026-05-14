@@ -1,4 +1,4 @@
-"""Pure-Python sanity checks on the Phase 43 session_summaries migration.
+"""Pure-Python sanity checks on the session_summaries migration.
 
 The live round-trip lives in :mod:`tests.models.test_migration_roundtrip`.
 This file just inspects the migration text so a sloppy edit can't drop
@@ -15,9 +15,9 @@ def _migration_source() -> str:
     paths = [
         p
         for p in versions.iterdir()
-        if str(p).endswith("0005_phase43_summaries.py")
+        if str(p).endswith("0005_session_summaries.py")
     ]
-    assert paths, "phase 43 migration not found"
+    assert paths, "session_summaries migration not found"
     return Path(str(paths[0])).read_text(encoding="utf-8")
 
 
@@ -32,10 +32,10 @@ def test_creates_session_summaries_table() -> None:
         assert column in src, f"missing column {column!r} in migration"
 
 
-def test_chains_off_phase42() -> None:
+def test_chains_off_pgvector() -> None:
     src = _migration_source()
-    assert 'revision: str = "0005_phase43_summaries"' in src
-    assert 'down_revision: str | None = "0004_phase42_pgvector"' in src
+    assert 'revision: str = "0005_session_summaries"' in src
+    assert 'down_revision: str | None = "0004_pgvector"' in src
 
 
 def test_creates_tenant_index() -> None:

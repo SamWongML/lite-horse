@@ -1,4 +1,4 @@
-"""Phase 46 — worker dispatcher routes audit_ship payloads.
+"""Worker dispatcher routes audit_ship payloads.
 
 Pure dispatcher-shape tests; no Postgres / S3 needed.
 """

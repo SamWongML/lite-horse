@@ -1,4 +1,4 @@
-"""Phase 38 — OTel tracing bootstrap + span emission on a turn driver.
+"""OTel tracing bootstrap + span emission on a turn driver.
 
 We don't ship traces over the network in tests. Instead we install an
 in-memory ``InMemorySpanExporter`` directly on a ``TracerProvider`` and

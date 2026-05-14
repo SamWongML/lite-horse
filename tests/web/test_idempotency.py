@@ -29,8 +29,8 @@ from lite_horse.web.turns import TurnRegistry, TurnRequest
 
 pytestmark = pytest.mark.asyncio
 
-_SECRET = b"phase35-idem-test-secret-do-not-use-in-prod"
-_KID = "phase35-idem-kid"
+_SECRET = b"idempotency-test-secret-do-not-use-in-prod"
+_KID = "idempotency-kid"
 _AUDIENCE = "lite-horse"
 _ISSUER = "http://localhost:9999"
 

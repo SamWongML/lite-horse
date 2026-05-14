@@ -29,8 +29,8 @@ from lite_horse.web.turns import TurnRegistry, TurnRequest
 
 pytestmark = pytest.mark.asyncio
 
-_SECRET = b"phase35-test-secret-do-not-use-in-prod"
-_KID = "phase35-kid"
+_SECRET = b"turns-stream-test-secret-do-not-use-in-prod"
+_KID = "turns-stream-kid"
 _AUDIENCE = "lite-horse"
 _ISSUER = "http://localhost:9999"
 
@@ -114,7 +114,7 @@ def _jwks() -> dict[str, Any]:
     }
 
 
-def _mint(sub: str = "phase35-user", role: str = "user") -> str:
+def _mint(sub: str = "turns-stream-user", role: str = "user") -> str:
     return jwt.encode(
         {
             "sub": sub,

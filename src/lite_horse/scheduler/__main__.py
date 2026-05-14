@@ -10,9 +10,9 @@ The plan calls for a ``SQLAlchemyJobStore`` to back APScheduler. With a
 single recurring tick that's effectively redundant — the only job in
 the store is the tick itself, and it's re-registered on every boot.
 We therefore keep APScheduler in-memory and rely on the PG-resident
-``cron_jobs`` table for durability. Documented as the deviation; if
-Phase 39 needs APScheduler-managed individual jobs (per-cron triggers
-instead of a tick), swap to ``SQLAlchemyJobStore`` then.
+``cron_jobs`` table for durability. Documented as the deviation; switch
+to ``SQLAlchemyJobStore`` when APScheduler-managed individual jobs
+(per-cron triggers instead of a tick) are needed.
 """
 from __future__ import annotations
 

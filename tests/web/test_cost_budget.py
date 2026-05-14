@@ -1,4 +1,4 @@
-"""Phase 39 per-user daily cost budget."""
+"""Per-user daily cost budget."""
 from __future__ import annotations
 
 from datetime import UTC, datetime

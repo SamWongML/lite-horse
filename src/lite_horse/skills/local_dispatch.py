@@ -1,8 +1,8 @@
 """Local-FS implementation of skill_manage actions.
 
-This used to live in ``skills/manage_tool.py``; Phase 40 split it out so
-that the tool body (now in ``manage_tool.py``) can stay free of
-``skills_root()`` imports — only the local backend wraps this module.
+This used to live in ``skills/manage_tool.py``; it was split out so the
+tool body (now in ``manage_tool.py``) can stay free of ``skills_root()``
+imports — only the local backend wraps this module.
 The cloud :class:`SkillCloudBackend` re-implements the same actions
 against ``SkillRepo``.
 """

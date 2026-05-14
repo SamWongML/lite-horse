@@ -1,4 +1,4 @@
-"""Compression-as-consolidation side-agent (Phase 18).
+"""Compression-as-consolidation side-agent.
 
 At the WARNING budget tier, :class:`BudgetHook` invokes this distiller to
 identify durable facts in the current trajectory and return them as candidate

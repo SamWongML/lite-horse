@@ -1,4 +1,4 @@
-"""``skill_promotion_candidates`` repository — Phase 45.
+"""``skill_promotion_candidates`` repository.
 
 Admin-only surface: callers are either the daily ``promotion_tick`` (no
 ``app.user_id`` GUC) or the admin HTTP routes (gated by ``role=admin``

@@ -1,4 +1,4 @@
-"""Tests for cron_manage dispatch (Phase 17)."""
+"""Tests for cron_manage dispatch."""
 from __future__ import annotations
 
 from pathlib import Path

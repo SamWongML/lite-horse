@@ -1,7 +1,7 @@
-"""phase 46 — GDPR delete requests + hardening
+"""GDPR delete requests + hardening
 
-Revision ID: 0008_phase46_hardening
-Revises: 0007_phase45_promotion
+Revision ID: 0008_hardening
+Revises: 0007_skill_promotion
 Create Date: 2026-06-12
 
 Adds ``gdpr_delete_requests`` — one queued row per user-initiated
@@ -30,8 +30,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0008_phase46_hardening"
-down_revision: str | None = "0007_phase45_promotion"
+revision: str = "0008_hardening"
+down_revision: str | None = "0007_skill_promotion"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

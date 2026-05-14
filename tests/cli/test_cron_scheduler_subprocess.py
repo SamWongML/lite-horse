@@ -1,7 +1,7 @@
 """Subprocess test for ``litehorse cron scheduler`` SIGTERM shutdown.
 
-Plan acceptance (Phase 29): ``litehorse cron scheduler`` + SIGTERM → clean
-shutdown inside 3 s, the pid file is removed, and no jobs remain "running".
+Acceptance: ``litehorse cron scheduler`` + SIGTERM → clean shutdown
+inside 3 s, the pid file is removed, and no jobs remain "running".
 """
 from __future__ import annotations
 

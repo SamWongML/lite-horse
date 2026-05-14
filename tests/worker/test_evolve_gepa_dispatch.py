@@ -1,4 +1,4 @@
-"""Phase 45 — worker dispatcher routes evolve_gepa payloads.
+"""Worker dispatcher routes evolve_gepa payloads.
 
 Doesn't hit Postgres. Just verifies :func:`is_evolve_gepa_payload`
 shape + the worker dispatcher hands off to the registered

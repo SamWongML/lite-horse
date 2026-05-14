@@ -49,11 +49,11 @@ class User(Base):
     byo_provider_key_dk: Mapped[bytes | None] = mapped_column(
         LargeBinary, nullable=True
     )
-    # Phase 39: per-user rate limit + daily cost budget overrides.
+    # Per-user rate limit + daily cost budget overrides.
     # NULL → use process default; non-positive → unlimited tier.
     rate_limit_per_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cost_budget_usd_micro: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    # Phase 41: points at the user's "main" agent. Auto-created on first login.
+    # Points at the user's "main" agent. Auto-created on first login.
     # Nullable so the FK can be added before the agents table is populated.
     default_agent_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

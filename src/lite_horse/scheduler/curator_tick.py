@@ -1,4 +1,4 @@
-"""Daily curator-enqueue tick — Phase 44.
+"""Daily curator-enqueue tick.
 
 Scans :meth:`SkillRepo.list_curator_targets_admin` for every
 ``(user_id, agent_id)`` slice that owns at least one user-scope skill,

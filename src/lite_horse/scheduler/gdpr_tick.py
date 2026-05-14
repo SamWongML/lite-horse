@@ -1,4 +1,4 @@
-"""Daily GDPR-delete tick — Phase 46.
+"""Daily GDPR-delete tick.
 
 Runs in admin context (no ``app.user_id`` GUC). Scans
 :meth:`GdprDeleteRepo.list_due` for every request whose

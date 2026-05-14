@@ -1,4 +1,4 @@
-"""Phase 43 — ``litehorse memory compact`` reduces MEMORY.md utilisation."""
+"""``litehorse memory compact`` reduces MEMORY.md utilisation."""
 from __future__ import annotations
 
 from pathlib import Path

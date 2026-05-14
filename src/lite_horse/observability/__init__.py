@@ -1,4 +1,4 @@
-"""Phase 38 observability — structured logs, OTel tracing, EMF metrics.
+"""Observability — structured logs, OTel tracing, EMF metrics.
 
 Three independent surfaces, each cheap to import and idempotent to call:
 

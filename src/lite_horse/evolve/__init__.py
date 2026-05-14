@@ -1,4 +1,4 @@
-"""Offline SKILL.md evolution pipeline (Phase 24).
+"""Offline SKILL.md evolution pipeline.
 
 Imported by admin tooling only. **Must not** be imported by ``lite_horse.api``
 — the webapp runtime stays free of the reflection + embedding surface.

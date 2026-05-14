@@ -1,4 +1,4 @@
-"""memory_chunks table — pgvector-indexed semantic recall (Phase 42).
+"""memory_chunks table — pgvector-indexed semantic recall.
 
 One row per chunked source fragment from ``memory.md``, ``user.md``,
 session summaries, message bodies, or skill bodies. The ``tsv`` column

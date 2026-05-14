@@ -1,4 +1,4 @@
-"""Per-tenant MCP connection pool — Phase 39.
+"""Per-tenant MCP connection pool.
 
 The v0.3 path warmed a process-global ``_INIT_LOCK`` once at startup
 and shared one set of ``MCPServer`` instances across every turn. Under

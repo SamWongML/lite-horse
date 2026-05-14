@@ -295,7 +295,7 @@ def evolve_cmd(
     ),
     population: bool = typer.Option(
         False, "--population",
-        help="Phase 45 GEPA mode: evolve via an N-generation population "
+        help="GEPA mode: evolve via an N-generation population "
              "loop and emit a proposal under ``.proposals/<slug>/``. "
              "Requires --fixture <path.json>.",
     ),
@@ -361,7 +361,7 @@ def _run_gepa_local(
     generations: int,
     population_size: int,
 ) -> dict[str, Any]:
-    """Phase 45 GEPA local entry-point. Returns a JSON-safe summary dict.
+    """GEPA local entry-point. Returns a JSON-safe summary dict.
 
     Reads the baseline SKILL.md from the current agent's skills tree,
     loads eval cases from ``--fixture`` JSON, runs the deterministic

@@ -1,4 +1,4 @@
-"""Phase 33 acceptance — the cloud route uses ``run_turn_streaming_for_user``.
+"""The cloud route uses ``run_turn_streaming_for_user``.
 
 Verifies the dependency-injected default runner closes over app state
 (``mcp_pool`` / ``kms`` / ``redis``) and forwards a ``TurnRequest`` into
