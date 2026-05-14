@@ -609,3 +609,19 @@ class GithubOAuthCallbackIn(BaseModel):
 class GithubOAuthCallbackOut(BaseModel):
     has_access_token: bool
     expires_at: int | None = None
+
+
+# ---------- GDPR delete ----------
+
+
+class GdprDeleteRequestOut(BaseModel):
+    """Public shape for a pending or resolved GDPR delete request.
+
+    Surfaces only timestamps — no archive key or internal id is returned
+    so a leaked response cannot be used to forge a request lookup.
+    """
+
+    requested_at: datetime
+    scheduled_at: datetime
+    cancelled_at: datetime | None = None
+    completed_at: datetime | None = None

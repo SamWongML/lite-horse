@@ -17,12 +17,13 @@ import json
 import logging
 from dataclasses import asdict, dataclass
 
+from lite_horse.constants.models import MODEL_GPT_5_4_MINI
 from lite_horse.curator import Curator, CuratorReport
 
 log = logging.getLogger(__name__)
 
 CURATE_KIND = "curate"
-DEFAULT_CURATOR_MODEL = "gpt-5.4-mini"
+DEFAULT_CURATOR_MODEL = MODEL_GPT_5_4_MINI
 
 
 @dataclass(frozen=True)

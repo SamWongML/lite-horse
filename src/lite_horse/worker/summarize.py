@@ -25,6 +25,7 @@ from dataclasses import asdict, dataclass
 
 from lite_horse.agent.backends.recall_cloud import RecallCloudBackend
 from lite_horse.agent.summarizer import Summarizer
+from lite_horse.constants.models import MODEL_GPT_5_4_MINI
 from lite_horse.providers.embedding import (
     EmbeddingProvider,
     select_embedding_provider,
@@ -37,7 +38,7 @@ from lite_horse.storage.db import db_session
 log = logging.getLogger(__name__)
 
 SUMMARIZE_KIND = "summarize"
-DEFAULT_SUMMARIZER_MODEL = "gpt-5.4-mini"
+DEFAULT_SUMMARIZER_MODEL = MODEL_GPT_5_4_MINI
 
 
 @dataclass(frozen=True)

@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from lite_horse.constants import DEFAULT_MAX_TURNS, litehorse_home
+from lite_horse.constants.models import MODEL_GPT_5_4
 
 ReasoningEffort = Literal["none", "low", "medium", "high"]
 LiteHorseEnv = Literal["local", "dev", "prod"]
@@ -83,7 +84,7 @@ class MCPServerConfig(BaseModel):
 
 
 class Config(BaseModel):
-    model: str = "gpt-5.4"
+    model: str = MODEL_GPT_5_4
     model_settings: ModelSettings = Field(default_factory=ModelSettings)
     agent: AgentSettings = Field(default_factory=AgentSettings)
     memory: MemorySettings = Field(default_factory=MemorySettings)

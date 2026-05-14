@@ -32,11 +32,12 @@ from lite_horse.agent.outcome_classifier import (
     ClassifierResult,
     OutcomeClassifier,
 )
+from lite_horse.constants.models import MODEL_GPT_5_4_MINI
 
 log = logging.getLogger(__name__)
 
 CLASSIFY_KIND = "classify"
-DEFAULT_CLASSIFIER_MODEL = "gpt-5.4-mini"
+DEFAULT_CLASSIFIER_MODEL = MODEL_GPT_5_4_MINI
 
 
 @dataclass(frozen=True)
