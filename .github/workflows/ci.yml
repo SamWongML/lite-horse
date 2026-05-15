@@ -41,3 +41,12 @@ jobs:
       - run: uv run mypy src
       - run: uv run alembic -c src/lite_horse/alembic.ini upgrade head
       - run: uv run pytest -q -m "not slow and not integration"
+
+  check:
+    if: always()
+    needs: [lint-typecheck-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
